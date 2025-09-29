@@ -28,6 +28,10 @@ type commitCompleteMsg struct {
 	err     error
 }
 
+type loadCompleteMsg struct {
+	cleanupModel *CleanupModel
+}
+
 // ViewType for the configure screen
 type ViewType uint
 
@@ -46,6 +50,7 @@ type ConfigureModel struct {
 	Height          int
 	Initialized     bool
 	CurrentView     ViewType
+	Loading         bool
 
 	// Sub-models for composable views
 	CleanupModel    *CleanupModel
@@ -174,7 +179,8 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 		ActiveTab:      0,
 		Width:          width,
 		Height:         height,
-		Initialized:    true,
+		Initialized:    false,
+		Loading:        true,
 		GitHubAccounts: githubAccounts,
 	}
 
@@ -220,13 +226,12 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 		listWidth = 40
 	}
 
-	// Initialize sub-models with content dimensions
-	m.CleanupModel = NewCleanupModel(listWidth, listHeight)
+	// Don't load CleanupModel yet - will load async
 	m.GitHubModel = NewGitHubModel(listWidth, listHeight)
 	m.CurrentView = TabView
 
-	// Initialize cleanup list first (tab 0)
-	cleanupItems := m.loadGitStatus()
+	// Empty cleanup list - will be populated when load completes
+	cleanupItems := []list.Item{}
 	cleanupList := list.New(cleanupItems, list.NewDefaultDelegate(), listWidth, listHeight)
 	cleanupList.SetShowTitle(false)
 	cleanupList.SetShowStatusBar(false)
@@ -303,6 +308,14 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 	m.refreshGitHubStatus()
 
 	return m
+}
+
+// LoadCleanupCmd loads the cleanup model asynchronously
+func LoadCleanupCmd(width, height int) tea.Cmd {
+	return func() tea.Msg {
+		cleanupModel := NewCleanupModel(width, height)
+		return loadCompleteMsg{cleanupModel: cleanupModel}
+	}
 }
 
 // createRepoCmd creates a GitHub repo asynchronously
@@ -474,11 +487,19 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.CreateStatus = ""
 		return m, nil
 	case spinner.TickMsg:
-		if m.IsCreating {
-			var cmd tea.Cmd
-			m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
+		var cmd tea.Cmd
+		m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
+		// Only continue ticking if we're showing the spinner
+		if m.IsCreating || m.Loading {
 			return m, cmd
 		}
+		return m, nil
+	case loadCompleteMsg:
+		m.Loading = false
+		m.Initialized = true
+		m.CleanupModel = msg.cleanupModel
+		m.Lists[0].SetItems(m.loadGitStatus())
+		return m, nil
 	case repoCreatedMsg:
 		m.IsCreating = false
 		if msg.err == nil {

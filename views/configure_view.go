@@ -21,6 +21,18 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return "Loading configuration..."
 	}
 
+	// Show spinner while loading
+	if configModel.Loading {
+		spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View()) + " Loading repository status..."
+		return lipgloss.Place(
+			configModel.Width,
+			configModel.Height,
+			lipgloss.Center,
+			lipgloss.Center,
+			spinnerView,
+		)
+	}
+
 	// Check if we're in a sub-view
 	switch configModel.CurrentView {
 	case handlers.GitHubView:

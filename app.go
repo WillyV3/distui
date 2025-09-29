@@ -147,6 +147,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			height := m.height - 4 // border (2) + padding (2)
 			accounts := extractGitHubAccounts(m.globalConfig)
 			m.configureModel = handlers.NewConfigureModel(width, height, accounts)
+			// Change page NOW, start spinner and trigger async load
+			m.currentPage = pageState(newPage)
+			m.quitting = quitting
+			listWidth := width - 2
+			listHeight := height - 13
+			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight))
 		}
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
@@ -181,14 +187,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quitting = quitting
 		return m, tea.Batch(cmd, pageCmd)
 	case configureView:
-		// Create model on first access with proper dimensions
-		if m.configureModel == nil && m.width > 0 && m.height > 0 {
-			// Account for border and padding from View()
-			width := m.width - 4   // border (2) + padding (2)
-			height := m.height - 4 // border (2) + padding (2)
-			accounts := extractGitHubAccounts(m.globalConfig)
-			m.configureModel = handlers.NewConfigureModel(width, height, accounts)
-		}
 		// Update dimensions on every frame if model exists
 		if m.configureModel != nil && m.width > 0 && m.height > 0 {
 			m.configureModel.Width = m.width - 4   // border (2) + padding (2)
