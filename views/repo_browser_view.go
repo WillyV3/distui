@@ -66,6 +66,14 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		scrollEnd = len(model.Entries)
 	}
 
+	// Check if we need to show the "more items" indicator
+	showMoreIndicator := scrollEnd < len(model.Entries)
+
+	// If showing indicator, reduce visible items by 1 to make room
+	if showMoreIndicator && scrollEnd > scrollStart {
+		scrollEnd--
+	}
+
 	// Define colors for file types
 	dirStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))    // Blue for directories
 	goStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51"))     // Cyan for Go files
@@ -121,17 +129,16 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		}
 
 		// Show scroll indicator if needed
-		remaining := len(model.Entries) - scrollEnd
-		if len(model.Entries) > availableLines && remaining > 0 {
+		if showMoreIndicator {
+			remaining := len(model.Entries) - scrollEnd
 			content.WriteString(fmt.Sprintf("  ...%d more files below\n", remaining))
 		}
 	}
 
 	// Fill remaining space
 	linesShown := scrollEnd - scrollStart
-	remaining := len(model.Entries) - scrollEnd
-	if len(model.Entries) > availableLines && remaining > 0 {
-		linesShown++
+	if showMoreIndicator {
+		linesShown++ // Account for the indicator line
 	}
 	for i := linesShown; i < availableLines; i++ {
 		content.WriteString("\n")
