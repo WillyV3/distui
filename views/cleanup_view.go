@@ -82,7 +82,7 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 		availableForFiles = 1
 	}
 
-	// Show file changes
+	// Show file changes or repo browser
 	if len(model.FileChanges) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, "  Files:")
@@ -121,8 +121,18 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 		if remaining > 0 {
 			lines = append(lines, fmt.Sprintf("    ...and %d more files", remaining))
 		}
+	} else if model.RepoBrowser != nil {
+		// No changes, show repo browser inline
+		lines = append(lines, "")
+		lines = append(lines, "  Repository Contents:")
+
+		// Create a mini repo browser view
+		browserLines := createMiniRepoBrowser(model.RepoBrowser, availableForFiles-2)
+		for _, line := range browserLines {
+			lines = append(lines, "  "+line)
+		}
 	} else {
-		// Add empty lines to fill space when no files
+		// Add empty lines to fill space when no browser available
 		for i := 0; i < availableForFiles; i++ {
 			lines = append(lines, "")
 		}
@@ -139,14 +149,86 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	lines = append(lines, "")
 	lines = append(lines, "  Actions:")
 	if model.HasChanges() {
-		lines = append(lines, "  [C] Commit  [s] Smart commit  [G] GitHub browser  [r] Refresh")
+		lines = append(lines, "  [C] Commit  [s] Smart commit  [r] Refresh")
 	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
-		lines = append(lines, "  [G] GitHub browser  [P] Push  [r] Refresh")
+		lines = append(lines, "  [P] Push to remote  [r] Refresh")
 	} else if model.NeedsGitHub() {
 		lines = append(lines, "  [G] Set up GitHub  [r] Refresh")
 	} else {
-		lines = append(lines, "  [G] GitHub browser  [r] Refresh")
+		lines = append(lines, "  [r] Refresh")
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func createMiniRepoBrowser(browser *handlers.RepoBrowserModel, availableLines int) []string {
+	var lines []string
+
+	if browser == nil || browser.Error != nil {
+		lines = append(lines, "(unable to browse repository)")
+		return lines
+	}
+
+	// Show current directory
+	dirStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	lines = append(lines, dirStyle.Render(browser.CurrentDirectory+"/"))
+
+	// Calculate how many entries we can show
+	entriesToShow := len(browser.Entries)
+	if entriesToShow > availableLines-1 { // -1 for directory line
+		entriesToShow = availableLines - 2 // Reserve space for "...more"
+		if entriesToShow < 1 {
+			entriesToShow = 1
+		}
+	}
+
+	// Show entries with simple formatting
+	for i := 0; i < entriesToShow && i < len(browser.Entries); i++ {
+		entry := browser.Entries[i]
+
+		// Simple type indicator
+		typeChar := "-"
+		if entry.IsDir {
+			typeChar = "/"
+		} else if strings.HasSuffix(entry.Name, ".go") {
+			typeChar = "g"
+		} else if strings.HasSuffix(entry.Name, ".md") {
+			typeChar = "m"
+		}
+
+		// Format name
+		name := entry.Name
+		if entry.IsDir {
+			name = name + "/"
+		}
+		if len(name) > 40 {
+			name = name[:37] + "..."
+		}
+
+		// Color based on type
+		line := fmt.Sprintf("%s %s", typeChar, name)
+
+		if entry.IsDir {
+			line = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Render(line)
+		} else if strings.HasSuffix(entry.Name, ".go") {
+			line = lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Render(line)
+		} else {
+			line = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(line)
+		}
+
+		lines = append(lines, line)
+	}
+
+	// Show if there are more files
+	if len(browser.Entries) > entriesToShow {
+		remaining := len(browser.Entries) - entriesToShow
+		lines = append(lines, dirStyle.Render(fmt.Sprintf("  ...%d more items", remaining)))
+	}
+
+	// Fill remaining space with empty lines
+	for len(lines) < availableLines {
+		lines = append(lines, "")
+	}
+
+	return lines
 }

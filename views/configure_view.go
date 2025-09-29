@@ -237,8 +237,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	controlLine2 := ""
 
 	if configModel.ActiveTab == 0 {
-		// Cleanup tab specific controls - always show GitHub option
-		controlLine1 = "[Space] Cycle  [s] Execute  [G] GitHub  [r] Refresh"
+		// Cleanup tab specific controls
+		controlLine1 = "[Space] Cycle  [s] Execute  [r] Refresh"
 		controlLine2 = "[Tab] Next Tab  [ESC] Cancel  [↑/↓] Navigate"
 	} else {
 		// Other tabs controls

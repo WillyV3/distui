@@ -10,12 +10,14 @@ type CleanupModel struct {
 	StatusText  string
 	Width       int
 	Height      int
+	RepoBrowser *RepoBrowserModel
 }
 
 func NewCleanupModel(width, height int) *CleanupModel {
 	m := &CleanupModel{
-		Width:  width,
-		Height: height,
+		Width:       width,
+		Height:      height,
+		RepoBrowser: NewRepoBrowserModel(width, height),
 	}
 	m.loadRepoStatus()
 	return m
@@ -76,4 +78,7 @@ func (m *CleanupModel) Refresh() {
 func (m *CleanupModel) Update(width, height int) {
 	m.Width = width
 	m.Height = height
+	if m.RepoBrowser != nil {
+		m.RepoBrowser.SetSize(width, height)
+	}
 }
