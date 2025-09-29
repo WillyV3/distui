@@ -57,29 +57,30 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		pageSize = 1
 	}
 
+	// When there are more items than fit on screen, we reserve 1 line for indicator
+	// So effective items per page = pageSize - 1 when needed
+	effectivePageSize := pageSize
+	if len(model.Entries) > pageSize {
+		effectivePageSize = pageSize - 1
+	}
+
 	// Calculate which "page" the selected item is on
 	currentPage := 0
-	if pageSize > 0 && len(model.Entries) > 0 {
-		currentPage = model.Selected / pageSize
+	if effectivePageSize > 0 && len(model.Entries) > 0 {
+		currentPage = model.Selected / effectivePageSize
 	}
 
 	// Calculate visible range for this page
-	scrollStart := pageSize * currentPage
-	scrollEnd := scrollStart + pageSize
+	scrollStart := effectivePageSize * currentPage
+	scrollEnd := scrollStart + effectivePageSize
 
 	// Clamp to valid range
 	if scrollEnd > len(model.Entries) {
 		scrollEnd = len(model.Entries)
 	}
 
-	// If we'll show "more items" indicator, reserve space for it
-	showMoreIndicator := scrollEnd < len(model.Entries)
-	if showMoreIndicator {
-		scrollEnd = scrollStart + pageSize - 1
-		if scrollEnd > len(model.Entries) {
-			scrollEnd = len(model.Entries)
-		}
-	}
+	// Check if we need to show "more items" indicator
+	hasMoreItems := scrollEnd < len(model.Entries)
 
 	// Define colors for file types
 	dirStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))    // Blue for directories
@@ -136,7 +137,7 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		}
 
 		// Show scroll indicator if needed
-		if showMoreIndicator {
+		if hasMoreItems {
 			remaining := len(model.Entries) - scrollEnd
 			content.WriteString(fmt.Sprintf("  ...%d more items\n", remaining))
 		}
@@ -144,7 +145,7 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 
 	// Fill remaining space to keep footer at bottom
 	linesShown := scrollEnd - scrollStart
-	if showMoreIndicator {
+	if hasMoreItems {
 		linesShown++ // Account for the indicator line
 	}
 	for i := linesShown; i < pageSize; i++ {
