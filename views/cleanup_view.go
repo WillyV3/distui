@@ -22,7 +22,7 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	statusStyle := lipgloss.NewStyle().
 		Padding(1, 0)
 
-	content.WriteString(headerStyle.Render("REPOSITORY STATUS") + "\n\n")
+	content.WriteString(headerStyle.Render("REPOSITORY STATUS") + "\n")
 
 	// Show repo status
 	if model.RepoInfo == nil {
@@ -56,29 +56,76 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 		content.WriteString(fmt.Sprintf("Branch: %s\n", model.RepoInfo.Branch))
 	}
 
-	content.WriteString("\n" + strings.Repeat("─", 40) + "\n\n")
+	// Use actual width for divider
+	dividerWidth := model.Width - 4
+	if dividerWidth < 20 {
+		dividerWidth = 20
+	}
+	content.WriteString(strings.Repeat("─", dividerWidth) + "\n")
 
 	// Show file changes
 	if len(model.FileChanges) > 0 {
-		content.WriteString("Files:\n")
-		for _, change := range model.FileChanges {
-			content.WriteString(fmt.Sprintf("%s %s (%s)\n",
-				change.Icon, change.Path, change.StatusText))
+		// Calculate available lines for files
+		// This view is rendered inside a content box with:
+		// - Tabs and header: 6 lines
+		// - Content box border: 2 lines
+		// - Content padding: 2 lines
+		// - Controls at bottom: 3 lines
+		// Total chrome outside this view: ~13 lines
+		// Within this view we have:
+		// - Status lines: 5 (header + git + github + changes + branch)
+		// - Divider: 2
+		// - Files label: 1
+		// - Actions section: 3-4
+		// - Padding: 2
+		// Total: ~13 internal + 13 external = 26 lines of overhead
+		// With our reduced newlines, we can use fewer lines
+		availableLines := model.Height - 22
+		if availableLines < 2 {
+			availableLines = 2
 		}
-		content.WriteString("\n")
+
+		// Determine how many files to show
+		filesToShow := len(model.FileChanges)
+		if filesToShow > availableLines {
+			filesToShow = availableLines - 1 // Save one line for "and X more..."
+		}
+
+		content.WriteString("Files:\n")
+		for i := 0; i < filesToShow; i++ {
+			change := model.FileChanges[i]
+			path := change.Path
+			// Truncate path if too long
+			maxPathLen := model.Width - 20 // Account for icon, status, and padding
+			if maxPathLen > 0 && len(path) > maxPathLen {
+				path = "..." + path[len(path)-maxPathLen+3:]
+			}
+			content.WriteString(fmt.Sprintf("%s %s (%s)\n",
+				change.Icon, path, change.StatusText))
+		}
+
+		// Show count of remaining files if any
+		remaining := len(model.FileChanges) - filesToShow
+		if remaining > 0 {
+			content.WriteString(fmt.Sprintf("  ...and %d more files\n", remaining))
+		}
+
 	}
 
 	// Action hints
-	content.WriteString(statusStyle.Render("\nActions:\n"))
+	content.WriteString(statusStyle.Render("Actions:\n"))
 	if model.NeedsGitHub() {
-		content.WriteString("Press [G] to set up GitHub repository\n")
+		content.WriteString("[G] Set up GitHub repository\n")
 	}
 	if model.HasChanges() {
-		content.WriteString("Press [C] to commit changes\n")
+		content.WriteString("[C] Commit changes  [s] Smart commit\n")
+	} else {
+		content.WriteString("[G] GitHub settings\n")
 	}
 	if model.IsClean() {
 		content.WriteString("✅ Ready for release!\n")
 	}
+	content.WriteString("[r] Refresh  [Tab] Next tab  [Esc] Back")
 
 	return content.String()
 }

@@ -19,11 +19,20 @@ func RenderGitHubManagement(model *handlers.GitHubModel) string {
 		Foreground(lipgloss.Color("117")).
 		Bold(true)
 
+	// Calculate box width based on available space
+	boxWidth := model.Width - 4
+	if boxWidth < 40 {
+		boxWidth = 40
+	}
+	if boxWidth > 80 {
+		boxWidth = 80 // Max width for readability
+	}
+
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("69")).
 		Padding(1).
-		Width(model.Width - 4)
+		Width(boxWidth)
 
 	content.WriteString(headerStyle.Render("GITHUB REPOSITORY MANAGEMENT") + "\n\n")
 

@@ -48,7 +48,8 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(infoStyle.Render(fmt.Sprintf("Module: %s", project.Module.Name)) + "\n")
 		content.WriteString(infoStyle.Render(fmt.Sprintf("Path: %s", project.Path)) + "\n\n")
 		content.WriteString(warningStyle.Render("This project is not configured for releases.") + "\n")
-		content.WriteString(warningStyle.Render("Press [c] to configure this project") + "\n")
+		content.WriteString(warningStyle.Render("Press [c] to configure this project") + "\n\n")
+		content.WriteString(subtleStyle.Render("Navigation: [g] Global  [s] Settings  [q] Quit") + "\n")
 	} else {
 		content.WriteString(headerStyle.Render("PROJECT OVERVIEW") + "\n\n")
 	}
@@ -89,7 +90,10 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		}
 	} else {
 		content.WriteString(infoStyle.Render("No releases yet") + "\n")
-		content.WriteString(infoStyle.Render("Press [r] to create your first release") + "\n")
+		content.WriteString(infoStyle.Render("Press [r] to create your first release") + "\n\n")
+
+		// Navigation hints
+		content.WriteString(subtleStyle.Render("Actions: [c] Configure  [r] Release  [g] Global  [s] Settings  [q] Quit") + "\n")
 	}
 
 	content.WriteString("\n" + headerStyle.Render("QUICK ACTIONS") + "\n\n")

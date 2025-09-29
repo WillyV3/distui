@@ -601,6 +601,13 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
+		// Handle 'C' key to switch to Commit view
+		if msg.String() == "C" && configModel.ActiveTab == 0 {
+			// TODO: When CommitModel is implemented, switch to CommitView
+			// For now, just show a message
+			return currentPage, false, nil, configModel
+		}
+
 		// Legacy handler for old 'G' key behavior (to be removed)
 		if msg.String() == "G" && configModel != nil && !configModel.CreatingRepo {
 			// Check if we need to create a GitHub repo
