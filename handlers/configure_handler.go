@@ -78,6 +78,15 @@ func (i CleanupItem) Title() string {
 
 func (i CleanupItem) Description() string {
 	actionText := ""
+
+	// Special handling for GitHub repo
+	if i.Category == "github" || i.Category == "github-new" {
+		if i.Action == "create" {
+			return "→ Will create GitHub repo"
+		}
+		return "→ Skip"
+	}
+
 	switch i.Action {
 	case "commit":
 		actionText = "→ Will commit"
@@ -202,6 +211,29 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 func (m *ConfigureModel) loadGitStatus() []list.Item {
 	items := []list.Item{}
 
+	// Check GitHub repo status first
+	if gitcleanup.HasGitRepo() {
+		if gitcleanup.HasGitHubRemote() {
+			owner, repo, err := gitcleanup.GetRepoInfo()
+			if err == nil && !gitcleanup.CheckGitHubRepoExists() {
+				items = append(items, CleanupItem{
+					Path:     fmt.Sprintf("⚠ GitHub repo not found: github.com/%s/%s", owner, repo),
+					Status:   "!",
+					Category: "github",
+					Action:   "skip",
+				})
+			}
+		} else {
+			// No GitHub remote at all - offer to create
+			items = append(items, CleanupItem{
+				Path:     "📦 Create new GitHub repo for this project",
+				Status:   "+",
+				Category: "github-new",
+				Action:   "skip",
+			})
+		}
+	}
+
 	gitFiles, err := gitcleanup.GetGitStatus()
 	if err != nil {
 		// Return empty list if not in git repo
@@ -303,16 +335,25 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
 			} else if i, ok := currentList.SelectedItem().(CleanupItem); ok {
-				// Cycle through actions: commit -> skip -> ignore -> commit
-				switch i.Action {
-				case "commit":
-					i.Action = "skip"
-				case "skip":
-					i.Action = "ignore"
-				case "ignore":
-					i.Action = "commit"
-				default:
-					i.Action = "commit"
+				// Special handling for GitHub repo creation
+				if i.Category == "github" || i.Category == "github-new" {
+					if i.Action == "create" {
+						i.Action = "skip"
+					} else {
+						i.Action = "create"
+					}
+				} else {
+					// Cycle through actions: commit -> skip -> ignore -> commit
+					switch i.Action {
+					case "commit":
+						i.Action = "skip"
+					case "skip":
+						i.Action = "ignore"
+					case "ignore":
+						i.Action = "commit"
+					default:
+						i.Action = "commit"
+					}
 				}
 				items := currentList.Items()
 				items[currentList.Index()] = i
@@ -371,13 +412,43 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.Lists[3].SetItems(configModel.loadGitStatus())
 			}
 			return currentPage, false, nil, configModel
+		case "g":
+			// Create GitHub repo manually (when focused on GitHub item)
+			if configModel != nil && configModel.ActiveTab == 3 {
+				currentList := &configModel.Lists[3]
+				if ci, ok := currentList.SelectedItem().(CleanupItem); ok {
+					if ci.Category == "github" || ci.Category == "github-new" {
+						gitcleanup.CreateGitHubRepo(false, "") // public by default
+						// Refresh list after creation
+						configModel.Lists[3].SetItems(configModel.loadGitStatus())
+					}
+				}
+			}
+			return currentPage, false, nil, configModel
 		case "s":
 			// Save configuration or execute smart commit
 			if configModel != nil && configModel.ActiveTab == 3 {
+				// Handle GitHub repo creation first if needed
+				for _, listItem := range configModel.Lists[3].Items() {
+					if ci, ok := listItem.(CleanupItem); ok {
+						if (ci.Category == "github" || ci.Category == "github-new") && ci.Action == "create" {
+							// Create GitHub repo
+							gitcleanup.CreateGitHubRepo(false, "") // public by default
+							// Refresh list after creation
+							configModel.Lists[3].SetItems(configModel.loadGitStatus())
+							return currentPage, false, nil, configModel
+						}
+					}
+				}
+
 				// Execute smart commit for cleanup tab
 				items := []gitcleanup.CleanupItem{}
 				for _, listItem := range configModel.Lists[3].Items() {
 					if ci, ok := listItem.(CleanupItem); ok {
+						// Skip GitHub repo items
+						if ci.Category == "github" {
+							continue
+						}
 						items = append(items, gitcleanup.CleanupItem{
 							Path:     ci.Path,
 							Status:   ci.Status,
@@ -387,10 +458,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 					}
 				}
 
-				if _, err := gitcleanup.ExecuteSmartCommit(items); err == nil {
-					// Refresh the cleanup list after commit
-					configModel.Lists[3].SetItems(configModel.loadGitStatus())
-					// TODO: Show success message
+				if len(items) > 0 {
+					if _, err := gitcleanup.ExecuteSmartCommit(items); err == nil {
+						// Refresh the cleanup list after commit
+						configModel.Lists[3].SetItems(configModel.loadGitStatus())
+						// TODO: Show success message
+					}
 				}
 			} else {
 				// TODO: Implement save logic for other tabs

@@ -72,7 +72,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 	// Different controls for cleanup tab
 	if configModel.ActiveTab == 3 {
-		content.WriteString("\n" + controlStyle.Render("[Space] Cycle Action  [s] Smart Commit  [r] Refresh"))
+		content.WriteString("\n" + controlStyle.Render("[Space] Cycle Action  [s] Execute Actions  [r] Refresh"))
 		content.WriteString("\n" + controlStyle.Render("[Tab] Next Tab  [ESC] Cancel  [↑/↓] Navigate"))
 	} else {
 		content.WriteString("\n" + controlStyle.Render("[Space] Toggle  [a] Check All  [Tab] Next Tab"))
