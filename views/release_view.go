@@ -52,17 +52,17 @@ func RenderReleaseContent(releaseModel *handlers.ReleaseModel) string {
 
 	switch releaseModel.Phase {
 	case models.PhaseVersionSelect:
-		return renderVersionSelection(releaseModel)
+		return RenderVersionSelection(releaseModel)
 	case models.PhaseComplete:
-		return renderSuccess(releaseModel)
+		return RenderSuccess(releaseModel)
 	case models.PhaseFailed:
-		return renderFailure(releaseModel)
+		return RenderFailure(releaseModel)
 	default:
-		return renderProgress(releaseModel)
+		return RenderProgress(releaseModel)
 	}
 }
 
-func renderVersionSelection(m *handlers.ReleaseModel) string {
+func RenderVersionSelection(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
 	content.WriteString(releaseHeaderStyle.Render("SELECT RELEASE VERSION") + "\n\n")
@@ -94,7 +94,7 @@ func renderVersionSelection(m *handlers.ReleaseModel) string {
 	return content.String()
 }
 
-func renderProgress(m *handlers.ReleaseModel) string {
+func RenderProgress(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
 	content.WriteString(releaseHeaderStyle.Render("RELEASING "+m.Version) + "\n\n")
@@ -159,7 +159,7 @@ func renderProgress(m *handlers.ReleaseModel) string {
 	return content.String()
 }
 
-func renderSuccess(m *handlers.ReleaseModel) string {
+func RenderSuccess(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
 	content.WriteString(releaseCheckMark.String() + " " + releaseHeaderStyle.Render("RELEASE COMPLETE") + "\n\n")
@@ -181,7 +181,7 @@ func renderSuccess(m *handlers.ReleaseModel) string {
 	return content.String()
 }
 
-func renderFailure(m *handlers.ReleaseModel) string {
+func RenderFailure(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
 	content.WriteString(releaseCrossMark.String() + " " + releaseHeaderStyle.Render("RELEASE FAILED") + "\n\n")

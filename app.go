@@ -22,7 +22,6 @@ const (
 	projectView pageState = iota
 	globalView
 	settingsView
-	releaseView
 	configureView
 	newProjectView
 )
@@ -141,7 +140,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route to page handlers
 	switch m.currentPage {
 	case projectView:
-		newPage, quitting, pageCmd := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg)
+		// Initialize releaseModel if needed
+		if m.releaseModel == nil && m.width > 0 && m.height > 0 && m.detectedProject != nil {
+			width := m.width - 4
+			height := m.height - 4
+			projectPath := m.detectedProject.Path
+			projectName := m.detectedProject.Module.Name
+			currentVersion := m.detectedProject.Module.Version
+			repoOwner := ""
+			repoName := ""
+			if m.detectedProject.Repository != nil {
+				repoOwner = m.detectedProject.Repository.Owner
+				repoName = m.detectedProject.Repository.Name
+			}
+			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName)
+		}
+
+		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg, m.releaseModel)
+		m.releaseModel = newReleaseModel
+
 		// Pre-create configure model if navigating to it
 		if newPage == int(configureView) && m.configureModel == nil && m.width > 0 && m.height > 0 {
 			width := m.width - 4   // border (2) + padding (2)
@@ -182,27 +199,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.quitting = quitting
 		m.settingsModel = newSettingsModel
 		return m, tea.Batch(cmd, pageCmd)
-	case releaseView:
-		if m.releaseModel == nil && m.width > 0 && m.height > 0 && m.detectedProject != nil {
-			width := m.width - 4
-			height := m.height - 4
-			projectPath := m.detectedProject.Path
-			projectName := m.detectedProject.Module.Name
-			currentVersion := m.detectedProject.Module.Version
-			repoOwner := ""
-			repoName := ""
-			if m.detectedProject.Repository != nil {
-				repoOwner = m.detectedProject.Repository.Owner
-				repoName = m.detectedProject.Repository.Name
-			}
-			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName)
-		}
-		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateReleaseView(
-			int(m.currentPage), int(projectView), msg, m.releaseModel)
-		m.currentPage = pageState(newPage)
-		m.quitting = quitting
-		m.releaseModel = newReleaseModel
-		return m, tea.Batch(cmd, pageCmd)
 	case configureView:
 		// Update dimensions on every frame if model exists
 		if m.configureModel != nil && m.width > 0 && m.height > 0 {
@@ -240,8 +236,6 @@ func (m model) View() string {
 		s = m.renderGlobalView()
 	case settingsView:
 		s = views.RenderSettingsContent(m.settingsModel)
-	case releaseView:
-		s = m.renderReleaseView()
 	case configureView:
 		s = m.renderConfigureView()
 	case newProjectView:
@@ -273,7 +267,7 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig)
+	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel)
 }
 
 func (m model) renderGlobalView() string {
@@ -282,11 +276,6 @@ func (m model) renderGlobalView() string {
 		deleteMode = m.globalModel.DeletingMode
 	}
 	return views.RenderGlobalContent(m.allProjects, m.selectedProjectIndex, deleteMode)
-}
-
-
-func (m model) renderReleaseView() string {
-	return views.RenderReleaseContent(m.releaseModel)
 }
 
 func (m model) renderConfigureView() string {

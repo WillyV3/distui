@@ -10,9 +10,9 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 
 ### Quick Stats
 - Total Tasks: 61 (47 original + 3 extra + 10 config tasks + 1 view merge)
-- Completed: 28 (18 previous + 10 release workflow)
+- Completed: 29 (18 previous + 10 release workflow + 1 view merge)
 - In Progress: 0
-- Remaining: 33
+- Remaining: 32
 
 ### Completed Categories
 - ✅ Setup Tasks: 5/5 (100%)
@@ -387,6 +387,173 @@ Task general-purpose "Complete T003, T004, and T005 in parallel"
 - Handle window sizing for releaseModel
 - Pass releaseModel to views.RenderReleaseContent
 **Estimate**: 2 points
+
+## View Architecture Refactor [CRITICAL]
+
+### ✅ T-CFG-10: Merge Release View into Project View [COMPLETED] [3 points]
+**Files**:
+- views/project_view.go (modify) ✅
+- views/release_view.go (refactor) ✅
+- handlers/project_handler.go (modify) ✅
+- app.go (modify) ✅
+
+**Current State**:
+- Project view shows static project info + "Press [r] to release"
+- Separate releaseView page (pageState = 3) for version selection
+- Extra navigation step: project → [r] → release → select version → enter
+- release_view.go renders 4 phases: PhaseVersionSelect, PhaseComplete, PhaseFailed, progress
+
+**Target State**:
+- Project view includes inline release version selector
+- No separate release page needed
+- Direct interaction: arrow keys select version → enter starts release
+- Release progress shown in same view (replaces project info during execution)
+
+**Implementation**:
+
+1. **views/project_view.go** - Add release section:
+```go
+func RenderProjectContent(p *ProjectState, releaseModel *handlers.ReleaseModel) string {
+    sections := []string{
+        renderProjectHeader(p),
+        renderInlineReleaseSection(releaseModel), // NEW
+        renderQuickActions(p),
+    }
+    return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func renderInlineReleaseSection(m *handlers.ReleaseModel) string {
+    if m == nil {
+        return ""
+    }
+
+    switch m.Phase {
+    case models.PhaseVersionSelect:
+        return renderCompactVersionSelect(m) // Inline version, not full screen
+    case models.PhaseComplete:
+        return views.RenderSuccess(m)
+    case models.PhaseFailed:
+        return views.RenderFailure(m)
+    default:
+        return views.RenderProgress(m)
+    }
+}
+
+func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
+    // Simplified version of renderVersionSelection from release_view.go
+    // Shows "SELECT RELEASE VERSION" + 4 options + keyboard hints
+    // Fits in ~10 lines instead of full screen
+}
+```
+
+2. **views/release_view.go** - Refactor to export helpers:
+```go
+// Keep these as exported functions for reuse:
+// - RenderProgress()
+// - RenderSuccess()
+// - RenderFailure()
+
+// Remove or make internal:
+// - RenderReleaseContent() (replaced by inline in project view)
+// - renderVersionSelection() (replaced by compact version)
+```
+
+3. **handlers/project_handler.go** - Handle version selection:
+```go
+func UpdateProjectView(currentPage, previousPage int, msg tea.Msg,
+                       projectState *ProjectState,
+                       releaseModel *handlers.ReleaseModel) (int, bool, tea.Cmd, *handlers.ReleaseModel) {
+
+    switch msg := msg.(type) {
+    case tea.KeyMsg:
+        // If release phase is version select, handle arrow keys + enter
+        if releaseModel != nil && releaseModel.Phase == models.PhaseVersionSelect {
+            switch msg.String() {
+            case "up", "k":
+                releaseModel.SelectedVersion--
+                // clamp to bounds
+            case "down", "j":
+                releaseModel.SelectedVersion++
+                // clamp to bounds
+            case "enter":
+                return currentPage, false, releaseModel.StartRelease(), releaseModel
+            case "esc":
+                releaseModel.Phase = models.PhaseVersionSelect // reset
+                releaseModel.SelectedVersion = 0
+            }
+        }
+
+        // Normal project view navigation
+        switch msg.String() {
+        case "g":
+            return int(globalView), false, nil, releaseModel
+        case "s":
+            return int(settingsView), false, nil, releaseModel
+        case "c":
+            return int(configureView), false, nil, releaseModel
+        case "r":
+            // Don't navigate away - just activate version selector
+            releaseModel.Phase = models.PhaseVersionSelect
+            return currentPage, false, nil, releaseModel
+        }
+
+    case models.ReleasePhaseMsg, models.ReleaseCompleteMsg:
+        // Forward to releaseModel.Update()
+        updatedModel, cmd := releaseModel.Update(msg)
+        return currentPage, false, cmd, updatedModel
+    }
+
+    return currentPage, false, nil, releaseModel
+}
+```
+
+4. **app.go** - Remove releaseView page state:
+```go
+type pageState int
+
+const (
+    projectView pageState = iota
+    globalView
+    settingsView
+    configureView
+    newProjectView
+    // REMOVE: releaseView
+)
+
+// Initialize releaseModel when project is detected, not on navigation
+if m.detectedProject != nil && m.releaseModel == nil && m.width > 0 && m.height > 0 {
+    m.releaseModel = handlers.NewReleaseModel(...)
+}
+
+// In Update(), remove releaseView case entirely
+// Project view now handles everything
+
+// In View(), update project rendering:
+case projectView:
+    return m.renderProjectView(m.projectState, m.releaseModel)
+```
+
+**Architecture Notes**:
+- Eliminates redundant page state (5 total instead of 6)
+- Follows "30-second release" goal (fewer keypresses)
+- Maintains handler/view separation
+- ReleaseModel still manages state, just rendered inline
+- Progressive disclosure: version selector only shows when [r] pressed
+- During release execution, progress takes over the whole view
+
+**Dependencies**: None (standalone refactor)
+
+**Validation**:
+- User opens app → sees project info with "Press [r]" hint
+- Press [r] → version selector appears inline (4 options)
+- Arrow keys move selection
+- Enter starts release → progress view takes over screen
+- On completion → shows success, ESC returns to project view with version selector hidden
+- No [r] navigation needed, no separate page
+
+**Estimate**: 3 points (moderate complexity, multiple file changes, careful state management)
+
+---
 
 ## Release Configuration Tasks [CRITICAL - BLOCKERS]
 
