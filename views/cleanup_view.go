@@ -187,17 +187,38 @@ func createMiniRepoBrowser(browser *handlers.RepoBrowserModel, availableLines in
 	dirStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	lines = append(lines, dirStyle.Render(browser.CurrentDirectory+"/"))
 
-	// Calculate how many entries we can show
-	entriesToShow := len(browser.Entries)
-	if entriesToShow > availableLines-1 { // -1 for directory line
-		entriesToShow = availableLines - 2 // Reserve space for "...more"
-		if entriesToShow < 1 {
-			entriesToShow = 1
+	// Calculate visible range - center the selected item
+	visibleCount := availableLines - 1 // -1 for directory line
+	if visibleCount < 1 {
+		visibleCount = 1
+	}
+
+	scrollStart := 0
+	scrollEnd := visibleCount
+
+	if len(browser.Entries) <= visibleCount {
+		// All items fit
+		scrollStart = 0
+		scrollEnd = len(browser.Entries)
+	} else {
+		// Center the selected item
+		scrollStart = browser.Selected - visibleCount/2
+		if scrollStart < 0 {
+			scrollStart = 0
+		}
+
+		scrollEnd = scrollStart + visibleCount
+		if scrollEnd > len(browser.Entries) {
+			scrollEnd = len(browser.Entries)
+			scrollStart = scrollEnd - visibleCount
+			if scrollStart < 0 {
+				scrollStart = 0
+			}
 		}
 	}
 
 	// Show entries with simple formatting
-	for i := 0; i < entriesToShow && i < len(browser.Entries); i++ {
+	for i := scrollStart; i < scrollEnd && i < len(browser.Entries); i++ {
 		entry := browser.Entries[i]
 
 		// Simple type indicator
@@ -245,8 +266,8 @@ func createMiniRepoBrowser(browser *handlers.RepoBrowserModel, availableLines in
 	}
 
 	// Show if there are more files
-	if len(browser.Entries) > entriesToShow {
-		remaining := len(browser.Entries) - entriesToShow
+	if scrollEnd < len(browser.Entries) {
+		remaining := len(browser.Entries) - scrollEnd
 		lines = append(lines, dirStyle.Render(fmt.Sprintf("  ...%d more items", remaining)))
 	}
 
