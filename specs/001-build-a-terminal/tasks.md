@@ -9,10 +9,10 @@
 This document contains all implementation tasks for the distui feature. Tasks are ordered by dependencies and marked with [P] when they can be executed in parallel.
 
 ### Quick Stats
-- Total Tasks: 60 (47 original + 3 extra + 10 new config tasks)
+- Total Tasks: 61 (47 original + 3 extra + 10 config tasks + 1 view merge)
 - Completed: 28 (18 previous + 10 release workflow)
 - In Progress: 0
-- Remaining: 32
+- Remaining: 33
 
 ### Completed Categories
 - ✅ Setup Tasks: 5/5 (100%)
