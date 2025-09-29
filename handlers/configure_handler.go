@@ -49,6 +49,7 @@ type ConfigureModel struct {
 	// Sub-models for composable views
 	CleanupModel    *CleanupModel
 	GitHubModel     *GitHubModel
+	CommitModel     *CommitModel
 
 	// Legacy fields (to be removed)
 	CreatingRepo    bool
@@ -326,6 +327,26 @@ func smartCommitCmd(items []gitcleanup.CleanupItem) tea.Cmd {
 	}
 }
 
+func regularCommitCmd(files []string, message string) tea.Cmd {
+	return func() tea.Msg {
+		// Convert file paths to GitFile structs
+		var gitFiles []gitcleanup.GitFile
+		for _, path := range files {
+			gitFiles = append(gitFiles, gitcleanup.GitFile{
+				Path: path,
+			})
+		}
+
+		// Commit the files
+		err := gitcleanup.CommitFiles(gitFiles, message)
+		if err != nil {
+			return commitCompleteMsg{err: err}
+		}
+
+		return commitCompleteMsg{message: message}
+	}
+}
+
 // refreshGitHubStatus updates cached GitHub repo status
 func (m *ConfigureModel) refreshGitHubStatus() {
 	if gitcleanup.HasGitRepo() && gitcleanup.HasGitHubRemote() {
@@ -497,6 +518,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				m.CleanupModel.Refresh()
 			}
 			m.Lists[0].SetItems(m.loadGitStatus())
+			// Return to main view
+			m.CurrentView = TabView
+			m.CommitModel = nil // Clean up
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Commit failed: %v", msg.err)
 		}
@@ -660,7 +684,38 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		}
 	case tea.KeyMsg:
 		// Handle view switching
-		if configModel.CurrentView == SmartCommitConfirm {
+		if configModel.CurrentView == CommitView {
+			switch msg.String() {
+			case "esc":
+				configModel.CurrentView = TabView
+				configModel.CommitModel = nil // Reset
+				configModel.CleanupModel.Refresh()
+				return currentPage, false, nil, configModel
+			case "enter":
+				// Only process if we're at the commit message stage and have files staged
+				if configModel.CommitModel != nil && configModel.CommitModel.IsComplete() && configModel.CommitModel.HasStagedFiles() {
+					// Execute the commit
+					message := configModel.CommitModel.CommitMessage.Value()
+					if message != "" {
+						configModel.IsCreating = true
+						configModel.CreateStatus = "Committing files..."
+						// Stage the selected files and commit
+						stagedFiles := configModel.CommitModel.GetStagedFiles()
+						return currentPage, false, tea.Batch(
+							configModel.CreateSpinner.Tick,
+							regularCommitCmd(stagedFiles, message),
+						), configModel
+					}
+				}
+			default:
+				// Pass key to commit model
+				if configModel.CommitModel != nil {
+					var cmd tea.Cmd
+					configModel.CommitModel, cmd = configModel.CommitModel.Update(msg)
+					return currentPage, false, cmd, configModel
+				}
+			}
+		} else if configModel.CurrentView == SmartCommitConfirm {
 			switch msg.String() {
 			case "y", "Y":
 				// User confirmed, execute smart commit
@@ -707,8 +762,13 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 
 		// Handle 'C' key to switch to Commit view (only in TabView)
 		if msg.String() == "C" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
-			// TODO: When CommitModel is implemented, switch to CommitView
-			// For now, just show a message
+			if configModel.CleanupModel != nil && configModel.CleanupModel.HasChanges() {
+				// Initialize commit model if needed
+				if configModel.CommitModel == nil {
+					configModel.CommitModel = NewCommitModel(configModel.Width-2, configModel.Height-13)
+				}
+				configModel.CurrentView = CommitView
+			}
 			return currentPage, false, nil, configModel
 		}
 

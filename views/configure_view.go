@@ -28,8 +28,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	case handlers.SmartCommitConfirm:
 		return RenderSmartCommitConfirm(configModel.CleanupModel)
 	case handlers.CommitView:
-		// TODO: Add commit view
-		return "Commit view coming soon..."
+		return RenderCommitView(configModel.CommitModel)
 	}
 
 	headerStyle := lipgloss.NewStyle().
