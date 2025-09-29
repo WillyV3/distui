@@ -57,26 +57,29 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		pageSize = 1
 	}
 
-	// When there are more items than fit on screen, we reserve 1 line for indicator
-	// So effective items per page = pageSize - 1 when needed
-	effectivePageSize := pageSize
-	if len(model.Entries) > pageSize {
-		effectivePageSize = pageSize - 1
-	}
+	// Calculate visible range - center the selected item when possible
+	scrollStart := 0
+	scrollEnd := pageSize
 
-	// Calculate which "page" the selected item is on
-	currentPage := 0
-	if effectivePageSize > 0 && len(model.Entries) > 0 {
-		currentPage = model.Selected / effectivePageSize
-	}
-
-	// Calculate visible range for this page
-	scrollStart := effectivePageSize * currentPage
-	scrollEnd := scrollStart + effectivePageSize
-
-	// Clamp to valid range
-	if scrollEnd > len(model.Entries) {
+	if len(model.Entries) <= pageSize {
+		// All items fit on screen
+		scrollStart = 0
 		scrollEnd = len(model.Entries)
+	} else {
+		// Try to center the selected index
+		scrollStart = model.Selected - pageSize/2
+		if scrollStart < 0 {
+			scrollStart = 0
+		}
+
+		scrollEnd = scrollStart + pageSize
+		if scrollEnd > len(model.Entries) {
+			scrollEnd = len(model.Entries)
+			scrollStart = scrollEnd - pageSize
+			if scrollStart < 0 {
+				scrollStart = 0
+			}
+		}
 	}
 
 	// Check if we need to show "more items" indicator
