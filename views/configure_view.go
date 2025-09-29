@@ -222,10 +222,12 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		if boxWidth < 40 {
 			boxWidth = 40
 		}
-		// Height is approximately what's available after tabs/controls
-		boxHeight := 15 // Default height for content area
-		if configModel.CleanupModel != nil && configModel.CleanupModel.Height > 0 {
-			boxHeight = configModel.CleanupModel.Height + 2 // Add padding
+		// Height should match what's calculated in the handler
+		// The handler calculates: listHeight = Height - 13
+		// This is the content height without UI chrome
+		boxHeight := configModel.Height - 13
+		if boxHeight < 5 {
+			boxHeight = 5
 		}
 
 		// Check if we need to overlay spinner

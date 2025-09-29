@@ -12,6 +12,14 @@ import (
 func RenderSmartCommitConfirm(model *handlers.CleanupModel) string {
 	var content strings.Builder
 
+	maxLines := 20
+	if model != nil && model.Height > 0 {
+		maxLines = model.Height
+		if maxLines < 15 {
+			maxLines = 15
+		}
+	}
+
 	warningStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("214")).
 		Bold(true)
@@ -45,7 +53,14 @@ func RenderSmartCommitConfirm(model *handlers.CleanupModel) string {
 	// Show what will be committed
 	if model != nil && len(model.FileChanges) > 0 {
 		boxContent.WriteString(headerStyle.Render("Files to be committed:") + "\n")
-		maxFiles := 10
+		// Calculate how many files we can show: maxLines - (header + info + warning + controls) = roughly 15 lines overhead
+		maxFiles := maxLines - 15
+		if maxFiles < 5 {
+			maxFiles = 5
+		}
+		if maxFiles > 10 {
+			maxFiles = 10
+		}
 		for i, change := range model.FileChanges {
 			if i >= maxFiles {
 				remaining := len(model.FileChanges) - maxFiles

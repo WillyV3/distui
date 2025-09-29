@@ -14,6 +14,10 @@ func RenderCommitView(model *handlers.CommitModel) string {
 	}
 
 	var lines []string
+	maxLines := model.Height
+	if maxLines < 10 {
+		maxLines = 10
+	}
 
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
@@ -38,30 +42,33 @@ func RenderCommitView(model *handlers.CommitModel) string {
 		}
 
 		lines = append(lines, "  Files to commit:")
+
+		// Calculate how many file lines we can show
+		availableForFiles := maxLines - 11
+		if availableForFiles < 3 {
+			availableForFiles = 3
+		}
+
 		stagedCount := 0
-		for i, change := range model.FileChanges {
+		displayedFiles := 0
+		for _, change := range model.FileChanges {
 			if model.Decisions[change.Path] == "stage" {
 				stagedCount++
-				statusChar := "+"
-				if strings.HasPrefix(change.Status, "M") {
-					statusChar = "M"
-				} else if strings.HasPrefix(change.Status, "D") {
-					statusChar = "-"
-				}
-				lines = append(lines, fmt.Sprintf("    [%s] %s", statusChar, change.Path))
-				if stagedCount >= 5 && i < len(model.FileChanges)-1 {
-					remaining := 0
-					for j := i + 1; j < len(model.FileChanges); j++ {
-						if model.Decisions[model.FileChanges[j].Path] == "stage" {
-							remaining++
-						}
+				if displayedFiles < availableForFiles {
+					statusChar := "+"
+					if strings.HasPrefix(change.Status, "M") {
+						statusChar = "M"
+					} else if strings.HasPrefix(change.Status, "D") {
+						statusChar = "-"
 					}
-					if remaining > 0 {
-						lines = append(lines, fmt.Sprintf("    ...and %d more", remaining))
-					}
-					break
+					lines = append(lines, fmt.Sprintf("    [%s] %s", statusChar, change.Path))
+					displayedFiles++
 				}
 			}
+		}
+
+		if stagedCount > displayedFiles {
+			lines = append(lines, fmt.Sprintf("    ...and %d more", stagedCount-displayedFiles))
 		}
 
 		lines = append(lines, "")
@@ -125,6 +132,11 @@ func RenderCommitView(model *handlers.CommitModel) string {
 	lines = append(lines, "  [i] Add to .gitignore")
 	lines = append(lines, "")
 	lines = append(lines, "  [p] Previous file  [Esc] Cancel")
+
+	// Ensure content fits within available height
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
 
 	return strings.Join(lines, "\n")
 }

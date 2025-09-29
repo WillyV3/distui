@@ -551,6 +551,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		if m.GitHubModel != nil {
 			m.GitHubModel.SetSize(listWidth, listHeight)
 		}
+		if m.CommitModel != nil {
+			m.CommitModel.SetSize(listWidth, listHeight)
+		}
 		for i := range m.Lists {
 			m.Lists[i].SetWidth(listWidth)
 			m.Lists[i].SetHeight(listHeight)
