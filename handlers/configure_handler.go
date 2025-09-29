@@ -537,17 +537,26 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			return struct{}{}
 		})
 	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
+		// Note: app.go will update m.Width and m.Height after this handler returns
+		// So we should use the current m.Width/m.Height which are already adjusted
+		// by app.go (minus border and padding), not msg.Width/msg.Height
+
+		// If model doesn't have dimensions yet, use msg dimensions minus app.go's chrome
+		width := m.Width
+		height := m.Height
+		if width == 0 || height == 0 {
+			width = msg.Width - 4   // border (2) + padding (2) from app.go View()
+			height = msg.Height - 4
+		}
 
 		// Update list sizes with same calculation as NewConfigureModel
 		// Total UI chrome: 13 lines
-		listHeight := msg.Height - 13
+		listHeight := height - 13
 		if listHeight < 5 {
 			listHeight = 5
 		}
 		// Content box has just border, no horizontal padding
-		listWidth := msg.Width - 2
+		listWidth := width - 2
 		if listWidth < 40 {
 			listWidth = 40
 		}

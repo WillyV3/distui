@@ -105,17 +105,15 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	}
 	lines = append(lines, "  "+strings.Repeat("─", dividerWidth))
 
-	// Fixed layout calculation
-	// Header is approximately 10-11 lines (including conditional unpushed warning)
-	// Actions at bottom: 4 lines (blank + "Actions:" + action line + padding)
-	// Total reserved: ~14-15 lines
-	fixedHeaderLines := 11  // Maximum header size (with unpushed warning)
+	// Track actual header lines (everything before file/browser section)
+	headerLineCount := len(lines)
+
+	// Actions at bottom: 4 lines (blank + "Actions:" + action line + blank after)
 	actionLines := 4
 
 	// Calculate available lines for files
-	// model.Height is already the available content height (after UI chrome)
-	// We just need to subtract our fixed header and action lines
-	availableForFiles := model.Height - fixedHeaderLines - actionLines
+	// model.Height is the content height, subtract actual header and action space
+	availableForFiles := model.Height - headerLineCount - actionLines
 	if availableForFiles < 1 {
 		availableForFiles = 1
 	}
@@ -177,10 +175,11 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	}
 
 	// Fill remaining space to push actions to bottom
-	currentLines := len(lines) - fixedHeaderLines
-	for currentLines < availableForFiles {
+	// Calculate how many lines we've used for content (excluding header)
+	contentLinesUsed := len(lines) - headerLineCount
+	for contentLinesUsed < availableForFiles {
 		lines = append(lines, "")
-		currentLines++
+		contentLinesUsed++
 	}
 
 	// Actions section (always at bottom)
