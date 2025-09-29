@@ -169,7 +169,36 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	s.Spinner = spinner.MiniDot
 	m.CreateSpinner = s
 
-	// Initialize distributions list
+	// Calculate list height more precisely
+	// Account for UI elements:
+	// - Header: 1 line
+	// - Status: 2 lines (status + blank)
+	// - Tabs: 3 lines (tabs + 2 blanks)
+	// - Content box border: 2 lines (top + bottom)
+	// - Content padding: 2 lines (vertical padding restored)
+	// - Controls: 3 lines (2 blanks + control line)
+	// Total: 13 lines of chrome
+	listHeight := m.Height - 13
+	if listHeight < 5 {
+		listHeight = 5
+	}
+
+	// Content box has no horizontal padding, just border (2 chars)
+	listWidth := m.Width - 2
+	if listWidth < 40 {
+		listWidth = 40
+	}
+
+	// Initialize cleanup list first (tab 0)
+	cleanupItems := m.loadGitStatus()
+	cleanupList := list.New(cleanupItems, list.NewDefaultDelegate(), listWidth, listHeight)
+	cleanupList.SetShowTitle(false)
+	cleanupList.SetShowStatusBar(false)
+	cleanupList.SetFilteringEnabled(false)
+	cleanupList.SetShowHelp(false)
+	m.Lists[0] = cleanupList
+
+	// Initialize distributions list (tab 1)
 	distributions := []list.Item{
 		DistributionItem{
 			Name:    "GitHub Releases",
@@ -197,34 +226,14 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 		},
 	}
 
-	// Calculate list height more precisely
-	// Account for UI elements:
-	// - Header: 1 line
-	// - Status: 2 lines (status + blank)
-	// - Tabs: 3 lines (tabs + 2 blanks)
-	// - Content box border: 2 lines (top + bottom)
-	// - Content padding: 2 lines (vertical padding restored)
-	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome
-	listHeight := m.Height - 13
-	if listHeight < 5 {
-		listHeight = 5
-	}
-
-	// Create distributions list
-	// Content box has no horizontal padding, just border (2 chars)
-	listWidth := m.Width - 2
-	if listWidth < 40 {
-		listWidth = 40
-	}
 	distList := list.New(distributions, list.NewDefaultDelegate(), listWidth, listHeight)
 	distList.SetShowTitle(false)
 	distList.SetShowStatusBar(false)
 	distList.SetFilteringEnabled(false)
 	distList.SetShowHelp(false)
-	m.Lists[0] = distList
+	m.Lists[1] = distList
 
-	// Initialize build settings list
+	// Initialize build settings list (tab 2)
 	buildItems := []list.Item{
 		BuildItem{Name: "Run tests before release", Value: "go test ./...", Enabled: true},
 		BuildItem{Name: "Clean build directory", Value: "", Enabled: true},
@@ -237,9 +246,9 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	buildList.SetShowStatusBar(false)
 	buildList.SetFilteringEnabled(false)
 	buildList.SetShowHelp(false)
-	m.Lists[1] = buildList
+	m.Lists[2] = buildList
 
-	// Initialize advanced list
+	// Initialize advanced list (tab 3)
 	advancedItems := []list.Item{
 		BuildItem{Name: "Create draft releases", Value: "", Enabled: false},
 		BuildItem{Name: "Mark as pre-release", Value: "", Enabled: false},
@@ -252,16 +261,7 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	advList.SetShowStatusBar(false)
 	advList.SetFilteringEnabled(false)
 	advList.SetShowHelp(false)
-	m.Lists[2] = advList
-
-	// Initialize cleanup list with real git status
-	cleanupItems := m.loadGitStatus()
-	cleanupList := list.New(cleanupItems, list.NewDefaultDelegate(), listWidth, listHeight)
-	cleanupList.SetShowTitle(false)
-	cleanupList.SetShowStatusBar(false)
-	cleanupList.SetFilteringEnabled(false)
-	cleanupList.SetShowHelp(false)
-	m.Lists[3] = cleanupList
+	m.Lists[3] = advList
 
 	// Cache GitHub status on initialization
 	m.refreshGitHubStatus()
@@ -413,7 +413,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.RepoIsPrivate = false
 			m.RepoInputFocus = 0
 			m.refreshGitHubStatus()
-			m.Lists[3].SetItems(m.loadGitStatus())
+			m.Lists[0].SetItems(m.loadGitStatus())
 			m.CreateStatus = "✓ Repository created successfully!"
 			// Clear status after 3 seconds
 			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
@@ -506,8 +506,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			return m, nil
 		case "a":
 			// Check/uncheck all in current tab
-			if m.ActiveTab == 0 {
-				items := m.Lists[0].Items()
+			if m.ActiveTab == 1 {
+				items := m.Lists[1].Items()
 				allChecked := true
 				for _, item := range items {
 					if dist, ok := item.(DistributionItem); ok && !dist.Enabled {
@@ -522,7 +522,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 						items[i] = dist
 					}
 				}
-				m.Lists[0].SetItems(items)
+				m.Lists[1].SetItems(items)
 			}
 			return m, nil
 		default:
@@ -662,22 +662,22 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return 0, false, nil, configModel // back to projectView
 		case "r":
 			// Refresh git status in cleanup tab
-			if configModel != nil && configModel.ActiveTab == 3 {
+			if configModel != nil && configModel.ActiveTab == 0 {
 				configModel.refreshGitHubStatus()
-				configModel.Lists[3].SetItems(configModel.loadGitStatus())
+				configModel.Lists[0].SetItems(configModel.loadGitStatus())
 			}
 			return currentPage, false, nil, configModel
 		case "s":
 			// Save configuration or execute smart commit
-			if configModel != nil && configModel.ActiveTab == 3 {
+			if configModel != nil && configModel.ActiveTab == 0 {
 				// Handle GitHub repo creation first if needed
-				for _, listItem := range configModel.Lists[3].Items() {
+				for _, listItem := range configModel.Lists[0].Items() {
 					if ci, ok := listItem.(CleanupItem); ok {
 						if (ci.Category == "github-new" || ci.Category == "github-push") && ci.Action == "create" {
 							// Create GitHub repo
 							gitcleanup.CreateGitHubRepo(false, "", "", "") // public by default, use default account
 							// Refresh list after creation
-							configModel.Lists[3].SetItems(configModel.loadGitStatus())
+							configModel.Lists[0].SetItems(configModel.loadGitStatus())
 							return currentPage, false, nil, configModel
 						}
 					}
@@ -685,7 +685,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 
 				// Execute smart commit for cleanup tab
 				items := []gitcleanup.CleanupItem{}
-				for _, listItem := range configModel.Lists[3].Items() {
+				for _, listItem := range configModel.Lists[0].Items() {
 					if ci, ok := listItem.(CleanupItem); ok {
 						// Skip GitHub repo items
 						if ci.Category == "github-new" || ci.Category == "github-push" {
@@ -703,7 +703,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				if len(items) > 0 {
 					if _, err := gitcleanup.ExecuteSmartCommit(items); err == nil {
 						// Refresh the cleanup list after commit
-						configModel.Lists[3].SetItems(configModel.loadGitStatus())
+						configModel.Lists[0].SetItems(configModel.loadGitStatus())
 						// TODO: Show success message
 					}
 				}

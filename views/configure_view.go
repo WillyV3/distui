@@ -63,7 +63,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	content.WriteString("\n")
 
 	// Render tabs as flexbox-style boxes
-	tabs := []string{"Distributions", "Build", "Advanced", "Cleanup"}
+	tabs := []string{"Cleanup", "Distributions", "Build", "Advanced"}
 
 	// Calculate dynamic tab width based on window width
 	// Distribute width evenly, accounting for rounding
@@ -209,7 +209,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	controlLine1 := ""
 	controlLine2 := ""
 
-	if configModel.ActiveTab == 3 {
+	if configModel.ActiveTab == 0 {
 		// Cleanup tab specific controls
 		if needsGitHub {
 			controlLine1 = "[Space] Cycle  [s] Execute  [G] GitHub  [r] Refresh"
