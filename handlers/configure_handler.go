@@ -316,7 +316,8 @@ func createRepoCmd(isPrivate bool, name, description, owner string) tea.Cmd {
 // pushCmd pushes to remote asynchronously
 func pushCmd() tea.Cmd {
 	return func() tea.Msg {
-		cmd := exec.Command("git", "push")
+		// Use -u to set upstream tracking on first push
+		cmd := exec.Command("git", "push", "-u", "origin", "HEAD")
 		err := cmd.Run()
 		return pushCompleteMsg{err: err}
 	}
