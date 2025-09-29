@@ -216,9 +216,9 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 		listWidth = 40
 	}
 
-	// Initialize sub-models
-	m.CleanupModel = NewCleanupModel(width, height)
-	m.GitHubModel = NewGitHubModel(width, height)
+	// Initialize sub-models with content dimensions
+	m.CleanupModel = NewCleanupModel(listWidth, listHeight)
+	m.GitHubModel = NewGitHubModel(listWidth, listHeight)
 	m.CurrentView = TabView
 
 	// Initialize cleanup list first (tab 0)
@@ -508,14 +508,6 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Width = msg.Width
 		m.Height = msg.Height
 
-		// Update sub-models with new dimensions
-		if m.CleanupModel != nil {
-			m.CleanupModel.Update(msg.Width, msg.Height)
-		}
-		if m.GitHubModel != nil {
-			m.GitHubModel.SetSize(msg.Width, msg.Height)
-		}
-
 		// Update list sizes with same calculation as NewConfigureModel
 		// Total UI chrome: 13 lines
 		listHeight := msg.Height - 13
@@ -526,6 +518,14 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		listWidth := msg.Width - 2
 		if listWidth < 40 {
 			listWidth = 40
+		}
+
+		// Update sub-models with CONTENT dimensions, not window dimensions
+		if m.CleanupModel != nil {
+			m.CleanupModel.Update(listWidth, listHeight)
+		}
+		if m.GitHubModel != nil {
+			m.GitHubModel.SetSize(listWidth, listHeight)
 		}
 		for i := range m.Lists {
 			m.Lists[i].SetWidth(listWidth)

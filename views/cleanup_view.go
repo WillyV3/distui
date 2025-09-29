@@ -13,120 +13,140 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 		return "Loading repository status..."
 	}
 
-	var content strings.Builder
+	var lines []string
 
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true)
 
-	statusStyle := lipgloss.NewStyle().
-		Padding(1, 0)
+	// Add top padding
+	lines = append(lines, "")
 
-	content.WriteString(headerStyle.Render("REPOSITORY STATUS") + "\n")
+	// Header with left padding
+	lines = append(lines, "  "+headerStyle.Render("REPOSITORY STATUS"))
 
 	// Show repo status
 	if model.RepoInfo == nil {
-		content.WriteString("❌ Not a git repository\n")
-		return content.String()
+		lines = append(lines, "  Not a git repository")
+		return strings.Join(lines, "\n")
 	}
 
-	// Git status
-	content.WriteString("Git Repository: ✅ Initialized\n")
+	// Add blank line after header
+	lines = append(lines, "")
 
-	// GitHub status
+	// Git status with padding
+	lines = append(lines, "  Git Repository: Initialized")
+
+	// GitHub status with padding
 	if model.RepoInfo.RemoteExists {
-		content.WriteString(fmt.Sprintf("GitHub Remote: ✅ %s/%s\n",
+		lines = append(lines, fmt.Sprintf("  GitHub Remote: %s/%s",
 			model.RepoInfo.Owner, model.RepoInfo.RepoName))
 	} else {
-		content.WriteString("GitHub Remote: ⚠️  Not configured\n")
+		lines = append(lines, "  GitHub Remote: Not configured")
 	}
 
-	// Changes summary
+	// Changes summary with padding
 	modified, added, deleted, untracked := model.GetFileSummary()
 	total := modified + added + deleted + untracked
 
 	if total > 0 {
-		content.WriteString(fmt.Sprintf("Local Changes: 🔴 %d uncommitted files\n", total))
+		lines = append(lines, fmt.Sprintf("  Local Changes: %d uncommitted files", total))
 	} else {
-		content.WriteString("Local Changes: ✅ Clean working directory\n")
+		lines = append(lines, "  Local Changes: Clean working directory")
 	}
 
-	// Branch info
+	// Branch info with padding
 	if model.RepoInfo.Branch != "" {
-		content.WriteString(fmt.Sprintf("Branch: %s\n", model.RepoInfo.Branch))
+		lines = append(lines, fmt.Sprintf("  Branch: %s", model.RepoInfo.Branch))
 	}
 
-	// Use actual width for divider
-	dividerWidth := model.Width - 4
+	// Divider with padding
+	lines = append(lines, "")
+	dividerWidth := model.Width - 8  // Account for padding on both sides
 	if dividerWidth < 20 {
 		dividerWidth = 20
 	}
-	content.WriteString(strings.Repeat("─", dividerWidth) + "\n")
+	lines = append(lines, "  "+strings.Repeat("─", dividerWidth))
+
+	// Calculate how many lines we've used so far
+	headerLines := len(lines)
+
+	// Reserve lines for actions at the bottom (4 lines: blank + "Actions:" + action line + potential bottom padding)
+	actionLines := 4
+
+	// Calculate available lines for files
+	// model.Height is already the available content height (after UI chrome)
+	// We just need to subtract our own header and action lines
+	availableForFiles := model.Height - headerLines - actionLines
+	if availableForFiles < 1 {
+		availableForFiles = 1
+	}
 
 	// Show file changes
 	if len(model.FileChanges) > 0 {
-		// Calculate available lines for files
-		// This view is rendered inside a content box with:
-		// - Tabs and header: 6 lines
-		// - Content box border: 2 lines
-		// - Content padding: 2 lines
-		// - Controls at bottom: 3 lines
-		// Total chrome outside this view: ~13 lines
-		// Within this view we have:
-		// - Status lines: 5 (header + git + github + changes + branch)
-		// - Divider: 2
-		// - Files label: 1
-		// - Actions section: 3-4
-		// - Padding: 2
-		// Total: ~13 internal + 13 external = 26 lines of overhead
-		// With our reduced newlines, we can use fewer lines
-		availableLines := model.Height - 22
-		if availableLines < 2 {
-			availableLines = 2
-		}
+		lines = append(lines, "")
+		lines = append(lines, "  Files:")
 
-		// Determine how many files to show
 		filesToShow := len(model.FileChanges)
-		if filesToShow > availableLines {
-			filesToShow = availableLines - 1 // Save one line for "and X more..."
+		if filesToShow > availableForFiles-2 { // -2 for blank line and "Files:" label
+			filesToShow = availableForFiles - 3 // Reserve space for "...and X more"
+			if filesToShow < 1 {
+				filesToShow = 1
+			}
 		}
 
-		content.WriteString("Files:\n")
-		for i := 0; i < filesToShow; i++ {
+		for i := 0; i < filesToShow && i < len(model.FileChanges); i++ {
 			change := model.FileChanges[i]
 			path := change.Path
-			// Truncate path if too long
-			maxPathLen := model.Width - 20 // Account for icon, status, and padding
+			// Truncate path if too long (account for padding)
+			maxPathLen := model.Width - 24
 			if maxPathLen > 0 && len(path) > maxPathLen {
 				path = "..." + path[len(path)-maxPathLen+3:]
 			}
-			content.WriteString(fmt.Sprintf("%s %s (%s)\n",
-				change.Icon, path, change.StatusText))
+
+			// Use simple status indicators without emojis
+			statusChar := "M"
+			if change.Status == "??" {
+				statusChar = "?"
+			} else if strings.HasPrefix(change.Status, "A") {
+				statusChar = "+"
+			} else if strings.HasPrefix(change.Status, "D") {
+				statusChar = "-"
+			}
+
+			lines = append(lines, fmt.Sprintf("    [%s] %s", statusChar, path))
 		}
 
-		// Show count of remaining files if any
 		remaining := len(model.FileChanges) - filesToShow
 		if remaining > 0 {
-			content.WriteString(fmt.Sprintf("  ...and %d more files\n", remaining))
-		}
-
-	}
-
-	// Action hints
-	content.WriteString(statusStyle.Render("Actions:\n"))
-	if model.NeedsGitHub() {
-		content.WriteString("[G] Set up GitHub repository\n")
-	} else if model.HasChanges() {
-		content.WriteString("[C] Commit changes  [s] Smart commit\n")
-	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
-		content.WriteString("[G] GitHub settings  [P] Push to remote\n")
-		if model.IsClean() {
-			content.WriteString("✅ Ready for release!\n")
+			lines = append(lines, fmt.Sprintf("    ...and %d more files", remaining))
 		}
 	} else {
-		content.WriteString("[G] GitHub settings\n")
+		// Add empty lines to fill space when no files
+		for i := 0; i < availableForFiles; i++ {
+			lines = append(lines, "")
+		}
 	}
-	content.WriteString("[r] Refresh  [Tab] Next tab  [Esc] Back")
 
-	return content.String()
+	// Fill remaining space to push actions to bottom
+	currentLines := len(lines) - headerLines
+	for currentLines < availableForFiles {
+		lines = append(lines, "")
+		currentLines++
+	}
+
+	// Actions section (always at bottom)
+	lines = append(lines, "")
+	lines = append(lines, "  Actions:")
+	if model.HasChanges() {
+		lines = append(lines, "  [C] Commit  [s] Smart commit  [G] GitHub browser  [r] Refresh")
+	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
+		lines = append(lines, "  [G] GitHub browser  [P] Push  [r] Refresh")
+	} else if model.NeedsGitHub() {
+		lines = append(lines, "  [G] Set up GitHub  [r] Refresh")
+	} else {
+		lines = append(lines, "  [G] GitHub browser  [r] Refresh")
+	}
+
+	return strings.Join(lines, "\n")
 }

@@ -15,25 +15,29 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 
 	var content strings.Builder
 
-	headerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true)
-
-	pathStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("214"))
-
 	selectedStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("237"))
 
-	// Header with current path
-	content.WriteString(headerStyle.Render("REPOSITORY BROWSER") + "\n")
-	content.WriteString(pathStyle.Render(fmt.Sprintf("Path: %s", model.CurrentDirectory)) + "\n")
+	// Header
+	titleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("117")).
+		Bold(true)
+	content.WriteString(titleStyle.Render("REPOSITORY BROWSER") + "\n")
+
+	// Current path
+	pathStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	content.WriteString(pathStyle.Render(model.CurrentDirectory) + "\n")
+
+	// Type legend (compact)
+	legendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	legendText := "/ dir  b bin  g go  m md  j json  y yaml  t txt  - other"
+	content.WriteString(legendStyle.Render(legendText) + "\n")
 	content.WriteString(strings.Repeat("─", model.Width-4) + "\n")
 
 	// Column headers
 	columnStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("244")).
-		Italic(true)
+		Bold(true)
 	content.WriteString(columnStyle.Render("T  Name                                     Modified") + "\n")
 	content.WriteString(strings.Repeat("─", model.Width-4) + "\n")
 
@@ -46,8 +50,8 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 	}
 
 	// Calculate visible entries
-	headerLines := 6 // header + path + divider + column headers + divider
-	footerLines := 3 // divider + legend + controls
+	headerLines := 6 // title + path + legend + divider + headers + divider
+	footerLines := 2 // divider + controls
 	availableLines := model.Height - headerLines - footerLines
 	if availableLines < 1 {
 		availableLines = 1
@@ -63,9 +67,22 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		scrollEnd = len(model.Entries)
 	}
 
+	// Define colors for file types
+	dirStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))    // Blue for directories
+	goStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("51"))     // Cyan for Go files
+	mdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))    // Orange for Markdown
+	jsonStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))  // Yellow for JSON
+	yamlStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("141"))  // Purple for YAML
+	txtStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))   // Light gray for text
+	binStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82"))    // Green for binaries
+	defaultStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // Gray for others
+
 	// Show entries
 	if len(model.Entries) == 0 {
-		content.WriteString("(empty directory)\n")
+		emptyStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Italic(true)
+		content.WriteString(emptyStyle.Render("   (empty directory)") + "\n")
 	} else {
 		for i := scrollStart; i < scrollEnd; i++ {
 			entry := model.Entries[i]
@@ -77,10 +94,30 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 				line = line[:maxLen-3] + "..."
 			}
 
+			// Apply color based on file type
+			var styledLine string
+			if entry.IsDir {
+				styledLine = dirStyle.Render(line)
+			} else if strings.HasSuffix(entry.Name, ".go") {
+				styledLine = goStyle.Render(line)
+			} else if strings.HasSuffix(entry.Name, ".md") {
+				styledLine = mdStyle.Render(line)
+			} else if strings.HasSuffix(entry.Name, ".json") {
+				styledLine = jsonStyle.Render(line)
+			} else if strings.HasSuffix(entry.Name, ".yaml") || strings.HasSuffix(entry.Name, ".yml") {
+				styledLine = yamlStyle.Render(line)
+			} else if strings.HasSuffix(entry.Name, ".txt") {
+				styledLine = txtStyle.Render(line)
+			} else if entry.Mode&0111 != 0 && !strings.Contains(entry.Name, ".") {
+				styledLine = binStyle.Render(line)
+			} else {
+				styledLine = defaultStyle.Render(line)
+			}
+
 			if i == model.Selected {
 				content.WriteString(selectedStyle.Render(line) + "\n")
 			} else {
-				content.WriteString(line + "\n")
+				content.WriteString(styledLine + "\n")
 			}
 		}
 
@@ -101,13 +138,14 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		content.WriteString("\n")
 	}
 
-	// Controls and legend
-	controlStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	legendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	// Footer section
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	content.WriteString(dividerStyle.Render(strings.Repeat("─", model.Width-4)) + "\n")
 
-	content.WriteString(strings.Repeat("─", model.Width-4) + "\n")
-	content.WriteString(legendStyle.Render("Types: / = dir, g = go, m = md, j = json, y = yaml, t = txt, - = other") + "\n")
-	content.WriteString(controlStyle.Render("[j/↓] Down  [k/↑] Up  [l/→/Enter] Open  [h/←/BS] Back  [q/Esc] Exit"))
+	// Controls
+	controlStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	navControls := "[j/↓] Down  [k/↑] Up  [l/→/Enter] Open  [h/←/BS] Back  [q/Esc] Exit"
+	content.WriteString(controlStyle.Render(navControls))
 
 	return content.String()
 }

@@ -123,7 +123,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 	// Create content area box that matches tab width
 	contentBox := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(lipgloss.ThickBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1, 0) // Vertical padding only, no horizontal
 
@@ -232,33 +232,17 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		content.WriteString("\n" + controlStyle.Render("──────────────────────────────────────────"))
 	}
 
-	// Check if GitHub repo needs creation (using cached values)
-	needsGitHub := false
-	if gitcleanup.HasGitRepo() {
-		if !configModel.HasGitRemote || !configModel.GitHubRepoExists {
-			needsGitHub = true
-		}
-	}
-
-	// Show appropriate controls based on active tab and GitHub status
+	// Show appropriate controls based on active tab
 	controlLine1 := ""
 	controlLine2 := ""
 
 	if configModel.ActiveTab == 0 {
-		// Cleanup tab specific controls
-		if needsGitHub {
-			controlLine1 = "[Space] Cycle  [s] Execute  [G] GitHub  [r] Refresh"
-		} else {
-			controlLine1 = "[Space] Cycle Action  [s] Execute  [r] Refresh"
-		}
+		// Cleanup tab specific controls - always show GitHub option
+		controlLine1 = "[Space] Cycle  [s] Execute  [G] GitHub  [r] Refresh"
 		controlLine2 = "[Tab] Next Tab  [ESC] Cancel  [↑/↓] Navigate"
 	} else {
 		// Other tabs controls
-		if needsGitHub {
-			controlLine1 = "[Space] Toggle  [a] Check All  [G] GitHub  [Tab] Next"
-		} else {
-			controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
-		}
+		controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
 		controlLine2 = "[s] Save  [ESC] Cancel  [↑/↓] Navigate"
 	}
 
