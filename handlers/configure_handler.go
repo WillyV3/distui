@@ -4,19 +4,29 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"distui/internal/gitcleanup"
 )
 
 // ConfigureModel holds the state for the configure view
 type ConfigureModel struct {
-	ActiveTab     int
-	Lists         [4]list.Model
-	Width         int
-	Height        int
-	Initialized   bool
+	ActiveTab       int
+	Lists           [4]list.Model
+	Width           int
+	Height          int
+	Initialized     bool
+	CreatingRepo    bool
+	RepoNameInput   textinput.Model
+	RepoDescInput   textinput.Model
+	RepoInputFocus  int  // 0=name, 1=description, 2=private toggle
+	RepoIsPrivate   bool // true=private, false=public
+	// Cached git status to avoid expensive calls on every render
+	GitHubRepoExists bool
+	GitHubOwner      string
+	GitHubRepo       string
+	HasGitRemote     bool
 }
 
 // Distribution item for the list
@@ -80,9 +90,15 @@ func (i CleanupItem) Description() string {
 	actionText := ""
 
 	// Special handling for GitHub repo
-	if i.Category == "github" || i.Category == "github-new" {
+	if i.Category == "github-new" {
 		if i.Action == "create" {
 			return "→ Will create GitHub repo"
+		}
+		return "→ Skip"
+	}
+	if i.Category == "github-push" {
+		if i.Action == "create" {
+			return "→ Will push to GitHub"
 		}
 		return "→ Skip"
 	}
@@ -119,6 +135,20 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 		Initialized: true,
 	}
 
+	// Initialize repo creation inputs
+	nameInput := textinput.New()
+	nameInput.Placeholder = "Repository name (e.g., my-awesome-project)"
+	nameInput.Focus()
+	nameInput.CharLimit = 100
+	nameInput.Width = width - 4
+	m.RepoNameInput = nameInput
+
+	descInput := textinput.New()
+	descInput.Placeholder = "Repository description (optional)"
+	descInput.CharLimit = 200
+	descInput.Width = width - 4
+	m.RepoDescInput = descInput
+
 	// Initialize distributions list
 	distributions := []list.Item{
 		DistributionItem{
@@ -149,20 +179,18 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 
 	// Calculate initial list size
 	// Account for: header (1), tabs (2), controls (4) = 7 lines
-	listHeight := m.Height - 7
+	// Account for: header(1) + status(1) + newline(1) + tabs with border(3) + divider(1) + controls(2) + padding(2) = 11
+	listHeight := m.Height - 11
 	if listHeight < 5 {
 		listHeight = 5
 	}
 
 	// Create distributions list
 	distList := list.New(distributions, list.NewDefaultDelegate(), m.Width, listHeight)
-	distList.Title = "Distributions"
+	distList.SetShowTitle(false)
 	distList.SetShowStatusBar(false)
 	distList.SetFilteringEnabled(false)
 	distList.SetShowHelp(false)
-	distList.Styles.Title = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true)
 	m.Lists[0] = distList
 
 	// Initialize build settings list
@@ -174,7 +202,7 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	}
 
 	buildList := list.New(buildItems, list.NewDefaultDelegate(), m.Width, listHeight)
-	buildList.Title = "Build Settings"
+	buildList.SetShowTitle(false)
 	buildList.SetShowStatusBar(false)
 	buildList.SetFilteringEnabled(false)
 	buildList.SetShowHelp(false)
@@ -189,7 +217,7 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	}
 
 	advList := list.New(advancedItems, list.NewDefaultDelegate(), m.Width, listHeight)
-	advList.Title = "Advanced"
+	advList.SetShowTitle(false)
 	advList.SetShowStatusBar(false)
 	advList.SetFilteringEnabled(false)
 	advList.SetShowHelp(false)
@@ -198,37 +226,53 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	// Initialize cleanup list with real git status
 	cleanupItems := m.loadGitStatus()
 	cleanupList := list.New(cleanupItems, list.NewDefaultDelegate(), m.Width, listHeight)
-	cleanupList.Title = "Smart Git Cleanup"
+	cleanupList.SetShowTitle(false)
 	cleanupList.SetShowStatusBar(false)
 	cleanupList.SetFilteringEnabled(false)
 	cleanupList.SetShowHelp(false)
 	m.Lists[3] = cleanupList
 
+	// Cache GitHub status on initialization
+	m.refreshGitHubStatus()
+
 	return m
+}
+
+// refreshGitHubStatus updates cached GitHub repo status
+func (m *ConfigureModel) refreshGitHubStatus() {
+	if gitcleanup.HasGitRepo() && gitcleanup.HasGitHubRemote() {
+		m.HasGitRemote = true
+		owner, repo, err := gitcleanup.GetRepoInfo()
+		if err == nil {
+			m.GitHubOwner = owner
+			m.GitHubRepo = repo
+			m.GitHubRepoExists = gitcleanup.CheckGitHubRepoExists()
+		}
+	} else {
+		m.HasGitRemote = false
+		m.GitHubRepoExists = false
+	}
 }
 
 // loadGitStatus loads current git status and categorizes files
 func (m *ConfigureModel) loadGitStatus() []list.Item {
 	items := []list.Item{}
 
-	// Check GitHub repo status first
+	// Add GitHub repo creation option if needed
 	if gitcleanup.HasGitRepo() {
-		if gitcleanup.HasGitHubRemote() {
-			owner, repo, err := gitcleanup.GetRepoInfo()
-			if err == nil && !gitcleanup.CheckGitHubRepoExists() {
-				items = append(items, CleanupItem{
-					Path:     fmt.Sprintf("⚠ GitHub repo not found: github.com/%s/%s", owner, repo),
-					Status:   "!",
-					Category: "github",
-					Action:   "skip",
-				})
-			}
-		} else {
-			// No GitHub remote at all - offer to create
+		if !gitcleanup.HasGitHubRemote() {
 			items = append(items, CleanupItem{
-				Path:     "📦 Create new GitHub repo for this project",
+				Path:     "Create GitHub repository",
 				Status:   "+",
 				Category: "github-new",
+				Action:   "skip",
+			})
+		} else if !gitcleanup.CheckGitHubRepoExists() {
+			owner, repo, _ := gitcleanup.GetRepoInfo()
+			items = append(items, CleanupItem{
+				Path:     fmt.Sprintf("Push to github.com/%s/%s", owner, repo),
+				Status:   "↑",
+				Category: "github-push",
 				Action:   "skip",
 			})
 		}
@@ -272,8 +316,14 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 			action = "skip"
 		}
 
+		// Truncate path if too long
+		path := gf.Path
+		if m.Width > 0 && len(path) > m.Width-15 {
+			path = "..." + path[len(path)-(m.Width-18):]
+		}
+
 		items = append(items, CleanupItem{
-			Path:     gf.Path,
+			Path:     path,
 			Status:   gf.Status,
 			Category: string(gf.Category),
 			Action:   action,
@@ -287,8 +337,8 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	// Update list sizes based on current dimensions
 	if m.Width > 0 && m.Height > 0 {
-		// Account for: header (1), tabs (2), controls (4) = 7 lines
-		listHeight := m.Height - 7
+		// Account for: header(1) + status(1) + newline(1) + tabs with border(3) + divider(1) + controls(2) + padding(2) = 11
+		listHeight := m.Height - 11
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -302,8 +352,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
-		// Update list sizes
-		listHeight := msg.Height - 7
+		// Update list sizes (account for border around tabs)
+		listHeight := msg.Height - 11
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -311,6 +361,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.Lists[i].SetWidth(msg.Width)
 			m.Lists[i].SetHeight(listHeight)
 		}
+		// Update text input widths for repo creation
+		m.RepoNameInput.Width = msg.Width - 4
+		m.RepoDescInput.Width = msg.Width - 4
 		m.Initialized = true
 
 	case tea.KeyMsg:
@@ -321,10 +374,18 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		case "shift+tab":
 			m.ActiveTab = (m.ActiveTab + 3) % 4
 			return m, nil
-		case "space":
+		case " ", "space":
 			// Toggle the selected item
+			if m.ActiveTab < 0 || m.ActiveTab >= len(m.Lists) {
+				return m, nil
+			}
 			currentList := &m.Lists[m.ActiveTab]
-			if i, ok := currentList.SelectedItem().(DistributionItem); ok {
+			selectedItem := currentList.SelectedItem()
+			if selectedItem == nil {
+				return m, nil
+			}
+
+			if i, ok := selectedItem.(DistributionItem); ok {
 				i.Enabled = !i.Enabled
 				items := currentList.Items()
 				items[currentList.Index()] = i
@@ -336,7 +397,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				currentList.SetItems(items)
 			} else if i, ok := currentList.SelectedItem().(CleanupItem); ok {
 				// Special handling for GitHub repo creation
-				if i.Category == "github" || i.Category == "github-new" {
+				if i.Category == "github-new" || i.Category == "github-push" {
 					if i.Action == "create" {
 						i.Action = "skip"
 					} else {
@@ -401,6 +462,61 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle repo creation mode inputs first
+		if configModel != nil && configModel.CreatingRepo {
+			switch msg.String() {
+			case "esc":
+				// Cancel repo creation
+				configModel.CreatingRepo = false
+				return currentPage, false, nil, configModel
+			case "tab":
+				// Cycle through name, description, and private toggle
+				if configModel.RepoInputFocus == 0 {
+					configModel.RepoInputFocus = 1
+					configModel.RepoNameInput.Blur()
+					configModel.RepoDescInput.Focus()
+				} else if configModel.RepoInputFocus == 1 {
+					configModel.RepoInputFocus = 2
+					configModel.RepoDescInput.Blur()
+				} else {
+					configModel.RepoInputFocus = 0
+					configModel.RepoNameInput.Focus()
+				}
+				return currentPage, false, nil, configModel
+			case "enter":
+				// Create the repo with provided name and description
+				repoName := configModel.RepoNameInput.Value()
+				if repoName == "" {
+					repoName = gitcleanup.GetDefaultRepoName()
+				}
+				repoDesc := configModel.RepoDescInput.Value()
+
+				if err := gitcleanup.CreateGitHubRepo(configModel.RepoIsPrivate, repoName, repoDesc); err == nil {
+					// Success - exit creation mode and refresh
+					configModel.CreatingRepo = false
+					configModel.refreshGitHubStatus()
+					configModel.Lists[3].SetItems(configModel.loadGitStatus())
+				}
+				return currentPage, false, nil, configModel
+			case " ":
+				// Toggle private/public when on that option
+				if configModel.RepoInputFocus == 2 {
+					configModel.RepoIsPrivate = !configModel.RepoIsPrivate
+					return currentPage, false, nil, configModel
+				}
+				// For text inputs, fall through to default to handle space as text
+				fallthrough
+			default:
+				// Update the focused input
+				if configModel.RepoInputFocus == 0 {
+					configModel.RepoNameInput, _ = configModel.RepoNameInput.Update(msg)
+				} else if configModel.RepoInputFocus == 1 {
+					configModel.RepoDescInput, _ = configModel.RepoDescInput.Update(msg)
+				}
+				return currentPage, false, nil, configModel
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return currentPage, true, tea.Quit, configModel
@@ -409,18 +525,25 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		case "r":
 			// Refresh git status in cleanup tab
 			if configModel != nil && configModel.ActiveTab == 3 {
+				configModel.refreshGitHubStatus()
 				configModel.Lists[3].SetItems(configModel.loadGitStatus())
 			}
 			return currentPage, false, nil, configModel
-		case "g":
-			// Create GitHub repo manually (when focused on GitHub item)
-			if configModel != nil && configModel.ActiveTab == 3 {
-				currentList := &configModel.Lists[3]
-				if ci, ok := currentList.SelectedItem().(CleanupItem); ok {
-					if ci.Category == "github" || ci.Category == "github-new" {
-						gitcleanup.CreateGitHubRepo(false, "") // public by default
-						// Refresh list after creation
-						configModel.Lists[3].SetItems(configModel.loadGitStatus())
+		case "G":
+			// Start GitHub repo creation (uppercase G for GitHub) - available in all tabs
+			if configModel != nil && !configModel.CreatingRepo {
+				// Check if we need to create a GitHub repo
+				if gitcleanup.HasGitRepo() {
+					if !gitcleanup.HasGitHubRemote() || !gitcleanup.CheckGitHubRepoExists() {
+						// Enter repo creation mode
+						configModel.CreatingRepo = true
+						configModel.RepoInputFocus = 0
+						configModel.RepoNameInput.Focus()
+						configModel.RepoDescInput.Blur()
+						// Set default repo name from directory
+						if configModel.RepoNameInput.Value() == "" {
+							configModel.RepoNameInput.SetValue(gitcleanup.GetDefaultRepoName())
+						}
 					}
 				}
 			}
@@ -431,9 +554,9 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				// Handle GitHub repo creation first if needed
 				for _, listItem := range configModel.Lists[3].Items() {
 					if ci, ok := listItem.(CleanupItem); ok {
-						if (ci.Category == "github" || ci.Category == "github-new") && ci.Action == "create" {
+						if (ci.Category == "github-new" || ci.Category == "github-push") && ci.Action == "create" {
 							// Create GitHub repo
-							gitcleanup.CreateGitHubRepo(false, "") // public by default
+							gitcleanup.CreateGitHubRepo(false, "", "") // public by default
 							// Refresh list after creation
 							configModel.Lists[3].SetItems(configModel.loadGitStatus())
 							return currentPage, false, nil, configModel
@@ -446,7 +569,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				for _, listItem := range configModel.Lists[3].Items() {
 					if ci, ok := listItem.(CleanupItem); ok {
 						// Skip GitHub repo items
-						if ci.Category == "github" {
+						if ci.Category == "github-new" || ci.Category == "github-push" {
 							continue
 						}
 						items = append(items, gitcleanup.CleanupItem{
@@ -469,10 +592,15 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				// TODO: Implement save logic for other tabs
 			}
 			return 0, false, nil, configModel // back to projectView after save
+		default:
+			// Let unhandled keys fall through to the model's Update
 		}
 	}
 
-	// Update the model
-	newModel, cmd := configModel.Update(msg)
-	return currentPage, false, cmd, newModel
+	// Update the model if it exists
+	if configModel != nil {
+		newModel, cmd := configModel.Update(msg)
+		return currentPage, false, cmd, newModel
+	}
+	return currentPage, false, nil, configModel
 }
