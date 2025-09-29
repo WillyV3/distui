@@ -2,13 +2,20 @@ package handlers
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"distui/internal/gitcleanup"
 )
+
+// Message types for async operations
+type repoCreatedMsg struct {
+	err error
+}
 
 // ConfigureModel holds the state for the configure view
 type ConfigureModel struct {
@@ -22,6 +29,10 @@ type ConfigureModel struct {
 	RepoDescInput   textinput.Model
 	RepoInputFocus  int  // 0=name, 1=description, 2=private toggle
 	RepoIsPrivate   bool // true=private, false=public
+	// Spinner for repo creation
+	IsCreating      bool
+	CreateSpinner   spinner.Model
+	CreateStatus    string
 	// Cached git status to avoid expensive calls on every render
 	GitHubRepoExists bool
 	GitHubOwner      string
@@ -149,6 +160,11 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	descInput.Width = width - 4
 	m.RepoDescInput = descInput
 
+	// Initialize spinner for repo creation
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	m.CreateSpinner = s
+
 	// Initialize distributions list
 	distributions := []list.Item{
 		DistributionItem{
@@ -236,6 +252,14 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	m.refreshGitHubStatus()
 
 	return m
+}
+
+// createRepoCmd creates a GitHub repo asynchronously
+func createRepoCmd(isPrivate bool, name, description string) tea.Cmd {
+	return func() tea.Msg {
+		err := gitcleanup.CreateGitHubRepo(isPrivate, name, description)
+		return repoCreatedMsg{err: err}
+	}
 }
 
 // refreshGitHubStatus updates cached GitHub repo status
@@ -349,6 +373,39 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case struct{}:
+		// Clear status message after timeout
+		m.CreateStatus = ""
+		return m, nil
+	case spinner.TickMsg:
+		if m.IsCreating {
+			var cmd tea.Cmd
+			m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
+			return m, cmd
+		}
+	case repoCreatedMsg:
+		m.IsCreating = false
+		if msg.err == nil {
+			// Success - refresh and clear inputs
+			m.CreatingRepo = false
+			m.RepoNameInput.SetValue("")
+			m.RepoDescInput.SetValue("")
+			m.RepoIsPrivate = false
+			m.RepoInputFocus = 0
+			m.refreshGitHubStatus()
+			m.Lists[3].SetItems(m.loadGitStatus())
+			m.CreateStatus = "✓ Repository created successfully!"
+			// Clear status after 3 seconds
+			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return struct{}{}
+			})
+		} else {
+			m.CreateStatus = fmt.Sprintf("✗ Failed: %v", msg.err)
+			// Clear status after 3 seconds
+			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+				return struct{}{}
+			})
+		}
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
@@ -461,6 +518,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	// Model will be created in app.go with proper dimensions
 
 	switch msg := msg.(type) {
+	case repoCreatedMsg, spinner.TickMsg:
+		// Pass these messages directly to the model's Update
+		if configModel != nil {
+			newModel, cmd := configModel.Update(msg)
+			return currentPage, false, cmd, newModel
+		}
 	case tea.KeyMsg:
 		// Handle repo creation mode inputs first
 		if configModel != nil && configModel.CreatingRepo {
@@ -484,20 +547,27 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				}
 				return currentPage, false, nil, configModel
 			case "enter":
-				// Create the repo with provided name and description
+				// Don't allow creation if already creating
+				if configModel.IsCreating {
+					return currentPage, false, nil, configModel
+				}
+
+				// Get repo details
 				repoName := configModel.RepoNameInput.Value()
 				if repoName == "" {
 					repoName = gitcleanup.GetDefaultRepoName()
 				}
 				repoDesc := configModel.RepoDescInput.Value()
 
-				if err := gitcleanup.CreateGitHubRepo(configModel.RepoIsPrivate, repoName, repoDesc); err == nil {
-					// Success - exit creation mode and refresh
-					configModel.CreatingRepo = false
-					configModel.refreshGitHubStatus()
-					configModel.Lists[3].SetItems(configModel.loadGitStatus())
-				}
-				return currentPage, false, nil, configModel
+				// Start creating with spinner
+				configModel.IsCreating = true
+				configModel.CreateStatus = "Creating repository..."
+
+				// Return commands for both spinner and repo creation
+				return currentPage, false, tea.Batch(
+					configModel.CreateSpinner.Tick,
+					createRepoCmd(configModel.RepoIsPrivate, repoName, repoDesc),
+				), configModel
 			case " ":
 				// Toggle private/public when on that option
 				if configModel.RepoInputFocus == 2 {

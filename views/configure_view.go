@@ -14,6 +14,7 @@ var (
 	tabStyle       = lipgloss.NewStyle().Foreground(tealColor).Padding(0, 1)
 	activeTabStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(tealColor).Padding(0, 1)
 	controlStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	spinnerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
 
 // RenderConfigureContent returns the content for the project configuration view
@@ -98,41 +99,53 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 			Width(configModel.Width - 4)
 
 		var form strings.Builder
-		form.WriteString(headerStyle.Render("Create GitHub Repository") + "\n\n")
 
-		form.WriteString("Repository Name:\n")
-		nameView := configModel.RepoNameInput.View()
-		if configModel.RepoInputFocus == 0 {
-			nameView = "> " + nameView
+		// Show spinner if creating
+		if configModel.IsCreating {
+			form.WriteString(spinnerStyle.Render(configModel.CreateSpinner.View()) + " ")
+			form.WriteString(configModel.CreateStatus + "\n")
+		} else if configModel.CreateStatus != "" {
+			form.WriteString(configModel.CreateStatus + "\n\n")
 		} else {
-			nameView = "  " + nameView
+			form.WriteString(headerStyle.Render("Create GitHub Repository") + "\n\n")
 		}
-		form.WriteString(nameView + "\n\n")
 
-		form.WriteString("Description:\n")
-		descView := configModel.RepoDescInput.View()
-		if configModel.RepoInputFocus == 1 {
-			descView = "> " + descView
-		} else {
-			descView = "  " + descView
-		}
-		form.WriteString(descView + "\n\n")
+		// Only show form fields if not currently creating
+		if !configModel.IsCreating {
+			form.WriteString("Repository Name:\n")
+			nameView := configModel.RepoNameInput.View()
+			if configModel.RepoInputFocus == 0 {
+				nameView = "> " + nameView
+			} else {
+				nameView = "  " + nameView
+			}
+			form.WriteString(nameView + "\n\n")
 
-		form.WriteString("Visibility:\n")
-		visibilityText := ""
-		if configModel.RepoIsPrivate {
-			visibilityText = "[●] Private  [ ] Public"
-		} else {
-			visibilityText = "[ ] Private  [●] Public"
-		}
-		if configModel.RepoInputFocus == 2 {
-			visibilityText = "> " + visibilityText + " [Space to toggle]"
-		} else {
-			visibilityText = "  " + visibilityText
-		}
-		form.WriteString(visibilityText + "\n\n")
+			form.WriteString("Description:\n")
+			descView := configModel.RepoDescInput.View()
+			if configModel.RepoInputFocus == 1 {
+				descView = "> " + descView
+			} else {
+				descView = "  " + descView
+			}
+			form.WriteString(descView + "\n\n")
 
-		form.WriteString(controlStyle.Render("[Tab] Switch fields  [Enter] Create  [Esc] Cancel"))
+			form.WriteString("Visibility:\n")
+			visibilityText := ""
+			if configModel.RepoIsPrivate {
+				visibilityText = "[●] Private  [ ] Public"
+			} else {
+				visibilityText = "[ ] Private  [●] Public"
+			}
+			if configModel.RepoInputFocus == 2 {
+				visibilityText = "> " + visibilityText + " [Space to toggle]"
+			} else {
+				visibilityText = "  " + visibilityText
+			}
+			form.WriteString(visibilityText + "\n\n")
+
+			form.WriteString(controlStyle.Render("[Tab] Switch fields  [Enter] Create  [Esc] Cancel"))
+		}
 
 		content.WriteString(formStyle.Render(form.String()))
 	} else if configModel.Initialized {
