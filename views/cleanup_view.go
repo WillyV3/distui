@@ -31,6 +31,18 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 		return strings.Join(lines, "\n")
 	}
 
+	// Show unpushed commits warning if applicable
+	if model.RepoInfo.UnpushedCommits > 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Bold(true)
+		warningText := fmt.Sprintf("⚠ %d unpushed commit", model.RepoInfo.UnpushedCommits)
+		if model.RepoInfo.UnpushedCommits > 1 {
+			warningText = fmt.Sprintf("⚠ %d unpushed commits", model.RepoInfo.UnpushedCommits)
+		}
+		lines = append(lines, "  "+warningStyle.Render(warningText+" - [P] to push!"))
+	}
+
 	// Add blank line after header
 	lines = append(lines, "")
 
