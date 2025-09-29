@@ -52,26 +52,24 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 	// Calculate visible entries
 	headerLines := 6 // title + path + legend + divider + headers + divider
 	footerLines := 2 // divider + controls
-	availableLines := model.Height - headerLines - footerLines
-	if availableLines < 1 {
-		availableLines = 1
+	pageSize := model.Height - headerLines - footerLines
+	if pageSize < 1 {
+		pageSize = 1
 	}
 
-	// Use viewport offset from model
-	scrollStart := model.ViewportOffset
-	scrollEnd := scrollStart + availableLines
+	// Calculate which "page" the selected item is on
+	currentPage := 0
+	if pageSize > 0 && len(model.Entries) > 0 {
+		currentPage = model.Selected / pageSize
+	}
+
+	// Calculate visible range for this page
+	scrollStart := pageSize * currentPage
+	scrollEnd := scrollStart + pageSize
 
 	// Clamp to valid range
 	if scrollEnd > len(model.Entries) {
 		scrollEnd = len(model.Entries)
-	}
-
-	// Check if we need to show the "more items" indicator
-	showMoreIndicator := scrollEnd < len(model.Entries)
-
-	// If showing indicator, reduce visible items by 1 to make room
-	if showMoreIndicator && scrollEnd > scrollStart {
-		scrollEnd--
 	}
 
 	// Define colors for file types
@@ -128,19 +126,19 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 			}
 		}
 
-		// Show scroll indicator if needed
-		if showMoreIndicator {
+		// Show scroll indicator if there are more items
+		if scrollEnd < len(model.Entries) {
 			remaining := len(model.Entries) - scrollEnd
-			content.WriteString(fmt.Sprintf("  ...%d more files below\n", remaining))
+			content.WriteString(fmt.Sprintf("  ...%d more items\n", remaining))
 		}
 	}
 
-	// Fill remaining space
+	// Fill remaining space to keep footer at bottom
 	linesShown := scrollEnd - scrollStart
-	if showMoreIndicator {
+	if scrollEnd < len(model.Entries) {
 		linesShown++ // Account for the indicator line
 	}
-	for i := linesShown; i < availableLines; i++ {
+	for i := linesShown; i < pageSize; i++ {
 		content.WriteString("\n")
 	}
 
