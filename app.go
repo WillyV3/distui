@@ -4,356 +4,317 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"tuitemplate/views"
-	"tuitemplate/handlers"
+	"distui/handlers"
+	"distui/internal/config"
+	"distui/internal/detection"
+	"distui/internal/models"
+	"distui/views"
 )
 
-// pageState tracks which page we're currently viewing
 type pageState uint
 
 const (
-	homePage pageState = iota
-	page1
-	page2
-	page3
+	projectView pageState = iota
+	globalView
+	settingsView
+	releaseView
+	configureView
+	newProjectView
 )
 
-// Global spinner styling
+// Styles
 var (
-	spinnerStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true)
+	titleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+	subtleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	mainStyle   = lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("#006666")).
+			Padding(1, 2)
+	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	dotStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).SetString(" • ")
 )
 
-// MenuItem implements list.Item interface
-type menuItem struct {
-	title       string
-	description string
-	pageIndex   int
+type model struct {
+	currentPage    pageState
+	width          int
+	height         int
+	spinner        spinner.Model
+	quitting       bool
+	asciiArt       string
+
+	// Real data
+	globalConfig   *models.GlobalConfig
+	currentProject *models.ProjectConfig
+	allProjects    []models.ProjectConfig
+	detectedProject *models.ProjectInfo
+
+	// UI state
+	selectedProjectIndex int
+	configureModel      *handlers.ConfigureModel
+	settingsModel       *handlers.SettingsModel
+	globalModel         *handlers.GlobalModel
 }
 
-func (i menuItem) FilterValue() string { return i.title }
-func (i menuItem) Title() string       { return i.title }
-func (i menuItem) Description() string { return i.description }
-
-// Main application model
-type appModel struct {
-	currentPage pageState
-	choice      int // For homepage menu selection
-	width       int
-	height      int
-	quitting    bool
-	spinner     spinner.Model
-	startTime   time.Time
-	menuList    list.Model
-}
-
-func initialAppModel() appModel {
+func initialModel() model {
 	s := spinner.New()
-	// Spinner options - uncomment one to try it:
-	// s.Spinner = spinner.Line
-	// s.Spinner = spinner.Dot
-	// s.Spinner = spinner.MiniDot
-	// s.Spinner = spinner.Jump
-	// s.Spinner = spinner.Pulse
-	// s.Spinner = spinner.Points
-	// s.Spinner = spinner.Globe
-	// s.Spinner = spinner.Moon
-	// s.Spinner = spinner.Monkey
-	s.Spinner = spinner.Meter
-	// s.Spinner = spinner.Hamburger
-	s.Style = spinnerStyle
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
 
-	// Create menu items
-	items := []list.Item{
-		menuItem{title: "📄 Page One", description: "First sample page", pageIndex: 0},
-		menuItem{title: "📄 Page Two", description: "Second sample page", pageIndex: 1},
-		menuItem{title: "📄 Page Three", description: "Third sample page", pageIndex: 2},
+	// Load ASCII art
+	asciiArt := ""
+	if data, err := os.ReadFile("ascii-art-txt"); err == nil {
+		asciiArt = string(data)
 	}
 
-	// Create list with custom delegate
-	delegate := list.NewDefaultDelegate()
+	// Load global config
+	globalConfig, err := config.LoadGlobalConfig()
+	if err != nil {
+		globalConfig = nil
+	}
 
-	// Customize colors using your base scheme
-	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(lipgloss.Color("117")).
-		BorderLeftForeground(lipgloss.Color("117"))
+	// Try to detect current project
+	detectedProject, err := detection.DetectProject(".")
+	if err != nil {
+		// Log the error for debugging but don't fail
+		fmt.Fprintf(os.Stderr, "Detection error: %v\n", err)
+	}
 
-	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(lipgloss.Color("244"))
+	// Load current project if it exists
+	var currentProject *models.ProjectConfig
+	if detectedProject != nil {
+		currentProject, _ = config.LoadProject(detectedProject.Identifier)
+	}
 
-	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.
-		Foreground(lipgloss.Color("255"))
+	// Load all projects (simplified for now)
+	var allProjects []models.ProjectConfig
+	if distui, err := config.LoadProject("distui"); err == nil {
+		allProjects = append(allProjects, *distui)
+	}
 
-	delegate.Styles.NormalDesc = delegate.Styles.NormalDesc.
-		Foreground(lipgloss.Color("244"))
+	// Always start at project view
+	initialPage := projectView
 
-	menuList := list.New(items, delegate, 50, 10)
-	menuList.SetShowHelp(false)
-	menuList.SetShowTitle(false)
-	menuList.SetShowStatusBar(false)
-	menuList.SetFilteringEnabled(false)
-
-	return appModel{
-		currentPage: homePage,
-		choice:      0,
-		width:       80,
-		height:      24,
-		spinner:     s,
-		startTime:   time.Now(),
-		menuList:    menuList,
+	return model{
+		currentPage:     initialPage,
+		spinner:         s,
+		asciiArt:        asciiArt,
+		globalConfig:    globalConfig,
+		currentProject:  currentProject,
+		allProjects:     allProjects,
+		detectedProject: detectedProject,
+		configureModel:  nil,
+		settingsModel:   nil,
 	}
 }
 
-func (m appModel) Init() tea.Cmd {
+func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		tea.SetWindowTitle("TUI Template App"),
+		tea.SetWindowTitle("distui - Go Release Manager"),
 	)
 }
 
-// Main update function - routes messages to appropriate page handlers
-func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Global quit keys
-	if msg, ok := msg.(tea.KeyMsg); ok {
-		if msg.String() == "ctrl+c" {
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			m.quitting = true
 			return m, tea.Quit
 		}
-	}
 
-	// Handle window resize globally
-	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Don't return early - let the message pass through to handlers
 	}
 
-	// Update spinner animation
+	// Update spinner
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
 
-	// Route to appropriate page handler
+	// Route to page handlers
 	switch m.currentPage {
-	case homePage:
-		var pageCmd tea.Cmd
-		m, pageCmd = m.updateHomePage(msg)
-		return m, tea.Batch(cmd, pageCmd)
-	case page1:
-		newPage, quitting, pageCmd := handlers.UpdatePage1(int(m.currentPage), int(homePage), msg)
-		m.currentPage = pageState(newPage)
-		m.quitting = quitting
-		return m, tea.Batch(cmd, pageCmd)
-	case page2:
-		newPage, quitting, pageCmd := handlers.UpdatePage2(int(m.currentPage), int(homePage), msg)
-		m.currentPage = pageState(newPage)
-		m.quitting = quitting
-		return m, tea.Batch(cmd, pageCmd)
-	case page3:
-		newPage, quitting, pageCmd := handlers.UpdatePage3(int(m.currentPage), int(homePage), msg)
-		m.currentPage = pageState(newPage)
-		m.quitting = quitting
-		return m, tea.Batch(cmd, pageCmd)
-	default:
-		return m, cmd
-	}
-}
-
-// Homepage update handler
-func (m appModel) updateHomePage(msg tea.Msg) (appModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc":
-			m.quitting = true
-			return m, tea.Quit
-		case "j", "down":
-			if m.choice < 2 {
-				m.choice++
-			}
-		case "k", "up":
-			if m.choice > 0 {
-				m.choice--
-			}
-		case "enter":
-			// Navigate to selected page
-			switch m.choice {
-			case 0:
-				m.currentPage = page1
-			case 1:
-				m.currentPage = page2
-			case 2:
-				m.currentPage = page3
-			}
-			return m, nil
+	case projectView:
+		newPage, quitting, pageCmd := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg)
+		// Pre-create configure model if navigating to it
+		if newPage == int(configureView) && m.configureModel == nil && m.width > 0 && m.height > 0 {
+			width := m.width - 6   // border (2) + padding (4)
+			height := m.height - 4 // border (2) + padding (2)
+			m.configureModel = handlers.NewConfigureModel(width, height)
 		}
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		return m, tea.Batch(cmd, pageCmd)
+	case globalView:
+		if m.globalModel == nil {
+			m.globalModel = handlers.NewGlobalModel(m.allProjects)
+		}
+		newPage, quitting, pageCmd, newGlobalModel := handlers.UpdateGlobalView(
+			int(m.currentPage), int(projectView), msg, m.globalModel)
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		m.globalModel = newGlobalModel
+		// Sync selectedIndex back to model
+		if m.globalModel != nil {
+			m.selectedProjectIndex = m.globalModel.SelectedIndex
+		}
+		return m, tea.Batch(cmd, pageCmd)
+	case settingsView:
+		if m.settingsModel == nil {
+			m.settingsModel = handlers.NewSettingsModel(m.globalConfig)
+		}
+		newPage, quitting, pageCmd, newSettingsModel := handlers.UpdateSettingsView(
+			int(m.currentPage), int(projectView), msg, m.settingsModel)
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		m.settingsModel = newSettingsModel
+		return m, tea.Batch(cmd, pageCmd)
+	case releaseView:
+		newPage, quitting, pageCmd := handlers.UpdateReleaseView(int(m.currentPage), int(projectView), msg)
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		return m, tea.Batch(cmd, pageCmd)
+	case configureView:
+		// Create model on first access with proper dimensions
+		if m.configureModel == nil && m.width > 0 && m.height > 0 {
+			// Account for border and padding from View()
+			width := m.width - 6   // border (2) + padding (4)
+			height := m.height - 4 // border (2) + padding (2)
+			m.configureModel = handlers.NewConfigureModel(width, height)
+		}
+		// Update dimensions on every frame if model exists
+		if m.configureModel != nil && m.width > 0 && m.height > 0 {
+			m.configureModel.Width = m.width - 6   // border (2) + padding (4)
+			m.configureModel.Height = m.height - 4 // border (2) + padding (2)
+		}
+		newPage, quitting, pageCmd, newConfigModel := handlers.UpdateConfigureView(
+			int(m.currentPage), int(projectView), msg, m.configureModel)
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		m.configureModel = newConfigModel
+		return m, tea.Batch(cmd, pageCmd)
+	case newProjectView:
+		newPage, quitting, pageCmd := handlers.UpdateNewProjectView(int(m.currentPage), int(globalView), msg)
+		m.currentPage = pageState(newPage)
+		m.quitting = quitting
+		return m, tea.Batch(cmd, pageCmd)
 	}
-	return m, nil
+
+	return m, cmd
 }
 
-
-
-// Main view function - routes to appropriate page renderer
-func (m appModel) View() string {
+func (m model) View() string {
 	if m.quitting {
-		return "\n  Thanks for visiting TUI Template App! 👋\n\n"
+		return "\n  Goodbye!\n\n"
 	}
 
+	var s string
+
+	// Route to appropriate view
 	switch m.currentPage {
-	case homePage:
-		return m.homePageView()
-	case page1:
-		return m.page1View()
-	case page2:
-		return m.page2View()
-	case page3:
-		return m.page3View()
+	case projectView:
+		s = m.renderProjectView()
+	case globalView:
+		s = m.renderGlobalView()
+	case settingsView:
+		s = views.RenderSettingsContent(m.settingsModel)
+	case releaseView:
+		s = m.renderReleaseView()
+	case configureView:
+		s = m.renderConfigureView()
+	case newProjectView:
+		s = m.renderNewProjectView()
 	default:
-		return "Unknown page"
+		s = "Unknown page"
 	}
+
+	// Use the window dimensions to create full-screen border
+	// The content will fill the available space
+	if m.width > 0 && m.height > 0 {
+		// Calculate available space inside border and padding
+		// ThickBorder = 2 chars on each side, padding = 2 on each side
+		contentWidth := m.width - 2  // Account for border
+		contentHeight := m.height - 2 // Account for border
+
+		// Create a style that fills the window
+		fullScreenStyle := lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder()).
+			BorderForeground(lipgloss.Color("#006666")).
+			Padding(1, 2).
+			Width(contentWidth).
+			Height(contentHeight)
+
+		return fullScreenStyle.Render(s)
+	}
+
+	return mainStyle.Render(s)
 }
 
-// Homepage view renderer
-func (m appModel) homePageView() string {
-	// Load ASCII title from file
-	asciiContent, err := os.ReadFile("ascii-art-txt")
-	var asciiTitle string
-	if err == nil {
-		asciiTitle = string(asciiContent)
-	} else {
-		// Fallback if file can't be read
-		asciiTitle = "🖥️  TUI TEMPLATE APP  🖥️"
+func (m model) renderProjectView() string {
+	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig)
+}
+
+func (m model) renderGlobalView() string {
+	deleteMode := false
+	if m.globalModel != nil {
+		deleteMode = m.globalModel.DeletingMode
 	}
-
-	// Create responsive layout styles with outer border
-	containerStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Padding(1).
-		Width(m.width - 2).
-		Height(m.height - 2).
-		Align(lipgloss.Center, lipgloss.Center)
-
-	// Static ASCII title - no animation
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Align(lipgloss.Center)
+	return views.RenderGlobalContent(m.allProjects, m.selectedProjectIndex, deleteMode)
+}
 
 
-	subtitleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("244")).
-		Italic(true).
-		Align(lipgloss.Center).
-		Margin(1, 0)
+func (m model) renderReleaseView() string {
+	return views.RenderReleaseContent()
+}
 
-	// Build the animated subtitle with spinners on both sides
-	animatedSubtitle := fmt.Sprintf("%s %s %s",
-		m.spinner.View(),
-		"A template for building terminal applications",
-		m.spinner.View())
-
-	// Simple menu items - all visible at once
-	menuItems := []struct {
-		title string
-		desc  string
-		index int
-	}{
-		{"📄 Page One", "First sample page", 0},
-		{"📄 Page Two", "Second sample page", 1},
-		{"📄 Page Three", "Third sample page", 2},
+func (m model) renderConfigureView() string {
+	projectName := "distui"
+	if m.detectedProject != nil {
+		projectName = m.detectedProject.Module.Name
 	}
+	return views.RenderConfigureContent(projectName, m.configureModel)
+}
 
-	// Build simple menu display
-	var menuContent strings.Builder
-	menuContent.WriteString("Welcome to the TUI Template! Choose a page to explore:\n\n")
+func (m model) renderNewProjectView() string {
+	var b strings.Builder
 
-	for i, item := range menuItems {
-		cursor := "   "
-		itemStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
-		descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	b.WriteString(titleStyle.Render("New Project Setup"))
+	b.WriteString("\n\n")
 
-		if m.choice == i {
-			cursor = "▶  "
-			itemStyle = itemStyle.Foreground(lipgloss.Color("117")).Bold(true)
-			descStyle = descStyle.Foreground(lipgloss.Color("117"))
+	if m.detectedProject != nil {
+		b.WriteString("Detected Project Information:\n\n")
+		b.WriteString(fmt.Sprintf("  Module: %s\n", m.detectedProject.Module.Name))
+		b.WriteString(fmt.Sprintf("  Path:   %s\n", m.detectedProject.Path))
+		if m.detectedProject.Repository != nil {
+			b.WriteString(fmt.Sprintf("  Repo:   %s/%s\n",
+				m.detectedProject.Repository.Owner,
+				m.detectedProject.Repository.Name))
 		}
-
-		menuContent.WriteString(itemStyle.Render(cursor + item.title) + "\n")
-		menuContent.WriteString(descStyle.Render("    " + item.desc) + "\n\n")
+		b.WriteString("\n")
+		b.WriteString("[s] Save this project\n")
+		b.WriteString("[e] Edit details\n")
+		b.WriteString("[c] Cancel\n")
+	} else {
+		b.WriteString("No project detected in current directory.\n")
+		b.WriteString("Please navigate to a Go project directory.\n")
 	}
 
-	menuContent.WriteString("↑/↓: navigate • enter: select • q: quit")
+	return b.String()
+}
 
-	// Create a styled container for the menu
-	menuContainer := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Padding(2, 4).
-		Margin(1, 0).
-		Align(lipgloss.Center)
 
-	// Combine everything with responsive layout
-	content := lipgloss.JoinVertical(
-		lipgloss.Center,
-		titleStyle.Render(asciiTitle),
-		subtitleStyle.Render(animatedSubtitle),
-		menuContainer.Render(menuContent.String()),
+func main() {
+	p := tea.NewProgram(
+		initialModel(),
+		tea.WithAltScreen(),
 	)
-
-	return containerStyle.Render(content)
-}
-
-// Standard page layout wrapper - locked pattern for all pages
-func (m appModel) renderPage(title, content string) string {
-	containerStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Padding(1).
-		Width(m.width - 2).
-		Height(m.height - 2).
-		Align(lipgloss.Center, lipgloss.Top)
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true).
-		Align(lipgloss.Center).
-		Margin(0, 0, 1, 0)
-
-	contentStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Padding(2, 4).
-		Width(m.width - 8)
-
-	pageContent := lipgloss.JoinVertical(
-		lipgloss.Center,
-		titleStyle.Render(title),
-		contentStyle.Render(content),
-	)
-
-	return containerStyle.Render(pageContent)
-}
-
-// Page1 view renderer
-func (m appModel) page1View() string {
-	content := views.RenderPage1Content()
-	return m.renderPage("📄 Page One", content)
-}
-
-// Page2 view renderer
-func (m appModel) page2View() string {
-	content := views.RenderPage2Content()
-	return m.renderPage("📄 Page Two", content)
-}
-
-// Page3 view renderer
-func (m appModel) page3View() string {
-	content := views.RenderPage3Content()
-	return m.renderPage("📄 Page Three", content)
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error: %v", err)
+		os.Exit(1)
+	}
 }
