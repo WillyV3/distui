@@ -162,8 +162,10 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	lines = append(lines, "  Actions:")
 	if model.HasChanges() {
 		lines = append(lines, "  [C] Commit  [s] Smart commit  [r] Refresh")
-	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
+	} else if model.RepoInfo != nil && model.RepoInfo.UnpushedCommits > 0 {
 		lines = append(lines, "  [P] Push to remote  [r] Refresh")
+	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
+		lines = append(lines, "  [r] Refresh")
 	} else if model.NeedsGitHub() {
 		lines = append(lines, "  [G] Set up GitHub  [r] Refresh")
 	} else {
