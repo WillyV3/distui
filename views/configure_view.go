@@ -10,11 +10,9 @@ import (
 )
 
 var (
-	tealColor      = lipgloss.Color("#006666")
-	tabStyle       = lipgloss.NewStyle().Foreground(tealColor).Padding(0, 1)
-	activeTabStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(tealColor).Padding(0, 1)
-	controlStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	spinnerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+	tealColor    = lipgloss.Color("#006666")
+	controlStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
 )
 
 // RenderConfigureContent returns the content for the project configuration view
@@ -64,30 +62,65 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 	content.WriteString("\n")
 
-	// Render tabs with border
-	tabs := []string{"Distributions", "Build Settings", "Advanced", "Cleanup"}
-	var renderedTabs []string
+	// Render tabs as flexbox-style boxes
+	tabs := []string{"Distributions", "Build", "Advanced", "Cleanup"}
 
-	for i, t := range tabs {
-		style := tabStyle
-		if i == configModel.ActiveTab {
-			style = activeTabStyle
+	// Calculate dynamic tab width based on window width
+	// Distribute width evenly, accounting for rounding
+	baseTabWidth := 18 // Default width
+	extraWidth := 0
+	if configModel.Width > 8 {
+		baseTabWidth = configModel.Width / 4
+		extraWidth = configModel.Width % 4 // Handle remainder
+		if baseTabWidth < 12 {
+			baseTabWidth = 12 // Minimum readable width
 		}
+		if baseTabWidth > 25 {
+			baseTabWidth = 25 // Maximum reasonable width
+			extraWidth = 0
+		}
+	}
+
+	var renderedTabs []string
+	for i, t := range tabs {
+		// Give extra width to last tab to fill entire width
+		tabWidth := baseTabWidth
+		if i == 3 && extraWidth > 0 {
+			tabWidth += extraWidth
+		}
+
+		// Create styles with appropriate width
+		style := lipgloss.NewStyle().
+			Width(tabWidth).
+			Height(1).
+			Align(lipgloss.Center)
+
+		if i == configModel.ActiveTab {
+			style = style.
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(tealColor)
+		} else {
+			style = style.
+				Foreground(lipgloss.Color("240"))
+		}
+
 		renderedTabs = append(renderedTabs, style.Render(t))
 	}
 
-	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
+	// Join tabs horizontally
+	content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...) + "\n\n")
 
-	// Apply border with width constraints
-	borderStyle := lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder()).
-		BorderForeground(tealColor)
+	// Create content area box that matches tab width
+	contentBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1, 0) // Vertical padding only, no horizontal
 
-	if configModel.Width > 0 {
-		borderStyle = borderStyle.Width(configModel.Width - 2)
+	// Set content box width to match total width
+	if configModel.Width > 8 {
+		// Use full width minus border
+		contentBox = contentBox.Width(configModel.Width - 2)
 	}
-
-	content.WriteString(borderStyle.Render(row) + "\n")
 
 	// Render the active list or repo creation form
 	if configModel.CreatingRepo {
@@ -149,9 +182,11 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 		content.WriteString(formStyle.Render(form.String()))
 	} else if configModel.Initialized {
-		content.WriteString(configModel.Lists[configModel.ActiveTab].View())
+		// Wrap list content in the content box
+		listContent := configModel.Lists[configModel.ActiveTab].View()
+		content.WriteString(contentBox.Render(listContent))
 	} else {
-		content.WriteString("Initializing...")
+		content.WriteString(contentBox.Render("Initializing..."))
 	}
 
 	// Controls

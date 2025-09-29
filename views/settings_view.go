@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"distui/handlers"
+	"distui/internal/models"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -41,14 +42,20 @@ func RenderSettingsContent(model *handlers.SettingsModel) string {
 			}
 
 			label := []string{
-				"GitHub Username:",
+				"Primary GitHub:",
+				"All Accounts:",
 				"Homebrew Tap:",
 				"NPM Scope:",
 				"Version Bump:",
 			}[i]
 
 			content.WriteString(style.Render(fmt.Sprintf("%-20s", label)))
+			content.WriteString(" ") // Add space between label and input
 			content.WriteString(model.Inputs[i].View())
+			if i == 1 {
+				content.WriteString("\n")
+				content.WriteString(subtleStyle.Render("                       (comma-separated, prefix with '@' for orgs: user1, @org1, user2)"))
+			}
 			content.WriteString("\n")
 		}
 
@@ -72,8 +79,52 @@ func RenderSettingsContent(model *handlers.SettingsModel) string {
 		// Display current settings
 		if model.Config != nil {
 			content.WriteString("Current Configuration:\n\n")
-			content.WriteString(fmt.Sprintf("  GitHub Username: %s\n", model.Config.User.GitHubUsername))
-			content.WriteString(fmt.Sprintf("  Homebrew Tap:   %s\n", model.Config.User.DefaultHomebrewTap))
+
+			// Show GitHub accounts
+			content.WriteString("  GitHub Accounts:\n")
+
+			// Build the complete accounts list including primary
+			var allAccounts []models.GitHubAccount
+			primaryUsername := model.Config.User.GitHubUsername
+			primaryAdded := false
+
+			// First, add all existing accounts
+			for _, acc := range model.Config.User.GitHubAccounts {
+				allAccounts = append(allAccounts, acc)
+				if acc.Username == primaryUsername && !acc.IsOrg {
+					primaryAdded = true
+				}
+			}
+
+			// If primary wasn't in the list, add it first
+			if primaryUsername != "" && !primaryAdded {
+				primaryAccount := models.GitHubAccount{
+					Username: primaryUsername,
+					IsOrg:    false,
+					Default:  true,
+				}
+				allAccounts = append([]models.GitHubAccount{primaryAccount}, allAccounts...)
+			}
+
+			// Display all accounts
+			if len(allAccounts) > 0 {
+				for _, acc := range allAccounts {
+					prefix := "    •"
+					if acc.Default || acc.Username == primaryUsername {
+						prefix = "    ✓"
+					}
+					username := acc.Username
+					if acc.IsOrg {
+						username = "@" + username
+					}
+					content.WriteString(fmt.Sprintf("%s %s\n", prefix, username))
+				}
+			
+			} else {
+				content.WriteString("    (none)\n")
+			}
+
+			content.WriteString(fmt.Sprintf("\n  Homebrew Tap:   %s\n", model.Config.User.DefaultHomebrewTap))
 			content.WriteString(fmt.Sprintf("  NPM Scope:      %s\n", model.Config.User.NPMScope))
 			content.WriteString(fmt.Sprintf("  Version Bump:   %s\n", model.Config.Preferences.DefaultVersionBump))
 		} else {

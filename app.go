@@ -143,7 +143,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newPage, quitting, pageCmd := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg)
 		// Pre-create configure model if navigating to it
 		if newPage == int(configureView) && m.configureModel == nil && m.width > 0 && m.height > 0 {
-			width := m.width - 6   // border (2) + padding (4)
+			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
 			m.configureModel = handlers.NewConfigureModel(width, height)
 		}
@@ -183,13 +183,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Create model on first access with proper dimensions
 		if m.configureModel == nil && m.width > 0 && m.height > 0 {
 			// Account for border and padding from View()
-			width := m.width - 6   // border (2) + padding (4)
+			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
 			m.configureModel = handlers.NewConfigureModel(width, height)
 		}
 		// Update dimensions on every frame if model exists
 		if m.configureModel != nil && m.width > 0 && m.height > 0 {
-			m.configureModel.Width = m.width - 6   // border (2) + padding (4)
+			m.configureModel.Width = m.width - 4   // border (2) + padding (2)
 			m.configureModel.Height = m.height - 4 // border (2) + padding (2)
 		}
 		newPage, quitting, pageCmd, newConfigModel := handlers.UpdateConfigureView(
@@ -245,7 +245,7 @@ func (m model) View() string {
 		fullScreenStyle := lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(lipgloss.Color("#006666")).
-			Padding(1, 2).
+			Padding(1, 1).
 			Width(contentWidth).
 			Height(contentHeight)
 
