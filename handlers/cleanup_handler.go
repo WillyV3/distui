@@ -6,12 +6,13 @@ import (
 )
 
 type CleanupModel struct {
-	RepoInfo    *gitcleanup.RepoInfo
-	FileChanges []gitcleanup.FileChange
-	StatusText  string
-	Width       int
-	Height      int
-	RepoBrowser *RepoBrowserModel
+	RepoInfo         *gitcleanup.RepoInfo
+	FileChanges      []gitcleanup.FileChange
+	StatusText       string
+	Width            int
+	Height           int
+	RepoBrowser      *RepoBrowserModel
+	GitHubRepoExists bool
 }
 
 func NewCleanupModel(width, height int) *CleanupModel {
@@ -38,6 +39,14 @@ func (m *CleanupModel) loadRepoStatus() error {
 	}
 
 	m.StatusText = gitcleanup.GetRepoStatus()
+
+	// Cache GitHub repo existence check
+	if m.RepoInfo != nil && m.RepoInfo.RemoteExists {
+		m.GitHubRepoExists = gitcleanup.CheckGitHubRepoExists()
+	} else {
+		m.GitHubRepoExists = false
+	}
+
 	return nil
 }
 

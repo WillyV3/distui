@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"distui/internal/gitcleanup"
+	"distui/internal/models"
 )
 
 // Message types for async operations
@@ -52,12 +53,13 @@ type ConfigureModel struct {
 	CommitModel     *CommitModel
 
 	// Legacy fields (to be removed)
-	CreatingRepo    bool
-	RepoNameInput   textinput.Model
-	RepoDescInput   textinput.Model
-	RepoInputFocus  int  // 0=name, 1=description, 2=private toggle, 3=account selection
-	RepoIsPrivate   bool // true=private, false=public
-	SelectedAccountIdx int // Index of selected GitHub account for repo creation
+	CreatingRepo       bool
+	RepoNameInput      textinput.Model
+	RepoDescInput      textinput.Model
+	RepoInputFocus     int  // 0=name, 1=description, 2=private toggle, 3=account selection
+	RepoIsPrivate      bool                   // true=private, false=public
+	SelectedAccountIdx int                    // Index of selected GitHub account for repo creation
+	GitHubAccounts     []models.GitHubAccount // List of available accounts/orgs
 	// Spinner for repo creation
 	IsCreating      bool
 	CreateSpinner   spinner.Model
@@ -159,7 +161,7 @@ func (i CleanupItem) Description() string {
 func (i CleanupItem) FilterValue() string { return i.Path }
 
 // Initialize the configure model
-func NewConfigureModel(width, height int) *ConfigureModel {
+func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount) *ConfigureModel {
 	// Use provided dimensions or defaults
 	if width <= 0 {
 		width = 100
@@ -169,10 +171,11 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	}
 
 	m := &ConfigureModel{
-		ActiveTab:   0,
-		Width:       width,
-		Height:      height,
-		Initialized: true,
+		ActiveTab:      0,
+		Width:          width,
+		Height:         height,
+		Initialized:    true,
+		GitHubAccounts: githubAccounts,
 	}
 
 	// Initialize repo creation inputs
@@ -377,13 +380,15 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 				Action:   "skip",
 			})
 		} else if !gitcleanup.CheckGitHubRepoExists() {
-			owner, repo, _ := gitcleanup.GetRepoInfo()
-			items = append(items, CleanupItem{
-				Path:     fmt.Sprintf("Push to github.com/%s/%s", owner, repo),
-				Status:   "↑",
-				Category: "github-push",
-				Action:   "skip",
-			})
+			owner, repo, err := gitcleanup.GetRepoInfo()
+			if err == nil && owner != "" && repo != "" {
+				items = append(items, CleanupItem{
+					Path:     fmt.Sprintf("Push to github.com/%s/%s", owner, repo),
+					Status:   "↑",
+					Category: "github-push",
+					Action:   "skip",
+				})
+			}
 		}
 	}
 
@@ -483,6 +488,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.RepoIsPrivate = false
 			m.RepoInputFocus = 0
 			m.refreshGitHubStatus()
+			if m.CleanupModel != nil {
+				m.CleanupModel.Refresh()
+			}
 			m.Lists[0].SetItems(m.loadGitStatus())
 			m.CreateStatus = "✓ Repository created successfully!"
 			// Clear status after 3 seconds
@@ -791,8 +799,8 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
-		// Legacy handler for old 'G' key behavior (to be removed)
-		if false && msg.String() == "G" && configModel != nil && !configModel.CreatingRepo {
+		// Handle 'G' key to create GitHub repository (only in TabView, Cleanup tab)
+		if msg.String() == "G" && configModel != nil && !configModel.CreatingRepo && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
 			// Check if we need to create a GitHub repo
 			if gitcleanup.HasGitRepo() {
 				if !gitcleanup.HasGitHubRemote() || !gitcleanup.CheckGitHubRepoExists() {
@@ -837,7 +845,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.CreatingRepo = false
 				return currentPage, false, nil, configModel
 			case "tab":
-				// Cycle through name, description, and private toggle
+				// Cycle through name, description, private toggle, and account
+				maxFields := 3
+				if len(configModel.GitHubAccounts) > 0 {
+					maxFields = 4
+				}
+
 				if configModel.RepoInputFocus == 0 {
 					configModel.RepoInputFocus = 1
 					configModel.RepoNameInput.Blur()
@@ -845,6 +858,8 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				} else if configModel.RepoInputFocus == 1 {
 					configModel.RepoInputFocus = 2
 					configModel.RepoDescInput.Blur()
+				} else if configModel.RepoInputFocus == 2 && maxFields == 4 {
+					configModel.RepoInputFocus = 3
 				} else {
 					configModel.RepoInputFocus = 0
 					configModel.RepoNameInput.Focus()
@@ -868,8 +883,10 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.CreateStatus = "Creating repository..."
 
 				// Get the owner (account) to create under
-				// TODO: This needs to be populated from global config accounts
-				owner := "" // Will use default account for now
+				owner := ""
+				if len(configModel.GitHubAccounts) > 0 && configModel.SelectedAccountIdx < len(configModel.GitHubAccounts) {
+					owner = configModel.GitHubAccounts[configModel.SelectedAccountIdx].Username
+				}
 
 				// Return commands for both spinner and repo creation
 				return currentPage, false, tea.Batch(
@@ -877,9 +894,18 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 					createRepoCmd(configModel.RepoIsPrivate, repoName, repoDesc, owner),
 				), configModel
 			case " ":
-				// Toggle private/public when on that option
+				// Toggle based on focus
 				if configModel.RepoInputFocus == 2 {
+					// Toggle private/public
 					configModel.RepoIsPrivate = !configModel.RepoIsPrivate
+					return currentPage, false, nil, configModel
+				}
+				if configModel.RepoInputFocus == 3 && len(configModel.GitHubAccounts) > 0 {
+					// Cycle through accounts
+					configModel.SelectedAccountIdx++
+					if configModel.SelectedAccountIdx >= len(configModel.GitHubAccounts) {
+						configModel.SelectedAccountIdx = 0
+					}
 					return currentPage, false, nil, configModel
 				}
 				// For text inputs, fall through to default to handle space as text

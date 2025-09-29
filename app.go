@@ -145,7 +145,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if newPage == int(configureView) && m.configureModel == nil && m.width > 0 && m.height > 0 {
 			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
-			m.configureModel = handlers.NewConfigureModel(width, height)
+			accounts := extractGitHubAccounts(m.globalConfig)
+			m.configureModel = handlers.NewConfigureModel(width, height, accounts)
 		}
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
@@ -185,7 +186,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Account for border and padding from View()
 			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
-			m.configureModel = handlers.NewConfigureModel(width, height)
+			accounts := extractGitHubAccounts(m.globalConfig)
+			m.configureModel = handlers.NewConfigureModel(width, height, accounts)
 		}
 		// Update dimensions on every frame if model exists
 		if m.configureModel != nil && m.width > 0 && m.height > 0 {
@@ -307,6 +309,29 @@ func (m model) renderNewProjectView() string {
 	return b.String()
 }
 
+func extractGitHubAccounts(cfg *models.GlobalConfig) []models.GitHubAccount {
+	if cfg == nil {
+		return []models.GitHubAccount{}
+	}
+
+	accounts := []models.GitHubAccount{}
+
+	// Add legacy personal account first if configured
+	if cfg.User.GitHubUsername != "" {
+		accounts = append(accounts, models.GitHubAccount{
+			Username: cfg.User.GitHubUsername,
+			IsOrg:    false,
+			Default:  true,
+		})
+	}
+
+	// Add accounts from GitHubAccounts list
+	for _, acc := range cfg.User.GitHubAccounts {
+		accounts = append(accounts, acc)
+	}
+
+	return accounts
+}
 
 func main() {
 	p := tea.NewProgram(

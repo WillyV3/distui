@@ -91,11 +91,20 @@ func CreateGitHubRepo(isPrivate bool, customName string, description string, own
 		repoName = GetDefaultRepoName()
 	}
 
-	// Check if we already have a remote - if so, we need to handle it differently
-	hasRemote := HasGitHubRemote()
+	// Ensure git is initialized
+	if !HasGitRepo() {
+		cmd := exec.Command("git", "init")
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to initialize git: %w", err)
+		}
+	}
 
+	// Ensure we're on main branch (not master)
+	exec.Command("git", "branch", "-M", "main").Run()
+
+	// Check if we already have a remote - if so, remove it
+	hasRemote := HasGitHubRemote()
 	if hasRemote {
-		// Remove existing remote first
 		exec.Command("git", "remote", "remove", "origin").Run()
 	}
 
@@ -107,7 +116,7 @@ func CreateGitHubRepo(isPrivate bool, customName string, description string, own
 		repoFullName = repoName
 	}
 
-	args := []string{"repo", "create", repoFullName, "--source", "."}
+	args := []string{"repo", "create", repoFullName}
 	if isPrivate {
 		args = append(args, "--private")
 	} else {
@@ -119,12 +128,17 @@ func CreateGitHubRepo(isPrivate bool, customName string, description string, own
 		args = append(args, "--description", description)
 	}
 
-	// Add --push to set up remote and push
-	args = append(args, "--push")
-
+	// Create the repo
 	cmd := exec.Command("gh", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create GitHub repo: %w", err)
+	}
+
+	// Add the remote manually (don't push yet - that's for release workflow)
+	remoteURL := fmt.Sprintf("git@github.com:%s.git", repoFullName)
+	cmd = exec.Command("git", "remote", "add", "origin", remoteURL)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to add remote: %w", err)
 	}
 
 	return nil

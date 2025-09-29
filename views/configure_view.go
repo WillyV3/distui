@@ -133,6 +133,10 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 
 	// Set height constraint - use the listHeight calculation
+	boxWidth := configModel.Width - 2
+	if boxWidth < 40 {
+		boxWidth = 40
+	}
 	boxHeight := configModel.Height - 13
 	if boxHeight < 5 {
 		boxHeight = 5
@@ -141,7 +145,142 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 	// First, render the base content
 	var baseContent string
-	if configModel.ActiveTab == 0 {
+	if configModel.CreatingRepo {
+		// Show repo creation form (available from any tab)
+		boxWidth := configModel.Width - 2
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+
+		formWidth := boxWidth - 4
+		if formWidth < 40 {
+			formWidth = 40
+		}
+
+		formStyle := lipgloss.NewStyle().
+			PaddingLeft(2).
+			Width(formWidth)
+
+		var form strings.Builder
+
+		// Add top padding
+		form.WriteString("\n")
+
+		// Show spinner if creating
+		if configModel.IsCreating {
+			form.WriteString("  " + spinnerStyle.Render(configModel.CreateSpinner.View()) + " ")
+			form.WriteString(configModel.CreateStatus + "\n")
+		} else if configModel.CreateStatus != "" {
+			form.WriteString("  " + configModel.CreateStatus + "\n\n")
+		} else {
+			form.WriteString("  " + headerStyle.Render("CREATE GITHUB REPOSITORY") + "\n\n")
+		}
+
+		// Only show form fields if not currently creating
+		if !configModel.IsCreating {
+			form.WriteString("  Repository Name:\n")
+			nameView := configModel.RepoNameInput.View()
+			if configModel.RepoInputFocus == 0 {
+				nameView = "  > " + nameView
+			} else {
+				nameView = "    " + nameView
+			}
+			form.WriteString(nameView + "\n\n")
+
+			form.WriteString("  Description:\n")
+			descView := configModel.RepoDescInput.View()
+			if configModel.RepoInputFocus == 1 {
+				descView = "  > " + descView
+			} else {
+				descView = "    " + descView
+			}
+			form.WriteString(descView + "\n\n")
+
+			form.WriteString("  Visibility:\n")
+			if configModel.RepoInputFocus == 2 {
+				form.WriteString("  > ")
+			} else {
+				form.WriteString("    ")
+			}
+			if configModel.RepoIsPrivate {
+				form.WriteString("[●] Private  [ ] Public")
+			} else {
+				form.WriteString("[ ] Private  [●] Public")
+			}
+			if configModel.RepoInputFocus == 2 {
+				form.WriteString("  [Space]")
+			}
+			form.WriteString("\n\n")
+
+			// Account selection
+			if len(configModel.GitHubAccounts) > 0 {
+				form.WriteString("  Account:\n")
+
+				// Show inline if 2 or fewer accounts, otherwise stack vertically
+				if len(configModel.GitHubAccounts) <= 2 {
+					if configModel.RepoInputFocus == 3 {
+						form.WriteString("  > ")
+					} else {
+						form.WriteString("    ")
+					}
+
+					var parts []string
+					for i, acc := range configModel.GitHubAccounts {
+						checkbox := "[ ]"
+						if i == configModel.SelectedAccountIdx {
+							checkbox = "[●]"
+						}
+
+						accType := "user"
+						if acc.IsOrg {
+							accType = "org"
+						}
+
+						parts = append(parts, fmt.Sprintf("%s %s (%s)", checkbox, acc.Username, accType))
+					}
+
+					form.WriteString(strings.Join(parts, "  "))
+
+					if configModel.RepoInputFocus == 3 {
+						form.WriteString("  [Space]")
+					}
+					form.WriteString("\n")
+				} else {
+					// Multiple accounts - show vertically
+					for i, acc := range configModel.GitHubAccounts {
+						if configModel.RepoInputFocus == 3 && i == configModel.SelectedAccountIdx {
+							form.WriteString("  > ")
+						} else {
+							form.WriteString("    ")
+						}
+
+						checkbox := "[ ]"
+						if i == configModel.SelectedAccountIdx {
+							checkbox = "[●]"
+						}
+
+						accType := "user"
+						if acc.IsOrg {
+							accType = "org"
+						}
+
+						form.WriteString(fmt.Sprintf("%s %s (%s)", checkbox, acc.Username, accType))
+
+						if configModel.RepoInputFocus == 3 && i == configModel.SelectedAccountIdx {
+							form.WriteString("  [Space]")
+						}
+
+						form.WriteString("\n")
+					}
+				}
+				form.WriteString("\n")
+			}
+
+			form.WriteString("  " + controlStyle.Render("[Tab] Switch fields  [Enter] Create  [Esc] Cancel"))
+		}
+
+		baseContent = formStyle.Render(form.String())
+	} else if configModel.ActiveTab == 0 {
 		// Special handling for Cleanup tab - show status instead of list
 		// Add status message if present
 		statusContent := RenderCleanupStatus(configModel.CleanupModel)
@@ -152,64 +291,6 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 				Render(configModel.CreateStatus) + "\n\n" + statusContent
 		}
 		baseContent = statusContent
-	} else if configModel.CreatingRepo {
-		// Show repo creation form (available from any tab)
-		formStyle := lipgloss.NewStyle().
-			Border(lipgloss.ThickBorder()).
-			BorderForeground(tealColor).
-			Padding(2).
-			Width(configModel.Width - 4)
-
-		var form strings.Builder
-
-		// Show spinner if creating
-		if configModel.IsCreating {
-			form.WriteString(spinnerStyle.Render(configModel.CreateSpinner.View()) + " ")
-			form.WriteString(configModel.CreateStatus + "\n")
-		} else if configModel.CreateStatus != "" {
-			form.WriteString(configModel.CreateStatus + "\n\n")
-		} else {
-			form.WriteString(headerStyle.Render("Create GitHub Repository") + "\n\n")
-		}
-
-		// Only show form fields if not currently creating
-		if !configModel.IsCreating {
-			form.WriteString("Repository Name:\n")
-			nameView := configModel.RepoNameInput.View()
-			if configModel.RepoInputFocus == 0 {
-				nameView = "> " + nameView
-			} else {
-				nameView = "  " + nameView
-			}
-			form.WriteString(nameView + "\n\n")
-
-			form.WriteString("Description:\n")
-			descView := configModel.RepoDescInput.View()
-			if configModel.RepoInputFocus == 1 {
-				descView = "> " + descView
-			} else {
-				descView = "  " + descView
-			}
-			form.WriteString(descView + "\n\n")
-
-			form.WriteString("Visibility:\n")
-			visibilityText := ""
-			if configModel.RepoIsPrivate {
-				visibilityText = "[●] Private  [ ] Public"
-			} else {
-				visibilityText = "[ ] Private  [●] Public"
-			}
-			if configModel.RepoInputFocus == 2 {
-				visibilityText = "> " + visibilityText + " [Space to toggle]"
-			} else {
-				visibilityText = "  " + visibilityText
-			}
-			form.WriteString(visibilityText + "\n\n")
-
-			form.WriteString(controlStyle.Render("[Tab] Switch fields  [Enter] Create  [Esc] Cancel"))
-		}
-
-		content.WriteString(formStyle.Render(form.String()))
 	} else if configModel.Initialized {
 		// Wrap list content in the content box
 		listContent := configModel.Lists[configModel.ActiveTab].View()
@@ -221,54 +302,40 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	// Render the content box with base content
 	var renderedContent string
 	if configModel.CreatingRepo {
-		// Form has its own styling, don't double-wrap
-		renderedContent = content.String()
+		// Center the form in the content box
+		centeredForm := lipgloss.Place(
+			boxWidth,
+			boxHeight,
+			lipgloss.Center,
+			lipgloss.Center,
+			baseContent,
+		)
+		renderedContent = contentBox.Render(centeredForm)
+	} else if configModel.IsCreating && configModel.CreateStatus != "" {
+		// Create spinner overlay
+		spinnerBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(tealColor).
+			Padding(1).
+			Width(40).
+			Align(lipgloss.Center)
+
+		spinnerContent := fmt.Sprintf("%s %s",
+			configModel.CreateSpinner.View(),
+			configModel.CreateStatus)
+
+		overlayContent := lipgloss.Place(
+			boxWidth,
+			boxHeight,
+			lipgloss.Center,
+			lipgloss.Center,
+			spinnerBox.Render(spinnerContent),
+		)
+		renderedContent = contentBox.Render(overlayContent)
 	} else {
-		// Calculate content box dimensions for overlay positioning
-		boxWidth := configModel.Width - 2
-		if boxWidth < 40 {
-			boxWidth = 40
-		}
-		// Height should match what's calculated in the handler
-		// The handler calculates: listHeight = Height - 13
-		// This is the content height without UI chrome
-		boxHeight := configModel.Height - 13
-		if boxHeight < 5 {
-			boxHeight = 5
-		}
-
-		// Check if we need to overlay spinner
-		if configModel.IsCreating && configModel.CreateStatus != "" {
-			// Create spinner overlay
-			spinnerBox := lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(tealColor).
-				Padding(1).
-				Width(40).
-				Align(lipgloss.Center)
-
-			spinnerContent := fmt.Sprintf("%s %s",
-				configModel.CreateSpinner.View(),
-				configModel.CreateStatus)
-
-			// Use lipgloss.Place to center the spinner over the content
-			overlayContent := lipgloss.Place(
-				boxWidth,
-				boxHeight,
-				lipgloss.Center,
-				lipgloss.Center,
-				spinnerBox.Render(spinnerContent),
-			)
-
-			// Render base content in the box first, then overlay
-			// Since we can't truly layer, we'll use the overlay as the content
-			renderedContent = contentBox.Render(overlayContent)
-		} else {
-			// Normal rendering without spinner
-			renderedContent = contentBox.Render(baseContent)
-		}
-		content.WriteString(renderedContent)
+		renderedContent = contentBox.Render(baseContent)
 	}
+	content.WriteString(renderedContent)
 
 	// Controls
 	if configModel.Width > 0 {
