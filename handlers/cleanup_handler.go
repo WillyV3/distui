@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"distui/internal/gitcleanup"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type CleanupModel struct {
@@ -81,4 +82,14 @@ func (m *CleanupModel) Update(width, height int) {
 	if m.RepoBrowser != nil {
 		m.RepoBrowser.SetSize(width, height)
 	}
+}
+
+func (m *CleanupModel) HandleKey(msg tea.KeyMsg) tea.Cmd {
+	// If there are no changes, delegate navigation to the repo browser
+	if !m.HasChanges() && m.RepoBrowser != nil {
+		var cmd tea.Cmd
+		m.RepoBrowser, cmd = m.RepoBrowser.Update(msg)
+		return cmd
+	}
+	return nil
 }

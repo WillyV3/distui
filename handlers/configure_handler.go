@@ -537,6 +537,18 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// If we're on the cleanup tab and there are no changes, delegate navigation to the repo browser
+		if m.ActiveTab == 0 && m.CleanupModel != nil && !m.CleanupModel.HasChanges() {
+			// Check if this is a navigation key that should go to the repo browser
+			switch msg.String() {
+			case "j", "down", "k", "up", "g", "G", "h", "left", "backspace", "l", "right", "enter":
+				if cmd := m.CleanupModel.HandleKey(msg); cmd != nil {
+					return m, cmd
+				}
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "tab":
 			m.ActiveTab = (m.ActiveTab + 1) % 4
@@ -682,11 +694,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 		}
 
-		// Handle 'G' key to switch to GitHub view (only in TabView)
-		if msg.String() == "G" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
-			configModel.CurrentView = GitHubView
-			return currentPage, false, nil, configModel
-		}
+		// G key handler removed - repo browser is now embedded in cleanup view
 
 		// Handle 'C' key to switch to Commit view (only in TabView)
 		if msg.String() == "C" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
