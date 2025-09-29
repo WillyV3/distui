@@ -107,11 +107,22 @@ func CheckRepoState() (*RepoInfo, error) {
 
 		// If upstream not set, try origin/main or origin/master
 		if err != nil {
-			cmd = exec.Command("git", "rev-list", "--count", "origin/main..HEAD")
-			output, err = cmd.Output()
-			if err != nil {
-				cmd = exec.Command("git", "rev-list", "--count", "origin/master..HEAD")
+			// Check if remote branch exists first
+			checkCmd := exec.Command("git", "ls-remote", "--heads", "origin", "main")
+			if checkOutput, checkErr := checkCmd.Output(); checkErr == nil && len(checkOutput) > 0 {
+				cmd = exec.Command("git", "rev-list", "--count", "origin/main..HEAD")
 				output, err = cmd.Output()
+			} else {
+				// Try master
+				checkCmd = exec.Command("git", "ls-remote", "--heads", "origin", "master")
+				if checkOutput, checkErr := checkCmd.Output(); checkErr == nil && len(checkOutput) > 0 {
+					cmd = exec.Command("git", "rev-list", "--count", "origin/master..HEAD")
+					output, err = cmd.Output()
+				} else {
+					// Remote exists but no branches - all local commits are unpushed
+					cmd = exec.Command("git", "rev-list", "--count", "HEAD")
+					output, err = cmd.Output()
+				}
 			}
 		}
 
