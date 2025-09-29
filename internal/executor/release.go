@@ -2,8 +2,12 @@ package executor
 
 import (
 	"context"
-	"os/exec"
+	"fmt"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"distui/internal/models"
 )
 
 type ReleaseExecutor struct {
@@ -12,22 +16,23 @@ type ReleaseExecutor struct {
 }
 
 type ReleaseConfig struct {
-	Version   string
-	SkipTests bool
-	AutoPush  bool
+	Version        string
+	SkipTests      bool
+	EnableHomebrew bool
+	EnableNPM      bool
+	HomebrewTap    string
+	RepoOwner      string
+	RepoName       string
+	ProjectName    string
 }
 
 type ExecutionResult struct {
-	Success  bool
-	Output   []string
-	Error    error
-	Duration time.Duration
-}
-
-type ExecutionStep struct {
-	Name    string
-	Command string
-	Args    []string
+	Success    bool
+	Version    string
+	Channels   []string
+	Duration   time.Duration
+	Error      error
+	FailedStep string
 }
 
 func NewReleaseExecutor(projectPath string, config ReleaseConfig) *ReleaseExecutor {
@@ -37,52 +42,111 @@ func NewReleaseExecutor(projectPath string, config ReleaseConfig) *ReleaseExecut
 	}
 }
 
-func (r *ReleaseExecutor) Execute(ctx context.Context) (*ExecutionResult, error) {
-	startTime := time.Now()
+func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
+	return func() tea.Msg {
+		startTime := time.Now()
+		channels := []string{"GitHub"}
 
+		if !r.config.SkipTests {
+			testCmd := RunTests(ctx, r.projectPath)
+			msg := testCmd()
+			if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
+				if completeMsg.ExitCode != 0 {
+					return r.failureResult(startTime, "tests", completeMsg.Error, channels)
+				}
+			}
+		}
+
+		if err := r.createAndPushTag(ctx); err != nil {
+			return r.failureResult(startTime, "tag", err, channels)
+		}
+
+		goreleaserCmd := RunGoReleaser(ctx, r.projectPath, r.config.Version)
+		msg := goreleaserCmd()
+		if err, ok := msg.(error); ok {
+			return r.failureResult(startTime, "goreleaser", err, channels)
+		}
+
+		if r.config.EnableHomebrew && r.config.HomebrewTap != "" {
+			homebrewCmd := UpdateHomebrewTap(ctx, r.config.ProjectName, r.config.Version, r.config.HomebrewTap, r.config.RepoOwner, r.config.RepoName)
+			msg := homebrewCmd()
+			if result, ok := msg.(HomebrewUpdateResult); ok && !result.Success {
+				return r.failureResult(startTime, "homebrew", result.Error, channels)
+			}
+			channels = append(channels, "Homebrew")
+		}
+
+		if r.config.EnableNPM {
+			channels = append(channels, "NPM")
+		}
+
+		return models.ReleaseCompleteMsg{
+			Success:    true,
+			Version:    r.config.Version,
+			Duration:   time.Since(startTime),
+			Channels:   channels,
+			TotalSteps: r.countSteps(),
+		}
+	}
+}
+
+func (r *ReleaseExecutor) createAndPushTag(ctx context.Context) error {
+	tagCmd := RunCommandStreaming(ctx, "git", []string{"tag", r.config.Version}, r.projectPath)
+	msg := tagCmd()
+	if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
+		if completeMsg.ExitCode != 0 {
+			return fmt.Errorf("creating tag: %w", completeMsg.Error)
+		}
+	}
+
+	pushCmd := RunCommandStreaming(ctx, "git", []string{"push", "origin", r.config.Version}, r.projectPath)
+	msg = pushCmd()
+	if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
+		if completeMsg.ExitCode != 0 {
+			return fmt.Errorf("pushing tag: %w", completeMsg.Error)
+		}
+	}
+
+	return nil
+}
+
+func (r *ReleaseExecutor) failureResult(startTime time.Time, step string, err error, channels []string) models.ReleaseCompleteMsg {
+	return models.ReleaseCompleteMsg{
+		Success:    false,
+		Version:    r.config.Version,
+		Duration:   time.Since(startTime),
+		Channels:   channels,
+		TotalSteps: r.countSteps(),
+		FailedStep: step,
+	}
+}
+
+func (r *ReleaseExecutor) countSteps() int {
+	steps := 3
 	if !r.config.SkipTests {
-		if err := r.runTests(ctx); err != nil {
-			return &ExecutionResult{Success: false, Error: err, Duration: time.Since(startTime)}, err
-		}
+		steps++
 	}
-
-	if err := r.buildRelease(ctx); err != nil {
-		return &ExecutionResult{Success: false, Error: err, Duration: time.Since(startTime)}, err
+	if r.config.EnableHomebrew {
+		steps++
 	}
-
-	if err := r.createTag(ctx); err != nil {
-		return &ExecutionResult{Success: false, Error: err, Duration: time.Since(startTime)}, err
+	if r.config.EnableNPM {
+		steps++
 	}
-
-	if r.config.AutoPush {
-		if err := r.pushTag(ctx); err != nil {
-			return &ExecutionResult{Success: false, Error: err, Duration: time.Since(startTime)}, err
-		}
-	}
-
-	return &ExecutionResult{Success: true, Duration: time.Since(startTime)}, nil
+	return steps
 }
 
-func (r *ReleaseExecutor) runTests(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "go", "test", "./...")
-	cmd.Dir = r.projectPath
-	return cmd.Run()
-}
+func (r *ReleaseExecutor) ValidatePreFlight() error {
+	if !CheckGoReleaserInstalled() {
+		return fmt.Errorf("goreleaser not installed")
+	}
 
-func (r *ReleaseExecutor) buildRelease(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", "dist/")
-	cmd.Dir = r.projectPath
-	return cmd.Run()
-}
+	if !CheckGoReleaserConfigExists(r.projectPath) {
+		return fmt.Errorf(".goreleaser.yml not found")
+	}
 
-func (r *ReleaseExecutor) createTag(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "git", "tag", r.config.Version)
-	cmd.Dir = r.projectPath
-	return cmd.Run()
-}
+	if _, err := GetGitHubToken(); err != nil {
+		return fmt.Errorf("GitHub authentication: %w", err)
+	}
 
-func (r *ReleaseExecutor) pushTag(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, "git", "push", "origin", r.config.Version)
-	cmd.Dir = r.projectPath
-	return cmd.Run()
+	return nil
 }

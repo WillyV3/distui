@@ -58,6 +58,7 @@ type model struct {
 	configureModel      *handlers.ConfigureModel
 	settingsModel       *handlers.SettingsModel
 	globalModel         *handlers.GlobalModel
+	releaseModel        *handlers.ReleaseModel
 }
 
 func initialModel() model {
@@ -182,9 +183,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.settingsModel = newSettingsModel
 		return m, tea.Batch(cmd, pageCmd)
 	case releaseView:
-		newPage, quitting, pageCmd := handlers.UpdateReleaseView(int(m.currentPage), int(projectView), msg)
+		if m.releaseModel == nil && m.width > 0 && m.height > 0 && m.detectedProject != nil {
+			width := m.width - 4
+			height := m.height - 4
+			projectPath := m.detectedProject.Path
+			projectName := m.detectedProject.Module.Name
+			currentVersion := m.detectedProject.Module.Version
+			repoOwner := ""
+			repoName := ""
+			if m.detectedProject.Repository != nil {
+				repoOwner = m.detectedProject.Repository.Owner
+				repoName = m.detectedProject.Repository.Name
+			}
+			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName)
+		}
+		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateReleaseView(
+			int(m.currentPage), int(projectView), msg, m.releaseModel)
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
+		m.releaseModel = newReleaseModel
 		return m, tea.Batch(cmd, pageCmd)
 	case configureView:
 		// Update dimensions on every frame if model exists
@@ -269,7 +286,7 @@ func (m model) renderGlobalView() string {
 
 
 func (m model) renderReleaseView() string {
-	return views.RenderReleaseContent()
+	return views.RenderReleaseContent(m.releaseModel)
 }
 
 func (m model) renderConfigureView() string {

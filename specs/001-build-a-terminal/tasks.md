@@ -9,17 +9,27 @@
 This document contains all implementation tasks for the distui feature. Tasks are ordered by dependencies and marked with [P] when they can be executed in parallel.
 
 ### Quick Stats
-- Total Tasks: 50 (47 original + 3 extra)
-- Completed: 18
+- Total Tasks: 60 (47 original + 3 extra + 10 new config tasks)
+- Completed: 28 (18 previous + 10 release workflow)
 - In Progress: 0
 - Remaining: 32
 
 ### Completed Categories
 - ✅ Setup Tasks: 5/5 (100%)
 - ✅ Configuration Management: 9/9 (100%)
-- ✅ Detection: 2/3 (66%)
+- ✅ Detection: 3/3 (100%)
 - ✅ Core Views (Project/Settings/Configure): 6/6 (100%)
 - ✅ User Environment & Onboarding: 3/3 (100%)
+- ✅ Git Management: 10/10 (100%)
+- ✅ Release Workflow Core: 10/10 (100%)
+
+### Pending Categories
+- ✅ Release Workflow Core: 10/10 (T012, T019-T025, T030-T031) - COMPLETE
+- 🔄 Release Configuration: 0/9 (T-CFG-1 to T-CFG-9) - CRITICAL
+- 🔄 Project Management: 0/2 (T028-T029 - New Project wizard)
+- 🔄 Testing: 0/8 (T032-T039)
+- 🔄 Integration: 0/4 (T040-T043)
+- 🔄 Polish: 0/4 (T044-T047)
 
 ### Execution Guide
 Tasks marked with [P] can be run in parallel. For example:
@@ -229,68 +239,287 @@ Task general-purpose "Complete T003, T004, and T005 in parallel"
 
 ## Release Execution Tasks
 
-### T019: Implement Release View
-**File**: views/release_view.go
-- Show version selection UI (patch/minor/major/custom)
-- Display release phases with progress
-- Stream command output in scrollable area
-- Show elapsed time counter
-- Format with progress indicators
-**Estimate**: 5 points
+### ✅ T012: Implement Homebrew Detection [COMPLETED]
+**File**: internal/detection/homebrew.go (CREATED)
+**Status**: COMPLETE
+- Implement DetectHomebrewTap(username string)
+- Check common tap locations (~/homebrew-tap, ~/repos/homebrew-tap)
+- Use gh CLI to find repos matching "homebrew-*" pattern
+- Return tap repository path and existing formulas
+- Handle taps not found gracefully
+**Estimate**: 2 points
+**Architecture**: Business logic in internal/detection (NOT in handlers)
 
-### T020: Implement Release Handler
-**File**: handlers/release_handler.go
-- Handle version type selection
-- Launch release execution command
-- Handle command output messages
-- Update progress state
-- Return to project view on completion
-**Estimate**: 3 points
-
-### T021: Implement Release Executor
-**File**: internal/executor/release.go
-- Implement ExecuteRelease(project, version) function
-- Run test command first
-- Create git tag
-- Execute goreleaser
-- Update distribution channels
-**Estimate**: 5 points
-
-### T022: Implement Command Runner
-**File**: internal/executor/command.go
-- Implement RunCommand(name, args) with output streaming
-- Handle stdout and stderr separately
-- Send output messages to TUI
-- Handle command timeout
+### ✅ T022: Implement Command Runner [COMPLETED]
+**File**: internal/executor/command.go (CREATED)
+**Status**: COMPLETE
+- Implement RunCommandStreaming(name, args, dir) function
+- Create CommandOutput message type for line-by-line streaming
+- Create CommandComplete message type for completion status
+- Handle stdout and stderr separately with goroutines
+- Send tea.Msg for each output line
 - Return exit code and error
 **Estimate**: 3 points
+**Pattern**: Use goroutines + channels to stream, send tea.Msg to TUI
+**Architecture**: Business logic in internal/executor, messages to handlers
 
-### T023: [P] Implement Test Executor
-**File**: internal/executor/test.go
+### ✅ T021: Expand Release Executor [COMPLETED]
+**File**: internal/executor/release.go (EXPANDED)
+**Status**: COMPLETE
+**Current State**: Has basic runTests/buildRelease/createTag/pushTag stubs
+**Needs**:
+- Keep existing ReleaseExecutor/ReleaseConfig structure
+- Add ExecuteReleasePhases(ctx, phases) function
+- Add RunGoReleaser(ctx, version) function
+- Add UpdateHomebrewTap(ctx, tapPath, version) function
+- Add PublishNPM(ctx, packageName) function
+- Integrate with RunCommandStreaming for output
+- Send phase completion messages to TUI
+- Handle rollback on failure
+**Estimate**: 5 points
+**Architecture**: ALL execution logic stays here, handlers only manage state
+
+### ✅ T023: [P] Implement Test Executor [COMPLETED]
+**File**: internal/executor/test.go (CREATED)
+**Status**: COMPLETE
 - Implement RunTests(project) function
-- Execute configured test command
-- Stream output to TUI
+- Execute "go test ./..." command
+- Use RunCommandStreaming for output
 - Return success/failure status
 - Keep under 100 lines
 **Estimate**: 2 points
 
-### T024: [P] Implement GoReleaser Executor
-**File**: internal/executor/goreleaser.go
-- Implement RunGoReleaser(project, version)
-- Set GITHUB_TOKEN from gh auth
-- Execute with --clean flag
-- Stream output messages
-- Handle goreleaser not installed
+### ✅ T024: [P] Implement GoReleaser Executor [COMPLETED]
+**File**: internal/executor/goreleaser.go (CREATED)
+**Status**: COMPLETE
+- Implement RunGoReleaser(project, version) function
+- Get GITHUB_TOKEN from gh auth token
+- Execute "goreleaser release --clean" command
+- Use RunCommandStreaming for output
+- Check if goreleaser is installed first
+- Handle goreleaser not installed gracefully
 **Estimate**: 3 points
 
-### T025: [P] Implement Homebrew Updater
-**File**: internal/executor/homebrew.go
-- Implement UpdateHomebrewTap(project, version)
-- Download release tarball
+### ✅ T025: [P] Implement Homebrew Updater [COMPLETED]
+**File**: internal/executor/homebrew.go (CREATED)
+**Status**: COMPLETE
+- Implement UpdateHomebrewTap(project, version, tapPath) function
+- Download release tarball from GitHub
 - Calculate SHA256 checksum
-- Update formula file
-- Commit and push changes
+- Update formula file with new version + SHA256
+- Commit changes to tap repository
+- Push to remote
+- Use RunCommandStreaming for git commands
 **Estimate**: 5 points
+
+### ✅ T030: [P] Define Message Types [COMPLETED]
+**File**: internal/models/messages.go (CREATED)
+**Status**: COMPLETE
+- Define releasePhaseMsg (phase started)
+- Define releasePhaseCompleteMsg (phase done)
+- Define commandOutputMsg (streaming output line)
+- Define commandCompleteMsg (command finished)
+- Define releaseCompleteMsg (all phases done)
+- Define releaseErrorMsg (failure with recovery options)
+**Estimate**: 1 point
+
+### ✅ T020: Implement Release Handler [COMPLETED]
+**File**: handlers/release_handler.go (EXPANDED)
+**Status**: COMPLETE
+**Current State**: Just navigation, no state management
+**Needs**:
+- Create ReleaseModel struct with:
+  - Phase (ReleasePhase enum)
+  - Packages ([]Package for package-manager pattern)
+  - Installing (int, current step index)
+  - Installed ([]int, completed steps)
+  - Progress (progress.Model from bubbles)
+  - Spinner (spinner.Model from bubbles)
+  - Output ([]string buffer)
+  - Version (string)
+  - StartTime (time.Time)
+  - Error (error)
+- Implement version selection state (patch/minor/major/custom)
+- Handle Enter to launch executeReleaseCmd
+- Handle phase completion messages
+- Update progress and spinner
+- Handle command output messages (append to buffer)
+- Return to project view on completion
+**Pattern**: Use package-manager example (each phase = "package")
+**Architecture**: State management ONLY, no execution logic
+**Estimate**: 5 points
+
+### ✅ T019: Implement Release View [COMPLETED]
+**File**: views/release_view.go (EXPANDED)
+**Status**: COMPLETE
+**Current State**: Hardcoded mock data, no dynamic rendering
+**Needs**:
+- Accept ReleaseModel as parameter (not empty function)
+- Render version selection UI when Phase == PhaseVersionSelect
+  - Show current version
+  - Show patch/minor/major options
+  - Show custom input option
+  - Highlight selected option
+- Render progress display when Phase >= PhaseTests
+  - Spinner for current phase
+  - Progress bar (bubbles/progress)
+  - List of packages (phases) with status
+  - Checkmarks for completed phases
+  - Elapsed time counter
+- Render output streaming area (scrollable)
+  - Last 20 lines of command output
+  - Auto-scroll to bottom
+  - Dim color for older lines
+- Render success/failure summary when Phase == PhaseComplete
+  - Duration, channels published, next steps
+- Render error display with recovery options on failure
+**Pattern**: Use package-manager example for progress rendering
+**Architecture**: Pure rendering, no business logic
+**Estimate**: 5 points
+
+### ✅ T031: Wire Release to App [COMPLETED]
+**File**: app.go (EXISTS - needs update)
+**Status**: COMPLETE
+- Add releaseModel *handlers.ReleaseModel to model struct
+- Initialize releaseModel when navigating to releaseView (like configureModel)
+- Pass project info and version to NewReleaseModel
+- Route releaseView case to handlers.UpdateReleaseView
+- Handle window sizing for releaseModel
+- Pass releaseModel to views.RenderReleaseContent
+**Estimate**: 2 points
+
+## Release Configuration Tasks [CRITICAL - BLOCKERS]
+
+### T-CFG-1: Add ReleaseSettings to ProjectConfig
+**File**: internal/models/types.go (EXISTS - needs expansion)
+**Status**: PENDING - Foundation for all config
+**Current State**: ProjectConfig exists but has no release settings
+**Needs**:
+- Add ReleaseSettings struct with:
+  - EnableHomebrew bool
+  - HomebrewTap string
+  - EnableNPM bool
+  - NPMScope string
+  - NPMPackage string
+  - SkipTests bool
+  - CreateDraft bool
+  - PreRelease bool
+  - GenerateChangelog bool
+  - SignCommits bool
+- Add ReleaseSettings field to ProjectConfig
+- Add yaml tags for persistence
+**Estimate**: 2 points
+**Architecture**: Business data model in internal/models
+
+### T-CFG-2: Implement Config Save on Toggle
+**File**: handlers/configure_handler.go (EXISTS - needs save logic)
+**Status**: PENDING - Depends on T-CFG-1
+**Current State**: Space key toggles items in memory only, not persisted
+**Needs**:
+- Add SaveProjectConfig() function
+- Wire to Space key handler for distribution items
+- Wire to Space key handler for build items
+- Call config.SaveProject() with updated settings
+- Show save indicator (subtle flash/checkmark)
+- Handle save errors gracefully
+**Pattern**: Auto-save on every toggle (like modern editors)
+**Estimate**: 3 points
+**Architecture**: State management in handlers, calls internal/config
+
+### T-CFG-3: Implement Config Load on Init
+**File**: handlers/configure_handler.go (EXISTS - needs load logic)
+**Status**: PENDING - Depends on T-CFG-1
+**Current State**: Lists initialized with hardcoded defaults
+**Needs**:
+- Load project config in NewConfigureModel
+- Read ReleaseSettings from loaded config
+- Set DistributionItem.Enabled from config
+- Set BuildItem.Enabled from config
+- Update list items with loaded values
+- Handle missing config gracefully (use defaults)
+**Estimate**: 2 points
+**Architecture**: State management in handlers, calls internal/config
+
+### T-CFG-4: Detect and Configure Homebrew Tap
+**File**: handlers/configure_handler.go (EXISTS - needs detection)
+**Status**: PENDING - Depends on T-CFG-3
+**Current State**: Hardcoded "Tap: willyv3/homebrew-tap" string
+**Needs**:
+- Call detection.DetectHomebrewTap(username) on init
+- If found: Update DistributionItem description with actual path
+- If not found: Show "Not configured - [e] to edit"
+- Add 'e' key handler to edit tap path (textinput modal)
+- Save tap path to config on edit
+- Validate tap path exists
+**Pattern**: Auto-detect, allow override
+**Estimate**: 3 points
+**Architecture**: Uses internal/detection, saves to internal/models
+
+### T-CFG-5: Configure NPM Package Settings
+**File**: handlers/configure_handler.go (EXISTS - needs NPM config)
+**Status**: PENDING - Depends on T-CFG-3
+**Current State**: Hardcoded "Scope: @williavs" string
+**Needs**:
+- Detect package.json if exists
+- Parse name/scope from package.json
+- If found: Update DistributionItem description
+- If not found: Show "Not configured - [e] to edit"
+- Add 'e' key handler to configure scope + package name
+- Save NPM settings to config
+**Estimate**: 3 points
+**Architecture**: Detection in handlers, saves to internal/models
+
+### T-CFG-6: Fix SkipTests Logic
+**File**: handlers/configure_handler.go (EXISTS - logic fix)
+**Status**: PENDING - Depends on T-CFG-2
+**Current State**: "Run tests before release" checkbox logic is backwards
+**Needs**:
+- When "Run tests" is ENABLED, SkipTests = FALSE
+- When "Run tests" is DISABLED, SkipTests = TRUE
+- Update BuildItem to toggle correctly
+- Save correct boolean to config
+**Note**: Simple boolean inversion
+**Estimate**: 1 point
+
+### T-CFG-7: Wire Config to ReleaseModel
+**File**: app.go (EXISTS - needs config passing)
+**Status**: PENDING - Depends on T-CFG-1, T-CFG-3
+**Current State**: ReleaseModel gets hardcoded false values
+**Needs**:
+- Read m.currentProject.ReleaseSettings on releaseView init
+- Pass EnableHomebrew from config to NewReleaseModel
+- Pass HomebrewTap from config to NewReleaseModel
+- Pass EnableNPM from config to NewReleaseModel
+- Pass NPM settings from config to NewReleaseModel
+- Handle nil config gracefully (use safe defaults)
+**Estimate**: 2 points
+**Architecture**: App routes config from loaded project to release handler
+
+### T-CFG-8: Add Configuration Status Display
+**File**: views/configure_view.go (EXISTS - needs status)
+**Status**: PENDING - Depends on T-CFG-4, T-CFG-5
+**Current State**: No indication if tap/npm detected or configured
+**Needs**:
+- Show "✓ Detected: ~/homebrew-tap" when tap found
+- Show "⚠ Not configured" when tap not found
+- Show "✓ Configured: @scope/package" for NPM
+- Show "⚠ Not configured" for NPM
+- Add subtle color coding (green = good, yellow = warning)
+**Estimate**: 2 points
+**Architecture**: Pure rendering in views
+
+### T-CFG-9: Add Config Validation
+**File**: handlers/configure_handler.go (EXISTS - needs validation)
+**Status**: PENDING - Depends on T-CFG-7
+**Current State**: No validation before saving
+**Needs**:
+- Validate homebrew tap path exists before saving
+- Check gh CLI installed if Homebrew enabled
+- Validate NPM package name format
+- Show validation errors inline
+- Prevent save if critical validation fails
+**Estimate**: 2 points
+**Architecture**: Validation logic in handlers
 
 ## User Environment & Onboarding Tasks [NEW]
 

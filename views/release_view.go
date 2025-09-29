@@ -3,69 +3,208 @@ package views
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"distui/handlers"
+	"distui/internal/models"
 )
 
-// RenderReleaseContent returns the content for the release creation view
-func RenderReleaseContent() string {
-	headerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
-		Bold(true).
-		Padding(0, 1)
+var (
+	releaseHeaderStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("117")).
+			Bold(true).
+			Padding(0, 1)
 
-	fieldStyle := lipgloss.NewStyle().
-		Padding(0, 1).
-		MarginLeft(2)
+	releaseFieldStyle = lipgloss.NewStyle().
+			Padding(0, 1).
+			MarginLeft(2)
 
-	valueStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("207")).
-		Bold(true)
+	releaseValueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("207")).
+			Bold(true)
 
-	actionStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("46")).
-		Bold(true).
-		Padding(0, 1).
-		MarginLeft(2)
+	releaseActionStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("46")).
+			Bold(true).
+			Padding(0, 1).
+			MarginLeft(2)
 
-	subtleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	releaseSelectedStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("170")).
+			Bold(true).
+			Padding(0, 1).
+			MarginLeft(2)
 
+	releaseSubtleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+
+	releaseCheckMark = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).SetString("✓")
+	releaseCrossMark = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).SetString("✗")
+
+	releaseCurrentPkgNameStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+)
+
+func RenderReleaseContent(releaseModel *handlers.ReleaseModel) string {
+	if releaseModel == nil {
+		return "No release model initialized"
+	}
+
+	switch releaseModel.Phase {
+	case models.PhaseVersionSelect:
+		return renderVersionSelection(releaseModel)
+	case models.PhaseComplete:
+		return renderSuccess(releaseModel)
+	case models.PhaseFailed:
+		return renderFailure(releaseModel)
+	default:
+		return renderProgress(releaseModel)
+	}
+}
+
+func renderVersionSelection(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
-	content.WriteString(headerStyle.Render("CREATE NEW RELEASE") + "\n\n")
+	content.WriteString(releaseHeaderStyle.Render("SELECT RELEASE VERSION") + "\n\n")
+	content.WriteString(releaseFieldStyle.Render(fmt.Sprintf("Current Version: %s", m.CurrentVersion)) + "\n\n")
 
-	content.WriteString(fieldStyle.Render("Project:         ") + valueStyle.Render("example-go-app") + "\n")
-	content.WriteString(fieldStyle.Render("Current Version: ") + valueStyle.Render("v1.2.3") + "\n")
-	content.WriteString(fieldStyle.Render("New Version:     ") + valueStyle.Render("v1.3.0") + " " + subtleStyle.Render("(patch/minor/major)") + "\n")
-
-	content.WriteString("\n" + headerStyle.Render("RELEASE CONFIGURATION") + "\n\n")
-	content.WriteString(fieldStyle.Render("Release Type:    ") + valueStyle.Render("Standard") + " " + subtleStyle.Render("(standard/hotfix/rc)") + "\n")
-	content.WriteString(fieldStyle.Render("Build Targets:   ") + valueStyle.Render("linux/amd64, darwin/amd64, windows/amd64") + "\n")
-	content.WriteString(fieldStyle.Render("Include Tests:   ") + valueStyle.Render("Yes") + "\n")
-	content.WriteString(fieldStyle.Render("Create GitHub Release: ") + valueStyle.Render("Yes") + "\n")
-	content.WriteString(fieldStyle.Render("Publish to Homebrew:  ") + valueStyle.Render("No") + "\n")
-
-	content.WriteString("\n" + headerStyle.Render("RELEASE NOTES") + "\n\n")
-	content.WriteString(fieldStyle.Render("Auto-generated from commits:") + "\n")
-	content.WriteString(fieldStyle.Render("• Added new feature X") + "\n")
-	content.WriteString(fieldStyle.Render("• Fixed bug in Y module") + "\n")
-	content.WriteString(fieldStyle.Render("• Updated dependencies") + "\n")
-
-	content.WriteString("\n" + headerStyle.Render("ACTIONS") + "\n\n")
-	actions := []string{
-		"[v] Change Version",
-		"[t] Configure Targets",
-		"[n] Edit Release Notes",
-		"[p] Preview Build",
-		"[enter] Start Release",
+	versions := []string{
+		"Patch (bug fixes)",
+		"Minor (new features)",
+		"Major (breaking changes)",
+		"Custom version",
 	}
 
-	for _, action := range actions {
-		content.WriteString(actionStyle.Render(fmt.Sprintf("  %s", action)) + "\n")
+	for i, ver := range versions {
+		prefix := "  "
+		style := releaseActionStyle
+		if i == m.SelectedVersion {
+			prefix = "> "
+			style = releaseSelectedStyle
+		}
+		content.WriteString(style.Render(prefix+ver) + "\n")
 	}
 
-	content.WriteString("\n" + subtleStyle.Render("Build and release your Go application"))
-	content.WriteString("\n" + subtleStyle.Render("↑/↓: navigate • enter: execute • esc: back • q: quit"))
+	if m.SelectedVersion == 3 {
+		content.WriteString("\n" + releaseFieldStyle.Render("Enter version: ") + m.VersionInput.View() + "\n")
+	}
+
+	content.WriteString("\n" + releaseSubtleStyle.Render("↑/↓: navigate • enter: start release • esc: back"))
+
+	return content.String()
+}
+
+func renderProgress(m *handlers.ReleaseModel) string {
+	var content strings.Builder
+
+	content.WriteString(releaseHeaderStyle.Render("RELEASING "+m.Version) + "\n\n")
+
+	n := len(m.Packages)
+	w := lipgloss.Width(fmt.Sprintf("%d", n))
+
+	installed := len(m.Installed)
+	pkgCount := fmt.Sprintf(" %*d/%*d", w, installed, w, n)
+
+	spin := m.Spinner.View() + " "
+	prog := m.Progress.View()
+
+	currentPkg := ""
+	if m.Installing >= 0 && m.Installing < len(m.Packages) {
+		currentPkg = m.Packages[m.Installing].Name
+	}
+
+	info := releaseCurrentPkgNameStyle.Render(currentPkg)
+
+	content.WriteString(spin + info + "\n")
+	content.WriteString(prog + pkgCount + "\n\n")
+
+	for i, pkg := range m.Packages {
+		status := ""
+		switch pkg.Status {
+		case "done":
+			status = releaseCheckMark.String()
+		case "failed":
+			status = releaseCrossMark.String()
+		case "installing":
+			status = m.Spinner.View()
+		default:
+			status = releaseSubtleStyle.Render("○")
+		}
+
+		line := fmt.Sprintf("%s %s", status, pkg.Name)
+		if pkg.Duration > 0 {
+			line += releaseSubtleStyle.Render(fmt.Sprintf(" (%s)", pkg.Duration.Round(time.Millisecond)))
+		}
+		content.WriteString(line + "\n")
+
+		if i < installed {
+			content.WriteString(releaseCheckMark.String() + " " + pkg.Name + "\n")
+		}
+	}
+
+	if len(m.Output) > 0 {
+		content.WriteString("\n" + releaseHeaderStyle.Render("OUTPUT") + "\n")
+		start := 0
+		if len(m.Output) > 10 {
+			start = len(m.Output) - 10
+		}
+		for _, line := range m.Output[start:] {
+			content.WriteString(releaseSubtleStyle.Render(line) + "\n")
+		}
+	}
+
+	elapsed := time.Since(m.StartTime).Round(time.Second)
+	content.WriteString("\n" + releaseSubtleStyle.Render(fmt.Sprintf("Elapsed: %s", elapsed)))
+
+	return content.String()
+}
+
+func renderSuccess(m *handlers.ReleaseModel) string {
+	var content strings.Builder
+
+	content.WriteString(releaseCheckMark.String() + " " + releaseHeaderStyle.Render("RELEASE COMPLETE") + "\n\n")
+
+	content.WriteString(releaseFieldStyle.Render("Version:  ") + releaseValueStyle.Render(m.Version) + "\n")
+
+	elapsed := time.Since(m.StartTime).Round(time.Second)
+	content.WriteString(releaseFieldStyle.Render("Duration: ") + releaseValueStyle.Render(elapsed.String()) + "\n\n")
+
+	content.WriteString(releaseHeaderStyle.Render("PUBLISHED TO") + "\n")
+	for _, pkg := range m.Packages {
+		if pkg.Status == "done" {
+			content.WriteString(releaseCheckMark.String() + " " + pkg.Name + "\n")
+		}
+	}
+
+	content.WriteString("\n" + releaseSubtleStyle.Render("Press ESC to return"))
+
+	return content.String()
+}
+
+func renderFailure(m *handlers.ReleaseModel) string {
+	var content strings.Builder
+
+	content.WriteString(releaseCrossMark.String() + " " + releaseHeaderStyle.Render("RELEASE FAILED") + "\n\n")
+
+	if m.Error != nil {
+		content.WriteString(releaseFieldStyle.Render("Error: ") + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(m.Error.Error()) + "\n\n")
+	}
+
+	content.WriteString(releaseHeaderStyle.Render("COMPLETED STEPS") + "\n")
+	for _, pkg := range m.Packages {
+		status := ""
+		switch pkg.Status {
+		case "done":
+			status = releaseCheckMark.String()
+		case "failed":
+			status = releaseCrossMark.String()
+		default:
+			status = releaseSubtleStyle.Render("○")
+		}
+		content.WriteString(status + " " + pkg.Name + "\n")
+	}
+
+	content.WriteString("\n" + releaseSubtleStyle.Render("Press ESC to return • R to retry"))
 
 	return content.String()
 }

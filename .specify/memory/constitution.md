@@ -1,14 +1,17 @@
 <!--
 Sync Impact Report
-Version change: 0.0.0 → 1.0.0 (Initial constitution with 10 core principles + 2 additional sections)
-Modified principles: N/A (initial creation)
-Added sections: All sections (initial creation)
+Version change: 1.0.0 → 1.1.0 (Pragmatic file size amendment + clarified structural discipline)
+Modified principles:
+  - "Structural Discipline" (Code Quality Standards) - Updated file size guidance from hard 100-line limit to pragmatic approach
+Added sections: None
 Removed sections: None
 Templates requiring updates:
-  - ✅ plan-template.md (will align with principles)
-  - ✅ spec-template.md (will align with scope)
-  - ✅ tasks-template.md (will align with task categories)
-Follow-up TODOs: None
+  - ⚠ plan-template.md (review for file size expectations)
+  - ⚠ tasks-template.md (update task splitting guidance if present)
+  - ✅ constitution command (this file)
+Follow-up TODOs:
+  - Consider refactoring configure_handler.go (989 lines) into smaller composable modules
+  - Review other 300+ line files for natural split points
 -->
 
 # distui Constitution
@@ -77,7 +80,19 @@ configuration mixing, no inheritance confusion.
 - If code needs comments, rewrite the code to be clearer
 
 ### Structural Discipline
-- Files MUST NOT exceed 100 lines (one terminal screen)
+Files SHOULD be kept concise and focused. While a 100-line guideline is ideal
+for single-terminal-screen visibility, pragmatism is required:
+
+- **Essential files only**: Files may exceed 100 lines when they contain only
+  essential, non-redundant logic that serves a cohesive purpose
+- **No arbitrary splits**: Do not split files artificially just to meet a line
+  count if it creates confusion or breaks natural cohesion
+- **Natural boundaries**: When files grow large, look for natural module
+  boundaries (separate concerns, extract reusable components)
+- **Refactoring targets**: Files exceeding 300 lines are strong candidates for
+  refactoring into composable modules
+
+Nesting and control flow:
 - Nesting MUST be minimized - use early returns and guard clauses
 - NO nested conditionals beyond absolutely necessary cases
 - Accept repetition if it clarifies control flow
@@ -123,7 +138,7 @@ non-negotiable principles that guide all development decisions.
 
 ### Compliance Verification
 - All code reviews MUST verify constitutional compliance
-- Automated checks where possible (file length, nesting depth)
+- Automated checks where possible (nesting depth, error handling patterns)
 - Manual review for clarity and philosophy alignment
 - Non-compliant code blocked from merge
 
@@ -132,4 +147,4 @@ This constitution evolves with the project but changes are deliberate and
 documented. Each amendment requires clear rationale and migration plan if
 breaking existing patterns.
 
-**Version**: 1.0.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-28
+**Version**: 1.1.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-29
