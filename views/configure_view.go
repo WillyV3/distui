@@ -25,6 +25,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	switch configModel.CurrentView {
 	case handlers.GitHubView:
 		return RenderGitHubManagement(configModel.GitHubModel)
+	case handlers.SmartCommitConfirm:
+		return RenderSmartCommitConfirm(configModel.CleanupModel)
 	case handlers.CommitView:
 		// TODO: Add commit view
 		return "Commit view coming soon..."

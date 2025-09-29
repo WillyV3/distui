@@ -34,6 +34,7 @@ const (
 	TabView ViewType = iota
 	GitHubView
 	CommitView
+	SmartCommitConfirm
 )
 
 // ConfigureModel holds the state for the configure view
@@ -638,7 +639,37 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		}
 	case tea.KeyMsg:
 		// Handle view switching
-		if configModel.CurrentView == GitHubView {
+		if configModel.CurrentView == SmartCommitConfirm {
+			switch msg.String() {
+			case "y", "Y":
+				// User confirmed, execute smart commit
+				changes, _ := gitcleanup.GetFileChanges()
+				items := []gitcleanup.CleanupItem{}
+
+				for _, change := range changes {
+					items = append(items, gitcleanup.CleanupItem{
+						Path:     change.Path,
+						Status:   change.Status,
+						Category: "auto",
+						Action:   "commit",
+					})
+				}
+
+				if len(items) > 0 {
+					configModel.CurrentView = TabView
+					configModel.IsCreating = true
+					configModel.CreateStatus = "Committing changes..."
+					return currentPage, false, tea.Batch(
+						configModel.CreateSpinner.Tick,
+						smartCommitCmd(items),
+					), configModel
+				}
+			case "n", "N", "esc":
+				// User cancelled
+				configModel.CurrentView = TabView
+				return currentPage, false, nil, configModel
+			}
+		} else if configModel.CurrentView == GitHubView {
 			switch msg.String() {
 			case "esc":
 				configModel.CurrentView = TabView
@@ -797,31 +828,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 			return currentPage, false, nil, configModel
 		case "s":
-			// Save configuration or execute smart commit
+			// Show smart commit confirmation
 			if configModel != nil && configModel.ActiveTab == 0 && !configModel.IsCreating {
-				// Get file changes from CleanupModel
 				if configModel.CleanupModel != nil && configModel.CleanupModel.HasChanges() {
-					changes, _ := gitcleanup.GetFileChanges()
-					items := []gitcleanup.CleanupItem{}
-
-					for _, change := range changes {
-						items = append(items, gitcleanup.CleanupItem{
-							Path:     change.Path,
-							Status:   change.Status,
-							Category: "auto",
-							Action:   "commit",
-						})
-					}
-
-					if len(items) > 0 {
-						// Start spinner and execute async commit
-						configModel.IsCreating = true
-						configModel.CreateStatus = "Committing changes..."
-						return currentPage, false, tea.Batch(
-							configModel.CreateSpinner.Tick,
-							smartCommitCmd(items),
-						), configModel
-					}
+					// Switch to confirmation view
+					configModel.CurrentView = SmartCommitConfirm
+					return currentPage, false, nil, configModel
 				}
 			}
 			return currentPage, false, nil, configModel // stay in configure view
