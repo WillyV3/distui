@@ -74,6 +74,10 @@ func (m *CleanupModel) IsClean() bool {
 
 func (m *CleanupModel) Refresh() {
 	m.loadRepoStatus()
+	// Also refresh the repo browser
+	if m.RepoBrowser != nil {
+		m.RepoBrowser.LoadDirectory()
+	}
 }
 
 func (m *CleanupModel) Update(width, height int) {
@@ -84,12 +88,12 @@ func (m *CleanupModel) Update(width, height int) {
 	}
 }
 
-func (m *CleanupModel) HandleKey(msg tea.KeyMsg) tea.Cmd {
+func (m *CleanupModel) HandleKey(msg tea.KeyMsg) (*CleanupModel, tea.Cmd) {
 	// If there are no changes, delegate navigation to the repo browser
 	if !m.HasChanges() && m.RepoBrowser != nil {
 		var cmd tea.Cmd
 		m.RepoBrowser, cmd = m.RepoBrowser.Update(msg)
-		return cmd
+		return m, cmd
 	}
-	return nil
+	return m, nil
 }

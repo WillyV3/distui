@@ -542,10 +542,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			// Check if this is a navigation key that should go to the repo browser
 			switch msg.String() {
 			case "j", "down", "k", "up", "g", "G", "h", "left", "backspace", "l", "right", "enter":
-				if cmd := m.CleanupModel.HandleKey(msg); cmd != nil {
-					return m, cmd
-				}
-				return m, nil
+				var cmd tea.Cmd
+				m.CleanupModel, cmd = m.CleanupModel.HandleKey(msg)
+				return m, cmd
 			}
 		}
 
@@ -625,11 +624,21 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			}
 			return m, nil
 		default:
+			// Don't pass navigation to the list if we're showing the repo browser
+			if m.ActiveTab == 0 && m.CleanupModel != nil && !m.CleanupModel.HasChanges() {
+				// Already handled above
+				return m, nil
+			}
 			// Pass through to the active list
 			var cmd tea.Cmd
 			m.Lists[m.ActiveTab], cmd = m.Lists[m.ActiveTab].Update(msg)
 			return m, cmd
 		}
+	}
+
+	// Don't update the list if we're on cleanup tab with repo browser
+	if m.ActiveTab == 0 && m.CleanupModel != nil && !m.CleanupModel.HasChanges() {
+		return m, nil
 	}
 
 	// Update the active list

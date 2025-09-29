@@ -205,10 +205,21 @@ func createMiniRepoBrowser(browser *handlers.RepoBrowserModel, availableLines in
 			name = name[:37] + "..."
 		}
 
-		// Color based on type
-		line := fmt.Sprintf("%s %s", typeChar, name)
+		// Add selection indicator
+		line := ""
+		if i == browser.Selected {
+			line = "> " + fmt.Sprintf("%s %s", typeChar, name)
+		} else {
+			line = "  " + fmt.Sprintf("%s %s", typeChar, name)
+		}
 
-		if entry.IsDir {
+		// Color based on type (but highlight if selected)
+		if i == browser.Selected {
+			line = lipgloss.NewStyle().
+				Background(lipgloss.Color("237")).
+				Foreground(lipgloss.Color("255")).
+				Render(line)
+		} else if entry.IsDir {
 			line = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Render(line)
 		} else if strings.HasSuffix(entry.Name, ".go") {
 			line = lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Render(line)
