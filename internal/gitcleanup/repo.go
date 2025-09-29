@@ -19,14 +19,15 @@ const (
 )
 
 type RepoInfo struct {
-	Status       RepoStatus
-	GitExists    bool
-	RemoteExists bool
-	RemoteURL    string
-	Branch       string
-	Owner        string
-	RepoName     string
-	FileStats    FileStats
+	Status          RepoStatus
+	GitExists       bool
+	RemoteExists    bool
+	RemoteURL       string
+	Branch          string
+	Owner           string
+	RepoName        string
+	FileStats       FileStats
+	UnpushedCommits int
 }
 
 type FileStats struct {
@@ -97,8 +98,28 @@ func CheckRepoState() (*RepoInfo, error) {
 	hasChanges := info.FileStats.Modified > 0 || info.FileStats.Added > 0 ||
 		info.FileStats.Deleted > 0 || info.FileStats.Untracked > 0
 
+	// Check for unpushed commits if we have a remote
+	hasUnpushedCommits := false
+	if info.RemoteExists {
+		// Check if we have commits ahead of remote
+		cmd := exec.Command("git", "rev-list", "--count", "@{upstream}..HEAD")
+		output, err := cmd.Output()
+		if err == nil {
+			countStr := strings.TrimSpace(string(output))
+			if countStr != "0" && countStr != "" {
+				hasUnpushedCommits = true
+				// Parse the count
+				var count int
+				fmt.Sscanf(countStr, "%d", &count)
+				info.UnpushedCommits = count
+			}
+		}
+	}
+
 	if hasChanges {
 		info.Status = RepoStatusDirty
+	} else if hasUnpushedCommits {
+		info.Status = RepoStatusUnpushed
 	} else {
 		info.Status = RepoStatusClean
 	}
