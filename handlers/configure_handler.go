@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"os/exec"
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -15,6 +16,15 @@ import (
 // Message types for async operations
 type repoCreatedMsg struct {
 	err error
+}
+
+type pushCompleteMsg struct {
+	err error
+}
+
+type commitCompleteMsg struct {
+	message string
+	err     error
 }
 
 // ViewType for the configure screen
@@ -298,6 +308,23 @@ func createRepoCmd(isPrivate bool, name, description, owner string) tea.Cmd {
 	}
 }
 
+// pushCmd pushes to remote asynchronously
+func pushCmd() tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("git", "push")
+		err := cmd.Run()
+		return pushCompleteMsg{err: err}
+	}
+}
+
+// smartCommitCmd executes smart commit asynchronously
+func smartCommitCmd(items []gitcleanup.CleanupItem) tea.Cmd {
+	return func() tea.Msg {
+		message, err := gitcleanup.ExecuteSmartCommit(items)
+		return commitCompleteMsg{message: message, err: err}
+	}
+}
+
 // refreshGitHubStatus updates cached GitHub repo status
 func (m *ConfigureModel) refreshGitHubStatus() {
 	if gitcleanup.HasGitRepo() && gitcleanup.HasGitHubRemote() {
@@ -447,6 +474,35 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				return struct{}{}
 			})
 		}
+	case pushCompleteMsg:
+		m.IsCreating = false
+		if msg.err == nil {
+			m.CreateStatus = "✓ Pushed to remote successfully!"
+			if m.CleanupModel != nil {
+				m.CleanupModel.Refresh()
+			}
+		} else {
+			m.CreateStatus = fmt.Sprintf("✗ Push failed: %v", msg.err)
+		}
+		// Clear status after 3 seconds
+		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return struct{}{}
+		})
+	case commitCompleteMsg:
+		m.IsCreating = false
+		if msg.err == nil {
+			m.CreateStatus = fmt.Sprintf("✓ Committed: %s", msg.message)
+			if m.CleanupModel != nil {
+				m.CleanupModel.Refresh()
+			}
+			m.Lists[0].SetItems(m.loadGitStatus())
+		} else {
+			m.CreateStatus = fmt.Sprintf("✗ Commit failed: %v", msg.err)
+		}
+		// Clear status after 3 seconds
+		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return struct{}{}
+		})
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
@@ -574,7 +630,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	// Model will be created in app.go with proper dimensions
 
 	switch msg := msg.(type) {
-	case repoCreatedMsg, spinner.TickMsg:
+	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg:
 		// Pass these messages directly to the model's Update
 		if configModel != nil {
 			newModel, cmd := configModel.Update(msg)
@@ -595,21 +651,37 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 		}
 
-		// Handle 'G' key to switch to GitHub view
-		if msg.String() == "G" && configModel.ActiveTab == 0 {
+		// Handle 'G' key to switch to GitHub view (only in TabView)
+		if msg.String() == "G" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
 			configModel.CurrentView = GitHubView
 			return currentPage, false, nil, configModel
 		}
 
-		// Handle 'C' key to switch to Commit view
-		if msg.String() == "C" && configModel.ActiveTab == 0 {
+		// Handle 'C' key to switch to Commit view (only in TabView)
+		if msg.String() == "C" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
 			// TODO: When CommitModel is implemented, switch to CommitView
 			// For now, just show a message
 			return currentPage, false, nil, configModel
 		}
 
+		// Handle 'P' key to push to remote (only in TabView, Cleanup tab)
+		if msg.String() == "P" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
+			// Push to remote
+			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
+				configModel.CleanupModel.RepoInfo.RemoteExists && !configModel.IsCreating {
+				// Start spinner and execute async push
+				configModel.IsCreating = true
+				configModel.CreateStatus = "Pushing to remote..."
+				return currentPage, false, tea.Batch(
+					configModel.CreateSpinner.Tick,
+					pushCmd(),
+				), configModel
+			}
+			return currentPage, false, nil, configModel
+		}
+
 		// Legacy handler for old 'G' key behavior (to be removed)
-		if msg.String() == "G" && configModel != nil && !configModel.CreatingRepo {
+		if false && msg.String() == "G" && configModel != nil && !configModel.CreatingRepo {
 			// Check if we need to create a GitHub repo
 			if gitcleanup.HasGitRepo() {
 				if !gitcleanup.HasGitHubRemote() || !gitcleanup.CheckGitHubRepoExists() {
@@ -726,48 +798,33 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		case "s":
 			// Save configuration or execute smart commit
-			if configModel != nil && configModel.ActiveTab == 0 {
-				// Handle GitHub repo creation first if needed
-				for _, listItem := range configModel.Lists[0].Items() {
-					if ci, ok := listItem.(CleanupItem); ok {
-						if (ci.Category == "github-new" || ci.Category == "github-push") && ci.Action == "create" {
-							// Create GitHub repo
-							gitcleanup.CreateGitHubRepo(false, "", "", "") // public by default, use default account
-							// Refresh list after creation
-							configModel.Lists[0].SetItems(configModel.loadGitStatus())
-							return currentPage, false, nil, configModel
-						}
-					}
-				}
+			if configModel != nil && configModel.ActiveTab == 0 && !configModel.IsCreating {
+				// Get file changes from CleanupModel
+				if configModel.CleanupModel != nil && configModel.CleanupModel.HasChanges() {
+					changes, _ := gitcleanup.GetFileChanges()
+					items := []gitcleanup.CleanupItem{}
 
-				// Execute smart commit for cleanup tab
-				items := []gitcleanup.CleanupItem{}
-				for _, listItem := range configModel.Lists[0].Items() {
-					if ci, ok := listItem.(CleanupItem); ok {
-						// Skip GitHub repo items
-						if ci.Category == "github-new" || ci.Category == "github-push" {
-							continue
-						}
+					for _, change := range changes {
 						items = append(items, gitcleanup.CleanupItem{
-							Path:     ci.Path,
-							Status:   ci.Status,
-							Category: ci.Category,
-							Action:   ci.Action,
+							Path:     change.Path,
+							Status:   change.Status,
+							Category: "auto",
+							Action:   "commit",
 						})
 					}
-				}
 
-				if len(items) > 0 {
-					if _, err := gitcleanup.ExecuteSmartCommit(items); err == nil {
-						// Refresh the cleanup list after commit
-						configModel.Lists[0].SetItems(configModel.loadGitStatus())
-						// TODO: Show success message
+					if len(items) > 0 {
+						// Start spinner and execute async commit
+						configModel.IsCreating = true
+						configModel.CreateStatus = "Committing changes..."
+						return currentPage, false, tea.Batch(
+							configModel.CreateSpinner.Tick,
+							smartCommitCmd(items),
+						), configModel
 					}
 				}
-			} else {
-				// TODO: Implement save logic for other tabs
 			}
-			return 0, false, nil, configModel // back to projectView after save
+			return currentPage, false, nil, configModel // stay in configure view
 		default:
 			// Let unhandled keys fall through to the model's Update
 		}

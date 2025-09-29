@@ -1,0 +1,248 @@
+# Project Configuration Contract
+# Location: ~/.distui/projects/{identifier}.yaml
+
+type: object
+required:
+  - project
+  - config
+properties:
+  project:
+    type: object
+    required:
+      - identifier
+      - path
+      - repository
+      - module
+    properties:
+      identifier:
+        type: string
+        pattern: "^github\\.com/[a-zA-Z0-9-]+/[a-zA-Z0-9-_.]+$"
+        description: "Unique project identifier from go.mod"
+        example: "github.com/user/repo"
+
+      path:
+        type: string
+        minLength: 1
+        description: "Absolute path to project directory"
+        example: "/Users/me/code/project"
+
+      last_accessed:
+        type: string
+        format: date-time
+        description: "ISO 8601 timestamp of last access"
+
+      detected_at:
+        type: string
+        format: date-time
+        description: "ISO 8601 timestamp of initial detection"
+
+      repository:
+        type: object
+        required:
+          - owner
+          - name
+        properties:
+          owner:
+            type: string
+            description: "GitHub repository owner"
+
+          name:
+            type: string
+            description: "GitHub repository name"
+
+          default_branch:
+            type: string
+            default: "main"
+            enum: ["main", "master", "develop", "trunk"]
+
+      module:
+        type: object
+        required:
+          - name
+        properties:
+          name:
+            type: string
+            description: "Go module name from go.mod"
+
+          version:
+            type: string
+            pattern: "^v?\\d+\\.\\d+\\.\\d+(-.*)?$"
+            description: "Current version"
+
+      binary:
+        type: object
+        properties:
+          name:
+            type: string
+            description: "Output binary name"
+
+          build_flags:
+            type: array
+            items:
+              type: string
+            description: "Custom Go build flags"
+
+  config:
+    type: object
+    required:
+      - distributions
+    properties:
+      distributions:
+        type: object
+        properties:
+          github_release:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: true
+
+              draft:
+                type: boolean
+                default: false
+
+              prerelease:
+                type: boolean
+                default: false
+
+          homebrew:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: false
+
+              tap_repo:
+                type: string
+                pattern: "^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
+                example: "username/homebrew-tap"
+
+              tap_path:
+                type: string
+                description: "Local path to tap repository"
+
+              formula_name:
+                type: string
+                pattern: "^[a-zA-Z0-9_-]+$"
+                description: "Formula filename without .rb"
+
+              formula_path:
+                type: string
+                description: "Path within tap repository"
+                example: "Formula/tool.rb"
+
+          npm:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: false
+
+              package_name:
+                type: string
+                pattern: "^(@[a-zA-Z0-9-]+/)?[a-zA-Z0-9-]+$"
+                description: "NPM package name"
+
+              registry:
+                type: string
+                format: uri
+                default: "https://registry.npmjs.org"
+
+              access:
+                type: string
+                enum: ["public", "private"]
+                default: "public"
+
+          go_module:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: true
+                description: "Enable go install support"
+
+              proxy:
+                type: string
+                default: "proxy.golang.org"
+
+      build:
+        type: object
+        properties:
+          goreleaser_config:
+            type: string
+            default: ".goreleaser.yaml"
+            description: "Path to GoReleaser config"
+
+          test_command:
+            type: string
+            default: "go test ./..."
+            description: "Test command to run before release"
+
+      ci_cd:
+        type: object
+        properties:
+          github_actions:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                default: false
+
+              workflow_path:
+                type: string
+                default: ".github/workflows/release.yml"
+
+  history:
+    type: object
+    properties:
+      releases:
+        type: array
+        maxItems: 10
+        items:
+          type: object
+          required:
+            - version
+            - date
+            - status
+          properties:
+            version:
+              type: string
+              pattern: "^v\\d+\\.\\d+\\.\\d+(-.*)?$"
+
+            date:
+              type: string
+              format: date-time
+
+            method:
+              type: string
+              enum: ["local", "ci"]
+
+            duration:
+              type: string
+              pattern: "^\\d+(\\.\\d+)?[smh]$"
+              example: "28s"
+
+            status:
+              type: string
+              enum: ["success", "failed", "partial"]
+
+            channels:
+              type: object
+              properties:
+                github:
+                  type: boolean
+                homebrew:
+                  type: boolean
+                npm:
+                  type: boolean
+
+            error:
+              type: string
+              description: "Error message if failed"
+
+validation_rules:
+  - "At least one distribution channel must be enabled"
+  - "If homebrew.enabled, tap_repo and formula_name are required"
+  - "If npm.enabled, package_name is required"
+  - "path must exist and contain go.mod file"
+  - "identifier must match module.name"

@@ -131,9 +131,31 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		contentBox = contentBox.Width(configModel.Width - 2)
 	}
 
-	// Special handling for Cleanup tab - show status instead of list
-	if configModel.ActiveTab == 0 {
-		content.WriteString(contentBox.Render(RenderCleanupStatus(configModel.CleanupModel)))
+	// Show spinner overlay if processing
+	if configModel.IsCreating && configModel.CreateStatus != "" {
+		spinnerBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(tealColor).
+			Padding(1).
+			Width(40).
+			Align(lipgloss.Center)
+
+		spinnerContent := fmt.Sprintf("%s %s",
+			configModel.CreateSpinner.View(),
+			configModel.CreateStatus)
+
+		content.WriteString(contentBox.Render(spinnerBox.Render(spinnerContent)))
+	} else if configModel.ActiveTab == 0 {
+		// Special handling for Cleanup tab - show status instead of list
+		// Add status message if present
+		statusContent := RenderCleanupStatus(configModel.CleanupModel)
+		if configModel.CreateStatus != "" {
+			statusContent = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("82")).
+				Bold(true).
+				Render(configModel.CreateStatus) + "\n\n" + statusContent
+		}
+		content.WriteString(contentBox.Render(statusContent))
 	} else if configModel.CreatingRepo {
 		// Show repo creation form (available from any tab)
 		formStyle := lipgloss.NewStyle().

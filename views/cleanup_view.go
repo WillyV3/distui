@@ -116,14 +116,15 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	content.WriteString(statusStyle.Render("Actions:\n"))
 	if model.NeedsGitHub() {
 		content.WriteString("[G] Set up GitHub repository\n")
-	}
-	if model.HasChanges() {
+	} else if model.HasChanges() {
 		content.WriteString("[C] Commit changes  [s] Smart commit\n")
+	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
+		content.WriteString("[G] GitHub settings  [P] Push to remote\n")
+		if model.IsClean() {
+			content.WriteString("✅ Ready for release!\n")
+		}
 	} else {
 		content.WriteString("[G] GitHub settings\n")
-	}
-	if model.IsClean() {
-		content.WriteString("✅ Ready for release!\n")
 	}
 	content.WriteString("[r] Refresh  [Tab] Next tab  [Esc] Back")
 
