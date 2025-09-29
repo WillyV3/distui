@@ -1,0 +1,79 @@
+package handlers
+
+import (
+	"distui/internal/gitcleanup"
+)
+
+type CleanupModel struct {
+	RepoInfo    *gitcleanup.RepoInfo
+	FileChanges []gitcleanup.FileChange
+	StatusText  string
+	Width       int
+	Height      int
+}
+
+func NewCleanupModel(width, height int) *CleanupModel {
+	m := &CleanupModel{
+		Width:  width,
+		Height: height,
+	}
+	m.loadRepoStatus()
+	return m
+}
+
+func (m *CleanupModel) loadRepoStatus() error {
+	info, err := gitcleanup.CheckRepoState()
+	if err != nil {
+		m.StatusText = "Error checking repository status"
+		return err
+	}
+	m.RepoInfo = info
+
+	changes, err := gitcleanup.GetFileChanges()
+	if err == nil {
+		m.FileChanges = changes
+	}
+
+	m.StatusText = gitcleanup.GetRepoStatus()
+	return nil
+}
+
+func (m *CleanupModel) GetFileSummary() (modified, added, deleted, untracked int) {
+	if m.RepoInfo == nil {
+		return 0, 0, 0, 0
+	}
+	return m.RepoInfo.FileStats.Modified,
+		m.RepoInfo.FileStats.Added,
+		m.RepoInfo.FileStats.Deleted,
+		m.RepoInfo.FileStats.Untracked
+}
+
+func (m *CleanupModel) NeedsGitHub() bool {
+	if m.RepoInfo == nil {
+		return false
+	}
+	return m.RepoInfo.Status == gitcleanup.RepoStatusNoRemote
+}
+
+func (m *CleanupModel) HasChanges() bool {
+	if m.RepoInfo == nil {
+		return false
+	}
+	return m.RepoInfo.Status == gitcleanup.RepoStatusDirty
+}
+
+func (m *CleanupModel) IsClean() bool {
+	if m.RepoInfo == nil {
+		return false
+	}
+	return m.RepoInfo.Status == gitcleanup.RepoStatusClean
+}
+
+func (m *CleanupModel) Refresh() {
+	m.loadRepoStatus()
+}
+
+func (m *CleanupModel) Update(width, height int) {
+	m.Width = width
+	m.Height = height
+}

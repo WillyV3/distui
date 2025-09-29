@@ -47,4 +47,4 @@ go.sum
 
 # Test coverage
 *.cover
-coverage.out
+coverage.outascii-art-txt

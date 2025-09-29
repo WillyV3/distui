@@ -21,6 +21,15 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return "Loading configuration..."
 	}
 
+	// Check if we're in a sub-view
+	switch configModel.CurrentView {
+	case handlers.GitHubView:
+		return RenderGitHubManagement(configModel.GitHubModel)
+	case handlers.CommitView:
+		// TODO: Add commit view
+		return "Commit view coming soon..."
+	}
+
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true)
@@ -122,8 +131,10 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		contentBox = contentBox.Width(configModel.Width - 2)
 	}
 
-	// Render the active list or repo creation form
-	if configModel.CreatingRepo {
+	// Special handling for Cleanup tab - show status instead of list
+	if configModel.ActiveTab == 0 {
+		content.WriteString(contentBox.Render(RenderCleanupStatus(configModel.CleanupModel)))
+	} else if configModel.CreatingRepo {
 		// Show repo creation form (available from any tab)
 		formStyle := lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).

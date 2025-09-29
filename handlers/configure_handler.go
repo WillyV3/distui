@@ -17,6 +17,15 @@ type repoCreatedMsg struct {
 	err error
 }
 
+// ViewType for the configure screen
+type ViewType uint
+
+const (
+	TabView ViewType = iota
+	GitHubView
+	CommitView
+)
+
 // ConfigureModel holds the state for the configure view
 type ConfigureModel struct {
 	ActiveTab       int
@@ -24,6 +33,13 @@ type ConfigureModel struct {
 	Width           int
 	Height          int
 	Initialized     bool
+	CurrentView     ViewType
+
+	// Sub-models for composable views
+	CleanupModel    *CleanupModel
+	GitHubModel     *GitHubModel
+
+	// Legacy fields (to be removed)
 	CreatingRepo    bool
 	RepoNameInput   textinput.Model
 	RepoDescInput   textinput.Model
@@ -188,6 +204,11 @@ func NewConfigureModel(width, height int) *ConfigureModel {
 	if listWidth < 40 {
 		listWidth = 40
 	}
+
+	// Initialize sub-models
+	m.CleanupModel = NewCleanupModel(width, height)
+	m.GitHubModel = NewGitHubModel(width, height)
+	m.CurrentView = TabView
 
 	// Initialize cleanup list first (tab 0)
 	cleanupItems := m.loadGitStatus()
@@ -429,6 +450,15 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
+
+		// Update sub-models with new dimensions
+		if m.CleanupModel != nil {
+			m.CleanupModel.Update(msg.Width, msg.Height)
+		}
+		if m.GitHubModel != nil {
+			m.GitHubModel.SetSize(msg.Width, msg.Height)
+		}
+
 		// Update list sizes with same calculation as NewConfigureModel
 		// Total UI chrome: 13 lines
 		listHeight := msg.Height - 13
@@ -551,7 +581,27 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, cmd, newModel
 		}
 	case tea.KeyMsg:
-		// Handle 'G' key first to prevent it from propagating
+		// Handle view switching
+		if configModel.CurrentView == GitHubView {
+			switch msg.String() {
+			case "esc":
+				configModel.CurrentView = TabView
+				configModel.CleanupModel.Refresh()
+				return currentPage, false, nil, configModel
+			default:
+				newModel, cmd := configModel.GitHubModel.Update(msg)
+				configModel.GitHubModel = newModel
+				return currentPage, false, cmd, configModel
+			}
+		}
+
+		// Handle 'G' key to switch to GitHub view
+		if msg.String() == "G" && configModel.ActiveTab == 0 {
+			configModel.CurrentView = GitHubView
+			return currentPage, false, nil, configModel
+		}
+
+		// Legacy handler for old 'G' key behavior (to be removed)
 		if msg.String() == "G" && configModel != nil && !configModel.CreatingRepo {
 			// Check if we need to create a GitHub repo
 			if gitcleanup.HasGitRepo() {
