@@ -792,11 +792,13 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
-		// Handle 'P' key to push to remote (only in TabView, Cleanup tab)
+		// Handle 'P' key to push to remote (only in TabView, Cleanup tab, and only if there are unpushed commits)
 		if msg.String() == "P" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
-			// Push to remote
+			// Push to remote only if there are unpushed commits
 			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
-				configModel.CleanupModel.RepoInfo.RemoteExists && !configModel.IsCreating {
+				configModel.CleanupModel.RepoInfo.RemoteExists &&
+				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 &&
+				!configModel.IsCreating {
 				// Start spinner and execute async push
 				configModel.IsCreating = true
 				configModel.CreateStatus = "Pushing to remote..."
