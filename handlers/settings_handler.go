@@ -11,11 +11,15 @@ import (
 )
 
 type SettingsModel struct {
-	FocusIndex int
-	Inputs     []textinput.Model
-	Config     *models.GlobalConfig
-	Editing    bool
-	Saved      bool
+	FocusIndex      int
+	Inputs          []textinput.Model
+	Config          *models.GlobalConfig
+	Editing         bool
+	Saved           bool
+	AddingAccount   bool
+	AccountInput    textinput.Model
+	IsOrgToggle     bool
+	SelectedAccount int // For managing accounts list
 }
 
 func NewSettingsModel(globalConfig *models.GlobalConfig) *SettingsModel {
@@ -73,6 +77,25 @@ func NewSettingsModel(globalConfig *models.GlobalConfig) *SettingsModel {
 		}
 
 		m.Inputs[i] = t
+	}
+
+	// Initialize account input for adding new accounts
+	accountInput := textinput.New()
+	accountInput.Placeholder = "GitHub username or organization"
+	accountInput.CharLimit = 64
+	accountInput.Cursor.Style = cursorStyle
+	m.AccountInput = accountInput
+
+	// Migrate old single username to accounts list if needed
+	if globalConfig != nil && globalConfig.User.GitHubUsername != "" {
+		if len(globalConfig.User.GitHubAccounts) == 0 {
+			globalConfig.User.GitHubAccounts = []models.GitHubAccount{
+				{
+					Username: globalConfig.User.GitHubUsername,
+					Default:  true,
+				},
+			}
+		}
 	}
 
 	return m
