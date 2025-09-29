@@ -15,6 +15,7 @@ type RepoBrowserModel struct {
 	CurrentDirectory string
 	Entries          []FileEntry
 	Selected         int
+	ViewportOffset   int
 	ShowHidden       bool
 	Width            int
 	Height           int
@@ -115,38 +116,50 @@ func (m *RepoBrowserModel) LoadDirectory() {
 }
 
 func (m *RepoBrowserModel) Update(msg tea.Msg) (*RepoBrowserModel, tea.Cmd) {
+	availableLines := m.Height - 8
+	if availableLines < 1 {
+		availableLines = 1
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.Down):
 			if m.Selected < len(m.Entries)-1 {
 				m.Selected++
+				m.adjustViewport(availableLines)
 			}
 		case key.Matches(msg, m.KeyMap.Up):
 			if m.Selected > 0 {
 				m.Selected--
+				m.adjustViewport(availableLines)
 			}
 		case key.Matches(msg, m.KeyMap.GoToTop):
 			m.Selected = 0
+			m.ViewportOffset = 0
 		case key.Matches(msg, m.KeyMap.GoToLast):
 			m.Selected = len(m.Entries) - 1
+			m.adjustViewport(availableLines)
 		case key.Matches(msg, m.KeyMap.PageDown):
-			pageSize := m.Height - 10
+			pageSize := availableLines
 			m.Selected += pageSize
 			if m.Selected >= len(m.Entries) {
 				m.Selected = len(m.Entries) - 1
 			}
+			m.adjustViewport(availableLines)
 		case key.Matches(msg, m.KeyMap.PageUp):
-			pageSize := m.Height - 10
+			pageSize := availableLines
 			m.Selected -= pageSize
 			if m.Selected < 0 {
 				m.Selected = 0
 			}
+			m.adjustViewport(availableLines)
 		case key.Matches(msg, m.KeyMap.Back):
 			// Go up one directory
 			if m.CurrentDirectory != "." && m.CurrentDirectory != "/" {
 				m.CurrentDirectory = filepath.Dir(m.CurrentDirectory)
 				m.Selected = 0
+				m.ViewportOffset = 0
 				m.LoadDirectory()
 			}
 		case key.Matches(msg, m.KeyMap.Open):
@@ -154,12 +167,34 @@ func (m *RepoBrowserModel) Update(msg tea.Msg) (*RepoBrowserModel, tea.Cmd) {
 			if m.Selected < len(m.Entries) && m.Entries[m.Selected].IsDir {
 				m.CurrentDirectory = filepath.Join(m.CurrentDirectory, m.Entries[m.Selected].Name)
 				m.Selected = 0
+				m.ViewportOffset = 0
 				m.LoadDirectory()
 			}
 		}
 	}
 
 	return m, nil
+}
+
+func (m *RepoBrowserModel) adjustViewport(availableLines int) {
+	// Keep selected item visible by adjusting viewport offset
+	if m.Selected < m.ViewportOffset {
+		m.ViewportOffset = m.Selected
+	} else if m.Selected >= m.ViewportOffset+availableLines {
+		m.ViewportOffset = m.Selected - availableLines + 1
+	}
+
+	// Clamp viewport offset
+	if m.ViewportOffset < 0 {
+		m.ViewportOffset = 0
+	}
+	maxOffset := len(m.Entries) - availableLines
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.ViewportOffset > maxOffset {
+		m.ViewportOffset = maxOffset
+	}
 }
 
 func (e FileEntry) String() string {

@@ -57,12 +57,11 @@ func RenderRepoBrowser(model *handlers.RepoBrowserModel) string {
 		availableLines = 1
 	}
 
-	// Calculate scroll position
-	scrollStart := 0
-	if model.Selected >= availableLines {
-		scrollStart = model.Selected - availableLines + 1
-	}
+	// Use viewport offset from model
+	scrollStart := model.ViewportOffset
 	scrollEnd := scrollStart + availableLines
+
+	// Clamp to valid range
 	if scrollEnd > len(model.Entries) {
 		scrollEnd = len(model.Entries)
 	}

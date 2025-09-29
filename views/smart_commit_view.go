@@ -13,10 +13,19 @@ func RenderSmartCommitConfirm(model *handlers.CleanupModel) string {
 	var content strings.Builder
 
 	maxLines := 20
-	if model != nil && model.Height > 0 {
-		maxLines = model.Height
-		if maxLines < 15 {
-			maxLines = 15
+	availableWidth := 80
+	if model != nil {
+		if model.Height > 0 {
+			maxLines = model.Height
+			if maxLines < 15 {
+				maxLines = 15
+			}
+		}
+		if model.Width > 0 {
+			availableWidth = model.Width - 4
+			if availableWidth < 60 {
+				availableWidth = 60
+			}
 		}
 	}
 
@@ -28,25 +37,22 @@ func RenderSmartCommitConfirm(model *handlers.CleanupModel) string {
 		Foreground(lipgloss.Color("117")).
 		Bold(true)
 
-	infoStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252"))
-
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
 		BorderForeground(lipgloss.Color("214")).
 		Padding(1, 2).
-		Width(60)
+		Width(availableWidth)
 
 	content.WriteString(warningStyle.Render("SMART COMMIT CONFIRMATION") + "\n\n")
 
 	var boxContent strings.Builder
 	boxContent.WriteString(headerStyle.Render("What Smart Commit Does:") + "\n\n")
 
-	boxContent.WriteString(infoStyle.Render("1. Automatically stages ALL changed files\n"))
-	boxContent.WriteString(infoStyle.Render("2. Generates a commit message based on:\n"))
-	boxContent.WriteString(infoStyle.Render("   • File types modified (.go, .md, etc.)\n"))
-	boxContent.WriteString(infoStyle.Render("   • Number of changes\n"))
-	boxContent.WriteString(infoStyle.Render("   • Type of changes (add/modify/delete)\n\n"))
+	boxContent.WriteString("1. Automatically stages ALL changed files\n")
+	boxContent.WriteString("2. Generates a commit message based on:\n")
+	boxContent.WriteString("   • File types modified (.go, .md, etc.)\n")
+	boxContent.WriteString("   • Number of changes\n")
+	boxContent.WriteString("   • Type of changes (add/modify/delete)\n\n")
 
 	boxContent.WriteString(warningStyle.Render("WARNING: This will commit ALL changes at once!") + "\n\n")
 
