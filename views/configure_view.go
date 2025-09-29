@@ -120,17 +120,24 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	// Join tabs horizontally
 	content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...) + "\n\n")
 
-	// Create content area box that matches tab width
+	// Create content area box that matches tab width and height
 	contentBox := lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder()).
 		BorderForeground(lipgloss.Color("240")).
 		Padding(1, 0) // Vertical padding only, no horizontal
 
-	// Set content box width to match total width
+	// Set content box dimensions
 	if configModel.Width > 8 {
 		// Use full width minus border
 		contentBox = contentBox.Width(configModel.Width - 2)
 	}
+
+	// Set height constraint - use the listHeight calculation
+	boxHeight := configModel.Height - 13
+	if boxHeight < 5 {
+		boxHeight = 5
+	}
+	contentBox = contentBox.Height(boxHeight)
 
 	// First, render the base content
 	var baseContent string

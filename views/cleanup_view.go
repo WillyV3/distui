@@ -46,15 +46,22 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	// Add blank line after header
 	lines = append(lines, "")
 
+	// Color styles for status
+	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
+	yellowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	blueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+
 	// Git status with padding
-	lines = append(lines, "  Git Repository: Initialized")
+	lines = append(lines, "  "+grayStyle.Render("Git Repository: ")+greenStyle.Render("Initialized"))
 
 	// GitHub status with padding
 	if model.RepoInfo.RemoteExists {
-		lines = append(lines, fmt.Sprintf("  GitHub Remote: %s/%s",
-			model.RepoInfo.Owner, model.RepoInfo.RepoName))
+		lines = append(lines, fmt.Sprintf("  %s%s",
+			grayStyle.Render("GitHub Remote: "),
+			blueStyle.Render(fmt.Sprintf("%s/%s", model.RepoInfo.Owner, model.RepoInfo.RepoName))))
 	} else {
-		lines = append(lines, "  GitHub Remote: Not configured")
+		lines = append(lines, "  "+grayStyle.Render("GitHub Remote: ")+yellowStyle.Render("Not configured"))
 	}
 
 	// Changes summary with padding
@@ -62,14 +69,25 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	total := modified + added + deleted + untracked
 
 	if total > 0 {
-		lines = append(lines, fmt.Sprintf("  Local Changes: %d uncommitted files", total))
+		lines = append(lines, fmt.Sprintf("  %s%s",
+			grayStyle.Render("Local Changes: "),
+			yellowStyle.Render(fmt.Sprintf("%d uncommitted files", total))))
 	} else {
-		lines = append(lines, "  Local Changes: Clean working directory")
+		lines = append(lines, "  "+grayStyle.Render("Local Changes: ")+greenStyle.Render("Clean working directory"))
 	}
 
 	// Branch info with padding
 	if model.RepoInfo.Branch != "" {
-		lines = append(lines, fmt.Sprintf("  Branch: %s", model.RepoInfo.Branch))
+		lines = append(lines, fmt.Sprintf("  %s%s",
+			grayStyle.Render("Branch: "),
+			blueStyle.Render(model.RepoInfo.Branch)))
+	}
+
+	// Show "All synced!" message if clean and pushed
+	if total == 0 && model.RepoInfo.UnpushedCommits == 0 {
+		lines = append(lines, "")
+		syncedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
+		lines = append(lines, "  "+syncedStyle.Render("✓ All synced! Repository is clean and up to date."))
 	}
 
 	// Divider with padding
@@ -80,16 +98,17 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	}
 	lines = append(lines, "  "+strings.Repeat("─", dividerWidth))
 
-	// Calculate how many lines we've used so far
-	headerLines := len(lines)
-
-	// Reserve lines for actions at the bottom (4 lines: blank + "Actions:" + action line + potential bottom padding)
+	// Fixed layout calculation
+	// Header is approximately 10-11 lines (including conditional unpushed warning)
+	// Actions at bottom: 4 lines (blank + "Actions:" + action line + padding)
+	// Total reserved: ~14-15 lines
+	fixedHeaderLines := 11  // Maximum header size (with unpushed warning)
 	actionLines := 4
 
 	// Calculate available lines for files
 	// model.Height is already the available content height (after UI chrome)
-	// We just need to subtract our own header and action lines
-	availableForFiles := model.Height - headerLines - actionLines
+	// We just need to subtract our fixed header and action lines
+	availableForFiles := model.Height - fixedHeaderLines - actionLines
 	if availableForFiles < 1 {
 		availableForFiles = 1
 	}
@@ -151,7 +170,7 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 	}
 
 	// Fill remaining space to push actions to bottom
-	currentLines := len(lines) - headerLines
+	currentLines := len(lines) - fixedHeaderLines
 	for currentLines < availableForFiles {
 		lines = append(lines, "")
 		currentLines++
