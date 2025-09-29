@@ -132,31 +132,19 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		contentBox = contentBox.Width(configModel.Width - 2)
 	}
 
-	// Show spinner overlay if processing
-	if configModel.IsCreating && configModel.CreateStatus != "" {
-		spinnerBox := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(tealColor).
-			Padding(1).
-			Width(40).
-			Align(lipgloss.Center)
-
-		spinnerContent := fmt.Sprintf("%s %s",
-			configModel.CreateSpinner.View(),
-			configModel.CreateStatus)
-
-		content.WriteString(contentBox.Render(spinnerBox.Render(spinnerContent)))
-	} else if configModel.ActiveTab == 0 {
+	// First, render the base content
+	var baseContent string
+	if configModel.ActiveTab == 0 {
 		// Special handling for Cleanup tab - show status instead of list
 		// Add status message if present
 		statusContent := RenderCleanupStatus(configModel.CleanupModel)
-		if configModel.CreateStatus != "" {
+		if configModel.CreateStatus != "" && !configModel.IsCreating {
 			statusContent = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("82")).
 				Bold(true).
 				Render(configModel.CreateStatus) + "\n\n" + statusContent
 		}
-		content.WriteString(contentBox.Render(statusContent))
+		baseContent = statusContent
 	} else if configModel.CreatingRepo {
 		// Show repo creation form (available from any tab)
 		formStyle := lipgloss.NewStyle().
@@ -218,9 +206,59 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	} else if configModel.Initialized {
 		// Wrap list content in the content box
 		listContent := configModel.Lists[configModel.ActiveTab].View()
-		content.WriteString(contentBox.Render(listContent))
+		baseContent = listContent
 	} else {
-		content.WriteString(contentBox.Render("Initializing..."))
+		baseContent = "Initializing..."
+	}
+
+	// Render the content box with base content
+	var renderedContent string
+	if configModel.CreatingRepo {
+		// Form has its own styling, don't double-wrap
+		renderedContent = content.String()
+	} else {
+		// Calculate content box dimensions for overlay positioning
+		boxWidth := configModel.Width - 2
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+		// Height is approximately what's available after tabs/controls
+		boxHeight := 15 // Default height for content area
+		if configModel.CleanupModel != nil && configModel.CleanupModel.Height > 0 {
+			boxHeight = configModel.CleanupModel.Height + 2 // Add padding
+		}
+
+		// Check if we need to overlay spinner
+		if configModel.IsCreating && configModel.CreateStatus != "" {
+			// Create spinner overlay
+			spinnerBox := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(tealColor).
+				Padding(1).
+				Width(40).
+				Align(lipgloss.Center)
+
+			spinnerContent := fmt.Sprintf("%s %s",
+				configModel.CreateSpinner.View(),
+				configModel.CreateStatus)
+
+			// Use lipgloss.Place to center the spinner over the content
+			overlayContent := lipgloss.Place(
+				boxWidth,
+				boxHeight,
+				lipgloss.Center,
+				lipgloss.Center,
+				spinnerBox.Render(spinnerContent),
+			)
+
+			// Render base content in the box first, then overlay
+			// Since we can't truly layer, we'll use the overlay as the content
+			renderedContent = contentBox.Render(overlayContent)
+		} else {
+			// Normal rendering without spinner
+			renderedContent = contentBox.Render(baseContent)
+		}
+		content.WriteString(renderedContent)
 	}
 
 	// Controls
