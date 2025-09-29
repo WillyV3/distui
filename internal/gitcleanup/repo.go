@@ -101,14 +101,24 @@ func CheckRepoState() (*RepoInfo, error) {
 	// Check for unpushed commits if we have a remote
 	hasUnpushedCommits := false
 	if info.RemoteExists {
-		// Check if we have commits ahead of remote
+		// Try with upstream first
 		cmd := exec.Command("git", "rev-list", "--count", "@{upstream}..HEAD")
 		output, err := cmd.Output()
+
+		// If upstream not set, try origin/main or origin/master
+		if err != nil {
+			cmd = exec.Command("git", "rev-list", "--count", "origin/main..HEAD")
+			output, err = cmd.Output()
+			if err != nil {
+				cmd = exec.Command("git", "rev-list", "--count", "origin/master..HEAD")
+				output, err = cmd.Output()
+			}
+		}
+
 		if err == nil {
 			countStr := strings.TrimSpace(string(output))
 			if countStr != "0" && countStr != "" {
 				hasUnpushedCommits = true
-				// Parse the count
 				var count int
 				fmt.Sscanf(countStr, "%d", &count)
 				info.UnpushedCommits = count
