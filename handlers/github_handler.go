@@ -22,6 +22,7 @@ type GitHubModel struct {
 	Width       int
 	Height      int
 	RepoInfo    *gitcleanup.RepoInfo
+	RepoBrowser *RepoBrowserModel
 }
 
 func NewGitHubModel(width, height int) *GitHubModel {
@@ -37,13 +38,14 @@ func NewGitHubModel(width, height int) *GitHubModel {
 	descInput.Width = width - 4
 
 	m := &GitHubModel{
-		State:      githubOverview,
-		RepoName:   nameInput,
-		RepoDesc:   descInput,
-		IsPrivate:  false,
-		FocusIndex: 0,
-		Width:      width,
-		Height:     height,
+		State:       githubOverview,
+		RepoName:    nameInput,
+		RepoDesc:    descInput,
+		IsPrivate:   false,
+		FocusIndex:  0,
+		Width:       width,
+		Height:      height,
+		RepoBrowser: NewRepoBrowserModel(width, height),
 	}
 
 	info, _ := gitcleanup.CheckRepoState()
@@ -54,6 +56,12 @@ func NewGitHubModel(width, height int) *GitHubModel {
 
 func (m *GitHubModel) Update(msg tea.Msg) (*GitHubModel, tea.Cmd) {
 	var cmd tea.Cmd
+
+	// Always delegate to repo browser if in overview state
+	if m.State == githubOverview && m.RepoBrowser != nil {
+		m.RepoBrowser, cmd = m.RepoBrowser.Update(msg)
+		return m, cmd
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -76,10 +84,7 @@ func (m *GitHubModel) Update(msg tea.Msg) (*GitHubModel, tea.Cmd) {
 				m.IsPrivate = !m.IsPrivate
 			}
 		case "enter":
-			if m.State == githubOverview {
-				m.State = githubCreate
-				m.RepoName.Focus()
-			} else if m.State == githubCreate {
+			if m.State == githubCreate {
 				// Execute creation (handled by parent)
 				return m, nil
 			}
@@ -100,4 +105,7 @@ func (m *GitHubModel) SetSize(width, height int) {
 	m.Height = height
 	m.RepoName.Width = width - 4
 	m.RepoDesc.Width = width - 4
+	if m.RepoBrowser != nil {
+		m.RepoBrowser.SetSize(width, height)
+	}
 }

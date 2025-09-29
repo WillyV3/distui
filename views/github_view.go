@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"strings"
 
 	"distui/handlers"
@@ -13,6 +12,12 @@ func RenderGitHubManagement(model *handlers.GitHubModel) string {
 		return "Loading GitHub management..."
 	}
 
+	// Show repo browser if in overview state
+	if model.State == 0 && model.RepoBrowser != nil { // githubOverview = 0
+		return RenderRepoBrowser(model.RepoBrowser)
+	}
+
+	// Otherwise show the creation form
 	var content strings.Builder
 
 	headerStyle := lipgloss.NewStyle().
@@ -36,15 +41,7 @@ func RenderGitHubManagement(model *handlers.GitHubModel) string {
 
 	content.WriteString(headerStyle.Render("GITHUB REPOSITORY MANAGEMENT") + "\n\n")
 
-	// Show current status
-	if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
-		content.WriteString(fmt.Sprintf("✅ Connected: github.com/%s/%s\n\n",
-			model.RepoInfo.Owner, model.RepoInfo.RepoName))
-		content.WriteString("[Esc] Return to Configure\n")
-		return content.String()
-	}
-
-	content.WriteString("⚠️  No GitHub repository configured\n\n")
+	content.WriteString("No GitHub repository configured\n\n")
 
 	// Create repository form
 	var form strings.Builder

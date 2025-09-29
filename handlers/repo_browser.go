@@ -9,7 +9,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dustin/go-humanize"
 )
 
 type RepoBrowserModel struct {
@@ -164,25 +163,39 @@ func (m *RepoBrowserModel) Update(msg tea.Msg) (*RepoBrowserModel, tea.Cmd) {
 }
 
 func (e FileEntry) String() string {
-	icon := " "
+	// Type indicator - single character
+	typeChar := "-"
 	if e.IsDir {
-		icon = "📁"
+		typeChar = "/"
 	} else if strings.HasSuffix(e.Name, ".go") {
-		icon = " "
+		typeChar = "g"
 	} else if strings.HasSuffix(e.Name, ".md") {
-		icon = " "
+		typeChar = "m"
+	} else if strings.HasSuffix(e.Name, ".json") {
+		typeChar = "j"
+	} else if strings.HasSuffix(e.Name, ".yaml") || strings.HasSuffix(e.Name, ".yml") {
+		typeChar = "y"
+	} else if strings.HasSuffix(e.Name, ".txt") {
+		typeChar = "t"
+	} else if e.Mode&0111 != 0 && !strings.Contains(e.Name, ".") {
+		// Executable file without extension (likely binary)
+		typeChar = "b"
 	}
 
-	size := ""
-	if !e.IsDir {
-		size = fmt.Sprintf("%7s", humanize.Bytes(uint64(e.Size)))
-	} else {
-		size = "       "
+	// Fixed width name column (40 chars)
+	name := e.Name
+	if e.IsDir {
+		name = name + "/"
 	}
+	if len(name) > 40 {
+		name = name[:37] + "..."
+	}
+	nameFormatted := fmt.Sprintf("%-40s", name)
 
-	perms := e.Mode.String()[1:] // Skip first char (d for dir, - for file)
+	// Date column
+	modTime := e.ModTime
 
-	return fmt.Sprintf("%s %s  %s  %s  %s", icon, e.Name, perms, size, e.ModTime)
+	return fmt.Sprintf("%s  %s  %s", typeChar, nameFormatted, modTime)
 }
 
 func (m *RepoBrowserModel) SetSize(width, height int) {
