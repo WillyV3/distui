@@ -50,7 +50,7 @@ type Package struct {
 	Duration time.Duration
 }
 
-func NewReleaseModel(width, height int, projectPath, projectName, currentVersion, repoOwner, repoName string) *ReleaseModel {
+func NewReleaseModel(width, height int, projectPath, projectName, currentVersion, repoOwner, repoName string, projectConfig *models.ProjectConfig) *ReleaseModel {
 	s := spinner.New()
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
@@ -71,23 +71,41 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		{Name: "GoReleaser", Status: "pending"},
 	}
 
+	// Load config settings
+	enableHomebrew := false
+	enableNPM := false
+	homebrewTap := ""
+
+	if projectConfig != nil && projectConfig.Config != nil {
+		if projectConfig.Config.Distributions.Homebrew != nil {
+			enableHomebrew = projectConfig.Config.Distributions.Homebrew.Enabled
+			homebrewTap = projectConfig.Config.Distributions.Homebrew.TapRepo
+		}
+		if projectConfig.Config.Distributions.NPM != nil {
+			enableNPM = projectConfig.Config.Distributions.NPM.Enabled
+		}
+	}
+
 	return &ReleaseModel{
-		Phase:          models.PhaseVersionSelect,
-		Packages:       packages,
-		Installing:     -1,
-		Installed:      []int{},
-		Progress:       p,
-		Spinner:        s,
-		Output:         []string{},
-		Width:          width,
-		Height:         height,
-		VersionInput:   ti,
+		Phase:           models.PhaseVersionSelect,
+		Packages:        packages,
+		Installing:      -1,
+		Installed:       []int{},
+		Progress:        p,
+		Spinner:         s,
+		Output:          []string{},
+		Width:           width,
+		Height:          height,
+		VersionInput:    ti,
 		SelectedVersion: 0,
-		CurrentVersion: currentVersion,
-		ProjectPath:    projectPath,
-		ProjectName:    projectName,
-		RepoOwner:      repoOwner,
-		RepoName:       repoName,
+		CurrentVersion:  currentVersion,
+		ProjectPath:     projectPath,
+		ProjectName:     projectName,
+		RepoOwner:       repoOwner,
+		RepoName:        repoName,
+		EnableHomebrew:  enableHomebrew,
+		EnableNPM:       enableNPM,
+		HomebrewTap:     homebrewTap,
 	}
 }
 

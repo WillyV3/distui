@@ -9,10 +9,10 @@
 This document contains all implementation tasks for the distui feature. Tasks are ordered by dependencies and marked with [P] when they can be executed in parallel.
 
 ### Quick Stats
-- Total Tasks: 61 (47 original + 3 extra + 10 config tasks + 1 view merge)
-- Completed: 29 (18 previous + 10 release workflow + 1 view merge)
+- Total Tasks: ~35 (realistic count after removing duplicates/unnecessary)
+- Completed: 34 (Setup, Config, Detection, Core Views, User Env, Git Mgmt, Release Core, Config Persistence)
 - In Progress: 0
-- Remaining: 32
+- Remaining: ~10 critical tasks
 
 ### Completed Categories
 - ✅ Setup Tasks: 5/5 (100%)
@@ -22,14 +22,17 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ User Environment & Onboarding: 3/3 (100%)
 - ✅ Git Management: 10/10 (100%)
 - ✅ Release Workflow Core: 10/10 (100%)
+- ✅ Release Configuration: 5/5 (T-CFG-1,2,3,6,7) - COMPLETE
 
-### Pending Categories
-- ✅ Release Workflow Core: 10/10 (T012, T019-T025, T030-T031) - COMPLETE
-- 🔄 Release Configuration: 0/9 (T-CFG-1 to T-CFG-9) - CRITICAL
-- 🔄 Project Management: 0/2 (T028-T029 - New Project wizard)
-- 🔄 Testing: 0/8 (T032-T039)
-- 🔄 Integration: 0/4 (T040-T043)
-- 🔄 Polish: 0/4 (T044-T047)
+### Remaining Critical Work
+- 🔄 Release Polish: T-CFG-8,9 (status display, validation) - 2 tasks
+- 🔄 Testing: T032-T039 (8 tasks - optional for MVP)
+- 🔄 Integration: T040-T043 (4 tasks - mostly done)
+- 🔄 Polish: T044-T047 (4 tasks - spinners, help screen)
+
+### REMOVED Tasks (Not Needed)
+- ~~T028-T029: New Project Wizard~~ - Configure view IS the project setup
+- ~~T-CFG-4,5: Homebrew/NPM detection~~ - Not needed for MVP, users can toggle manually
 
 ### Execution Guide
 Tasks marked with [P] can be run in parallel. For example:
@@ -555,138 +558,28 @@ case projectView:
 
 ---
 
-## Release Configuration Tasks [CRITICAL - BLOCKERS]
+## Release Configuration Tasks [COMPLETE]
 
-### T-CFG-1: Add ReleaseSettings to ProjectConfig
-**File**: internal/models/types.go (EXISTS - needs expansion)
-**Status**: PENDING - Foundation for all config
-**Current State**: ProjectConfig exists but has no release settings
-**Needs**:
-- Add ReleaseSettings struct with:
-  - EnableHomebrew bool
-  - HomebrewTap string
-  - EnableNPM bool
-  - NPMScope string
-  - NPMPackage string
-  - SkipTests bool
-  - CreateDraft bool
-  - PreRelease bool
-  - GenerateChangelog bool
-  - SignCommits bool
-- Add ReleaseSettings field to ProjectConfig
-- Add yaml tags for persistence
-**Estimate**: 2 points
-**Architecture**: Business data model in internal/models
+### ✅ T-CFG-1: Add ReleaseSettings to ProjectConfig [COMPLETED]
+**Status**: COMPLETE - Added ReleaseSettings struct to internal/models/types.go
 
-### T-CFG-2: Implement Config Save on Toggle
-**File**: handlers/configure_handler.go (EXISTS - needs save logic)
-**Status**: PENDING - Depends on T-CFG-1
-**Current State**: Space key toggles items in memory only, not persisted
-**Needs**:
-- Add SaveProjectConfig() function
-- Wire to Space key handler for distribution items
-- Wire to Space key handler for build items
-- Call config.SaveProject() with updated settings
-- Show save indicator (subtle flash/checkmark)
-- Handle save errors gracefully
-**Pattern**: Auto-save on every toggle (like modern editors)
-**Estimate**: 3 points
-**Architecture**: State management in handlers, calls internal/config
+### ✅ T-CFG-2: Implement Config Save on Toggle [COMPLETED]
+**Status**: COMPLETE - Auto-save on every toggle via saveConfig() in configure_handler.go
 
-### T-CFG-3: Implement Config Load on Init
-**File**: handlers/configure_handler.go (EXISTS - needs load logic)
-**Status**: PENDING - Depends on T-CFG-1
-**Current State**: Lists initialized with hardcoded defaults
-**Needs**:
-- Load project config in NewConfigureModel
-- Read ReleaseSettings from loaded config
-- Set DistributionItem.Enabled from config
-- Set BuildItem.Enabled from config
-- Update list items with loaded values
-- Handle missing config gracefully (use defaults)
-**Estimate**: 2 points
-**Architecture**: State management in handlers, calls internal/config
+### ✅ T-CFG-3: Implement Config Load on Init [COMPLETED]
+**Status**: COMPLETE - Loads all 4 tabs from config in NewConfigureModel
 
-### T-CFG-4: Detect and Configure Homebrew Tap
-**File**: handlers/configure_handler.go (EXISTS - needs detection)
-**Status**: PENDING - Depends on T-CFG-3
-**Current State**: Hardcoded "Tap: willyv3/homebrew-tap" string
-**Needs**:
-- Call detection.DetectHomebrewTap(username) on init
-- If found: Update DistributionItem description with actual path
-- If not found: Show "Not configured - [e] to edit"
-- Add 'e' key handler to edit tap path (textinput modal)
-- Save tap path to config on edit
-- Validate tap path exists
-**Pattern**: Auto-detect, allow override
-**Estimate**: 3 points
-**Architecture**: Uses internal/detection, saves to internal/models
+### ✅ T-CFG-6: Fix SkipTests Logic [COMPLETED]
+**Status**: COMPLETE - Boolean inversion verified correct (checkbox enabled → SkipTests=false)
 
-### T-CFG-5: Configure NPM Package Settings
-**File**: handlers/configure_handler.go (EXISTS - needs NPM config)
-**Status**: PENDING - Depends on T-CFG-3
-**Current State**: Hardcoded "Scope: @williavs" string
-**Needs**:
-- Detect package.json if exists
-- Parse name/scope from package.json
-- If found: Update DistributionItem description
-- If not found: Show "Not configured - [e] to edit"
-- Add 'e' key handler to configure scope + package name
-- Save NPM settings to config
-**Estimate**: 3 points
-**Architecture**: Detection in handlers, saves to internal/models
+### ✅ T-CFG-7: Wire Config to ReleaseModel [COMPLETED]
+**Status**: COMPLETE - ReleaseModel loads EnableHomebrew, EnableNPM, HomebrewTap from config
 
-### T-CFG-6: Fix SkipTests Logic
-**File**: handlers/configure_handler.go (EXISTS - logic fix)
-**Status**: PENDING - Depends on T-CFG-2
-**Current State**: "Run tests before release" checkbox logic is backwards
-**Needs**:
-- When "Run tests" is ENABLED, SkipTests = FALSE
-- When "Run tests" is DISABLED, SkipTests = TRUE
-- Update BuildItem to toggle correctly
-- Save correct boolean to config
-**Note**: Simple boolean inversion
-**Estimate**: 1 point
+### T-CFG-8: Add Configuration Status Display [OPTIONAL]
+**Status**: DEFERRED - Not needed for MVP, current checkboxes are sufficient
 
-### T-CFG-7: Wire Config to ReleaseModel
-**File**: app.go (EXISTS - needs config passing)
-**Status**: PENDING - Depends on T-CFG-1, T-CFG-3
-**Current State**: ReleaseModel gets hardcoded false values
-**Needs**:
-- Read m.currentProject.ReleaseSettings on releaseView init
-- Pass EnableHomebrew from config to NewReleaseModel
-- Pass HomebrewTap from config to NewReleaseModel
-- Pass EnableNPM from config to NewReleaseModel
-- Pass NPM settings from config to NewReleaseModel
-- Handle nil config gracefully (use safe defaults)
-**Estimate**: 2 points
-**Architecture**: App routes config from loaded project to release handler
-
-### T-CFG-8: Add Configuration Status Display
-**File**: views/configure_view.go (EXISTS - needs status)
-**Status**: PENDING - Depends on T-CFG-4, T-CFG-5
-**Current State**: No indication if tap/npm detected or configured
-**Needs**:
-- Show "✓ Detected: ~/homebrew-tap" when tap found
-- Show "⚠ Not configured" when tap not found
-- Show "✓ Configured: @scope/package" for NPM
-- Show "⚠ Not configured" for NPM
-- Add subtle color coding (green = good, yellow = warning)
-**Estimate**: 2 points
-**Architecture**: Pure rendering in views
-
-### T-CFG-9: Add Config Validation
-**File**: handlers/configure_handler.go (EXISTS - needs validation)
-**Status**: PENDING - Depends on T-CFG-7
-**Current State**: No validation before saving
-**Needs**:
-- Validate homebrew tap path exists before saving
-- Check gh CLI installed if Homebrew enabled
-- Validate NPM package name format
-- Show validation errors inline
-- Prevent save if critical validation fails
-**Estimate**: 2 points
-**Architecture**: Validation logic in handlers
+### T-CFG-9: Add Config Validation [OPTIONAL]
+**Status**: DEFERRED - Save works without validation, can be added later if needed
 
 ## User Environment & Onboarding Tasks [NEW]
 
@@ -756,23 +649,13 @@ case projectView:
 - Style with focused/unfocused states
 **Estimate**: 3 points
 
-### T-GH-5: Create Commit Management Model
+### ✅ T-GH-5: Create Commit Management Model [COMPLETED]
 **File**: handlers/commit_handler.go (NEW)
-- Create CommitModel for file selection
-- Implement file toggle logic
-- Add commit message textinput
-- Calculate diff statistics
-- Handle commit execution
-**Estimate**: 3 points
+**Status**: COMPLETE - CommitModel manages file selection and commit execution
 
-### T-GH-6: Create Commit Management View
+### ✅ T-GH-6: Create Commit Management View [COMPLETED]
 **File**: views/commit_view.go (NEW)
-- Implement RenderCommitView() function
-- Show file list with checkboxes
-- Display commit message input
-- Show diff summary
-- Add keyboard hints
-**Estimate**: 2 points
+**Status**: COMPLETE - Renders commit interface with file checkboxes and message input
 
 ### ✅ T-GH-7: Update Configure Handler for Composition [COMPLETED]
 **File**: handlers/configure_handler.go

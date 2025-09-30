@@ -153,7 +153,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				repoOwner = m.detectedProject.Repository.Owner
 				repoName = m.detectedProject.Repository.Name
 			}
-			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName)
+			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName, m.currentProject)
 		}
 
 		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg, m.releaseModel)
@@ -164,7 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
 			accounts := extractGitHubAccounts(m.globalConfig)
-			m.configureModel = handlers.NewConfigureModel(width, height, accounts)
+			m.configureModel = handlers.NewConfigureModel(width, height, accounts, m.currentProject, m.detectedProject)
 			// Change page NOW, start spinner and trigger async load
 			m.currentPage = pageState(newPage)
 			m.quitting = quitting

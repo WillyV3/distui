@@ -74,9 +74,10 @@ type BinaryInfo struct {
 }
 
 type ProjectSettings struct {
-	Distributions Distributions   `yaml:"distributions"`
-	Build         *BuildSettings  `yaml:"build,omitempty"`
-	CICD          *CICDSettings   `yaml:"ci_cd,omitempty"`
+	Distributions Distributions    `yaml:"distributions"`
+	Build         *BuildSettings   `yaml:"build,omitempty"`
+	Release       *ReleaseSettings `yaml:"release,omitempty"`
+	CICD          *CICDSettings    `yaml:"ci_cd,omitempty"`
 }
 
 type Distributions struct {
@@ -115,6 +116,14 @@ type GoModuleConfig struct {
 type BuildSettings struct {
 	GoreleaserConfig string `yaml:"goreleaser_config,omitempty"`
 	TestCommand      string `yaml:"test_command,omitempty"`
+}
+
+type ReleaseSettings struct {
+	SkipTests         bool `yaml:"skip_tests"`
+	CreateDraft       bool `yaml:"create_draft"`
+	PreRelease        bool `yaml:"pre_release"`
+	GenerateChangelog bool `yaml:"generate_changelog"`
+	SignCommits       bool `yaml:"sign_commits"`
 }
 
 type CICDSettings struct {
