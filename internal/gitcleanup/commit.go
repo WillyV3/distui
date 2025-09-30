@@ -86,6 +86,13 @@ func ExecuteSmartCommit(items []CleanupItem) (string, error) {
 
 	// Add files to .gitignore if needed
 	if len(toIgnore) > 0 {
+		// Untrack files that are already tracked
+		for _, path := range toIgnore {
+			// Mark as unchanged to stop tracking changes
+			cmd := exec.Command("git", "update-index", "--assume-unchanged", path)
+			cmd.Run() // Ignore errors - file might not be tracked
+		}
+
 		if err := AddToGitignore(toIgnore); err != nil {
 			return "", fmt.Errorf("failed to update .gitignore: %w", err)
 		}

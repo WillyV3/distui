@@ -21,6 +21,43 @@ func CategorizeFile(path string) FileCategory {
 	base := filepath.Base(path)
 	dir := filepath.Dir(path)
 
+	// Ignore patterns first (binaries and temp files)
+	ignoreExtensions := []string{".out", ".exe", ".dll", ".so", ".dylib", ".test", ".a"}
+	ignoreDirs := []string{"bin", "dist", "node_modules", ".git", "vendor"}
+	ignoreFiles := []string{".DS_Store", "thumbs.db", "distui", "tuitemplate"}
+
+	// Check if path starts with dist/ or is dist directory
+	if strings.HasPrefix(path, "dist/") || path == "dist" {
+		return CategoryIgnore
+	}
+
+	for _, e := range ignoreExtensions {
+		if ext == e {
+			return CategoryIgnore
+		}
+	}
+	for _, f := range ignoreFiles {
+		if base == f {
+			return CategoryIgnore
+		}
+	}
+	for _, d := range ignoreDirs {
+		if strings.Contains(dir, d) {
+			return CategoryIgnore
+		}
+	}
+
+	// Check for likely binaries without extension
+	// If no extension and not a known text file, assume it's a binary
+	if ext == "" && !strings.Contains(base, ".") {
+		// Check if it looks like a Go binary name
+		if base == "distui" || base == "tuitemplate" || strings.HasPrefix(base, "main") {
+			return CategoryIgnore
+		}
+		// Unknown files without extension - probably binaries
+		return CategoryIgnore
+	}
+
 	// Auto-commit patterns (Go code and project files)
 	autoExtensions := []string{".go", ".mod", ".sum"}
 	autoFiles := []string{"go.work", "go.work.sum"}
@@ -41,27 +78,6 @@ func CategorizeFile(path string) FileCategory {
 	for _, e := range docsExtensions {
 		if ext == e {
 			return CategoryDocs
-		}
-	}
-
-	// Ignore patterns (binaries and temp files)
-	ignoreExtensions := []string{".out", ".exe", ".dll", ".so", ".dylib", ".test"}
-	ignoreDirs := []string{"bin", "dist", "node_modules", ".git", "vendor"}
-	ignoreFiles := []string{".DS_Store", "thumbs.db"}
-
-	for _, e := range ignoreExtensions {
-		if ext == e {
-			return CategoryIgnore
-		}
-	}
-	for _, f := range ignoreFiles {
-		if base == f {
-			return CategoryIgnore
-		}
-	}
-	for _, d := range ignoreDirs {
-		if strings.Contains(dir, d) {
-			return CategoryIgnore
 		}
 	}
 

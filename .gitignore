@@ -4,6 +4,7 @@
 
 # Binaries and executables
 tuitemplate
+distui
 *.exe
 *.dll
 *.so
@@ -13,6 +14,7 @@ tuitemplate
 *.test
 *.out
 /vendor/
+/dist/
 
 # IDE and editor files
 .vscode/
