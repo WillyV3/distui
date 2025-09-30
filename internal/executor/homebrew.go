@@ -22,7 +22,7 @@ type HomebrewUpdateResult struct {
 	Error        error
 }
 
-func UpdateHomebrewTap(ctx context.Context, projectName string, version string, tapPath string, repoOwner string, repoName string) tea.Cmd {
+func UpdateHomebrewTap(ctx context.Context, projectName string, version string, tapRepo string, repoOwner string, repoName string) tea.Cmd {
 	return func() tea.Msg {
 		tarballURL := fmt.Sprintf("https://github.com/%s/%s/archive/refs/tags/%s.tar.gz", repoOwner, repoName, version)
 
@@ -34,7 +34,21 @@ func UpdateHomebrewTap(ctx context.Context, projectName string, version string, 
 			}
 		}
 
+		// tapRepo is like "willyv3/homebrew-tap", convert to local path
+		homeDir := os.Getenv("HOME")
+		tapPath := filepath.Join(homeDir, "homebrew-tap")
 		formulaPath := filepath.Join(tapPath, "Formula", projectName+".rb")
+
+		// Check if formula exists, if not create it first
+		if _, err := os.Stat(formulaPath); os.IsNotExist(err) {
+			// Create initial formula
+			if err := CreateInitialFormula(projectName, projectName, repoOwner, repoName, version, tapPath); err != nil {
+				return HomebrewUpdateResult{
+					Success: false,
+					Error:   fmt.Errorf("creating initial formula: %w", err),
+				}
+			}
+		}
 
 		if err := updateFormulaFile(formulaPath, version, tarballURL, sha256sum); err != nil {
 			return HomebrewUpdateResult{
