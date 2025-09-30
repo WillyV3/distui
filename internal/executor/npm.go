@@ -2,11 +2,11 @@ package executor
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -53,11 +53,6 @@ func (n *NPMPublisher) UpdatePackageVersion() error {
 		return fmt.Errorf("reading package.json: %w", err)
 	}
 
-	var pkg map[string]interface{}
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return fmt.Errorf("parsing package.json: %w", err)
-	}
-
 	// Strip 'v' prefix if present
 	version := n.version
 	if strings.HasPrefix(version, "v") {
@@ -65,14 +60,12 @@ func (n *NPMPublisher) UpdatePackageVersion() error {
 	}
 
 	n.debugLog("Setting version field to: %s", version)
-	pkg["version"] = version
 
-	updatedData, err := json.MarshalIndent(pkg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling updated package.json: %w", err)
-	}
-
-	if err := os.WriteFile(pkgPath, append(updatedData, '\n'), 0644); err != nil {
+	// Use regex to replace version value while preserving exact formatting/spacing
+	// Matches: "version": "any.version.number" and replaces just the version value
+	versionRegex := regexp.MustCompile(`("version"\s*:\s*)"[^"]*"`)
+	updatedData := versionRegex.ReplaceAll(data, []byte(`$1"`+version+`"`))
+	if err := os.WriteFile(pkgPath, updatedData, 0644); err != nil {
 		return fmt.Errorf("writing updated package.json: %w", err)
 	}
 
