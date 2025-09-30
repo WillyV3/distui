@@ -30,7 +30,8 @@ func GetGitHubToken() (string, error) {
 		return "", fmt.Errorf("getting GitHub token: %w", err)
 	}
 
-	token := string(output)
+	// Trim whitespace and newlines from token
+	token := strings.TrimSpace(string(output))
 	if token == "" {
 		return "", fmt.Errorf("GitHub token is empty")
 	}
@@ -48,6 +49,8 @@ func RunGoReleaser(ctx context.Context, projectPath string, version string) tea.
 		if err != nil {
 			return fmt.Errorf("getting GitHub token: %w", err)
 		}
+		// Ensure token is trimmed
+		token = strings.TrimSpace(token)
 
 		os.Setenv("GITHUB_TOKEN", token)
 
@@ -71,6 +74,8 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		if err != nil {
 			return fmt.Errorf("getting GitHub token: %w", err)
 		}
+		// Ensure token is trimmed
+		token = strings.TrimSpace(token)
 
 		// Try goreleaser in PATH first, then ~/go/bin
 		goreleaserCmd := "goreleaser"
@@ -81,7 +86,7 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		// First, run a check to see if config has fatal errors (not deprecations)
 		checkCmd := exec.Command(goreleaserCmd, "check")
 		checkCmd.Dir = projectPath
-		checkCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
+		checkCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+strings.TrimSpace(token))
 		if checkOutput, checkErr := checkCmd.CombinedOutput(); checkErr != nil {
 			outputStr := string(checkOutput)
 			// Only fail on actual errors, not deprecation warnings
@@ -107,7 +112,7 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		// Create the actual release command
 		cmd := exec.Command(goreleaserCmd, "release", "--clean")
 		cmd.Dir = projectPath
-		cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
+		cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+strings.TrimSpace(token))
 
 		// Get stdout and stderr pipes
 		stdout, err := cmd.StdoutPipe()
