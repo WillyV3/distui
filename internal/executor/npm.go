@@ -103,6 +103,7 @@ func (n *NPMPublisher) Publish(outputChan chan<- string) error {
 	// Check if already published
 	published, err := n.CheckIfPublished()
 	if err != nil {
+		n.debugLog("ERROR: Failed to check if published: %v", err)
 		return fmt.Errorf("checking publish status: %w", err)
 	}
 	if published {
@@ -135,26 +136,45 @@ func (n *NPMPublisher) Publish(outputChan chan<- string) error {
 	}
 
 	if err != nil {
+		n.debugLog("ERROR: npm publish command failed: %v", err)
 		return fmt.Errorf("npm publish failed: %w", err)
 	}
 
-	outputChan <- fmt.Sprintf("✓ Successfully published %s@%s to NPM", n.packageName, n.version)
+	successMsg := fmt.Sprintf("✓ Successfully published %s@%s to NPM", n.packageName, n.version)
+	n.debugLog("SUCCESS: %s", successMsg)
+	outputChan <- successMsg
 	return nil
 }
 
 func PublishToNPM(projectPath, version, packageName string, outputChan chan<- string) error {
 	publisher := NewNPMPublisher(projectPath, version, packageName)
 
+	publisher.debugLog("=== NPM PUBLISH START ===")
+	publisher.debugLog("Project Path: %s", projectPath)
+	publisher.debugLog("Version: %s", version)
+	publisher.debugLog("Package Name: %s", packageName)
+
 	// Check auth first
 	if err := publisher.CheckAuth(); err != nil {
+		publisher.debugLog("ERROR: Auth check failed: %v", err)
 		return err
 	}
+	publisher.debugLog("✓ Auth check passed")
 
 	// Update package.json version
 	if err := publisher.UpdatePackageVersion(); err != nil {
+		publisher.debugLog("ERROR: Version update failed: %v", err)
+		return err
+	}
+	publisher.debugLog("✓ Version update completed")
+
+	// Publish
+	publisher.debugLog("Starting publish step...")
+	if err := publisher.Publish(outputChan); err != nil {
+		publisher.debugLog("ERROR: Publish failed: %v", err)
 		return err
 	}
 
-	// Publish
-	return publisher.Publish(outputChan)
+	publisher.debugLog("=== NPM PUBLISH COMPLETE ===")
+	return nil
 }
