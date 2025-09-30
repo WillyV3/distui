@@ -334,6 +334,24 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 		}
 	}
 
+	// Handle completion - ESC to dismiss
+	if m.Phase == models.PhaseComplete {
+		switch msg.String() {
+		case "esc", "enter", " ":
+			// Reset to initial state - user will return to project view
+			m.Phase = models.PhaseVersionSelect
+			m.Output = []string{}
+			m.Error = nil
+			m.Installing = -1
+			m.Installed = []int{}
+			m.SelectedVersion = 0
+			for i := range m.Packages {
+				m.Packages[i].Status = "pending"
+			}
+			return m, nil
+		}
+	}
+
 	// Handle retry on failure
 	if m.Phase == models.PhaseFailed {
 		switch msg.String() {

@@ -22,13 +22,21 @@ type NPMNameCheckResult struct {
 	Suggestions []string
 }
 
-func CheckNPMNameAvailable(packageName string) (bool, error) {
+func CheckNPMNameAvailable(packageName, username string) (bool, string, error) {
 	if packageName == "" {
-		return false, fmt.Errorf("package name cannot be empty")
+		return false, "", fmt.Errorf("package name cannot be empty")
 	}
 
-	// First check exact match
-	cmd := exec.Command("npm", "view", packageName, "name")
+	// Get current NPM user
+	whoamiCmd := exec.Command("npm", "whoami")
+	whoamiOutput, whoamiErr := whoamiCmd.CombinedOutput()
+	npmUsername := ""
+	if whoamiErr == nil {
+		npmUsername = strings.TrimSpace(string(whoamiOutput))
+	}
+
+	// Check exact match
+	cmd := exec.Command("npm", "view", packageName, "maintainers", "--json")
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -42,17 +50,24 @@ func CheckNPMNameAvailable(packageName string) (bool, error) {
 
 				if checkErr == nil || !strings.Contains(string(checkOutput), "E404") {
 					// Found a similar package that exists
-					return false, fmt.Errorf("similar package exists: %s", variation)
+					return false, "", fmt.Errorf("similar package exists: %s", variation)
 				}
 			}
 
-			return true, nil
+			return true, "", nil
 		}
-		return false, fmt.Errorf("checking npm registry: %w", err)
+		return false, "", fmt.Errorf("checking npm registry: %w", err)
 	}
 
-	// Package exists exactly
-	return false, nil
+	// Package exists - check if current NPM user owns it
+	outputStr := strings.ToLower(string(output))
+	if npmUsername != "" && strings.Contains(outputStr, strings.ToLower(npmUsername)) {
+		// User owns this package
+		return true, npmUsername, nil
+	}
+
+	// Package exists but owned by someone else
+	return false, "", nil
 }
 
 func generateNameVariations(packageName string) []string {
@@ -118,7 +133,7 @@ func CheckNPMName(packageName, username string) NPMNameCheckResult {
 		Status: NPMNameChecking,
 	}
 
-	available, err := CheckNPMNameAvailable(packageName)
+	available, owner, err := CheckNPMNameAvailable(packageName, username)
 	if err != nil {
 		// Check if this is a similarity conflict (not a real error)
 		if strings.Contains(err.Error(), "similar package exists:") {
@@ -134,10 +149,18 @@ func CheckNPMName(packageName, username string) NPMNameCheckResult {
 	}
 
 	if available {
-		result.Status = NPMNameAvailable
+		if owner != "" {
+			// Package exists and user owns it
+			result.Status = NPMNameAvailable
+			result.Error = fmt.Sprintf("You own this package (%s)", owner)
+		} else {
+			// Package doesn't exist - truly available
+			result.Status = NPMNameAvailable
+		}
 		return result
 	}
 
+	// Package exists but owned by someone else
 	result.Status = NPMNameUnavailable
 	result.Suggestions = GenerateNPMNameSuggestions(packageName, username)
 	return result

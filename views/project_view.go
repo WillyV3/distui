@@ -124,6 +124,35 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 			project.Repository.Owner, project.Repository.Name)) + "\n")
 	}
 
+	// Distribution info (only show when not in release mode)
+	if releaseModel == nil || releaseModel.Phase == models.PhaseVersionSelect {
+		if config != nil && config.Config != nil {
+			hasDistributions := false
+			if config.Config.Distributions.NPM != nil && config.Config.Distributions.NPM.Enabled {
+				if !hasDistributions {
+					content.WriteString("\n")
+					hasDistributions = true
+				}
+				npmName := config.Config.Distributions.NPM.PackageName
+				if npmName == "" && project != nil {
+					npmName = project.Module.Name
+				}
+				content.WriteString(infoStyle.Render(fmt.Sprintf("NPM: %s", npmName)) + "\n")
+			}
+			if config.Config.Distributions.Homebrew != nil && config.Config.Distributions.Homebrew.Enabled {
+				if !hasDistributions {
+					content.WriteString("\n")
+					hasDistributions = true
+				}
+				tapRepo := config.Config.Distributions.Homebrew.TapRepo
+				if tapRepo == "" && project != nil && project.Repository != nil {
+					tapRepo = fmt.Sprintf("%s/homebrew-tap", project.Repository.Owner)
+				}
+				content.WriteString(infoStyle.Render(fmt.Sprintf("Homebrew: %s", tapRepo)) + "\n")
+			}
+		}
+	}
+
 	// Version selection appears inline when [r] pressed
 	if releaseModel != nil && releaseModel.Phase == models.PhaseVersionSelect {
 		content.WriteString("\n")

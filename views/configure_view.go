@@ -391,8 +391,13 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 			content.WriteString(statusStyle.Render(
 				lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Render("⏳ Checking package name availability...")))
 		case "available":
+			message := "✓ Package name is available"
+			if configModel.NPMNameError != "" {
+				// Show ownership info if present
+				message = "✓ " + configModel.NPMNameError
+			}
 			content.WriteString(statusStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Render("✓ Package name is available")))
+				lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Render(message)))
 		case "unavailable":
 			// Show the reason (e.g., "similar package exists: dist-ui")
 			reason := "Package name unavailable"
