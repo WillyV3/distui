@@ -60,7 +60,7 @@ func CategorizeFile(path string) FileCategory {
 
 	// Auto-commit patterns (Go code and project files)
 	autoExtensions := []string{".go", ".mod", ".sum"}
-	autoFiles := []string{"go.work", "go.work.sum"}
+	autoFiles := []string{"go.work", "go.work.sum", ".goreleaser.yaml", ".goreleaser.yml", "package.json"}
 
 	for _, e := range autoExtensions {
 		if ext == e {

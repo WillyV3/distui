@@ -728,6 +728,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.GenerateStatus = "✓ Release files generated successfully!"
 			m.CurrentView = TabView
 			m.PendingGenerateFiles = nil
+			// Reload git status to show the newly generated files
+			m.Lists[0].SetItems(m.loadGitStatus())
 		} else {
 			m.GenerateStatus = fmt.Sprintf("✗ Generation failed: %v", msg.err)
 		}

@@ -42,11 +42,15 @@ brews:
     repository:
       owner: willyv3
       name: homebrew-tap
+      token: "{{ .Env.GITHUB_TOKEN }}"
     homepage: https://github.com/willyv3/distui
     description: "distui"
     license: MIT
-    # Important: GoReleaser automatically creates formula for pre-built binaries
-    # The formula will download from GitHub releases, not build from source
+    folder: Formula
+    commit_author:
+      name: distui
+      email: distui@users.noreply.github.com
+    commit_msg_template: "Brew formula update for distui version {{ .Tag }}"
     test: |
       system "#{bin}/distui", "--version"
 
