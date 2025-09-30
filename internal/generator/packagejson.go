@@ -10,19 +10,28 @@ import (
 )
 
 type PackageJSON struct {
-	Name        string            `json:"name"`
-	Version     string            `json:"version"`
-	Description string            `json:"description,omitempty"`
-	Main        string            `json:"main,omitempty"`
-	Bin         map[string]string `json:"bin,omitempty"`
-	Repository  *Repository       `json:"repository,omitempty"`
-	Keywords    []string          `json:"keywords,omitempty"`
-	Author      string            `json:"author,omitempty"`
-	License     string            `json:"license,omitempty"`
+	Name         string            `json:"name"`
+	Version      string            `json:"version"`
+	Description  string            `json:"description,omitempty"`
+	Main         string            `json:"main,omitempty"`
+	Bin          map[string]string `json:"bin,omitempty"`
+	Scripts      map[string]string `json:"scripts,omitempty"`
+	Repository   *Repository       `json:"repository,omitempty"`
+	Keywords     []string          `json:"keywords,omitempty"`
+	Author       string            `json:"author,omitempty"`
+	License      string            `json:"license,omitempty"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
+	GoBinary     *GoBinary         `json:"goBinary,omitempty"`
 }
 
 type Repository struct {
 	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+type GoBinary struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 	URL  string `json:"url"`
 }
 
@@ -51,12 +60,23 @@ func GeneratePackageJSON(project *models.ProjectInfo, config *models.ProjectConf
 		version = version[1:]
 	}
 
+	binaryName := project.Binary.Name
+	if binaryName == "" {
+		binaryName = project.Module.Name
+	}
+
 	pkg := PackageJSON{
 		Name:        packageName,
 		Version:     version,
 		Description: fmt.Sprintf("%s - distributed via distui", project.Module.Name),
 		Bin: map[string]string{
-			packageName: "./bin/" + project.Binary.Name,
+			binaryName: "./bin/" + binaryName,
+		},
+		Scripts: map[string]string{
+			"postinstall": "golang-npm install",
+		},
+		Dependencies: map[string]string{
+			"golang-npm": "^0.0.6",
 		},
 		Keywords: []string{"cli", "tool"},
 		License:  "MIT",
@@ -66,6 +86,14 @@ func GeneratePackageJSON(project *models.ProjectInfo, config *models.ProjectConf
 		pkg.Repository = &Repository{
 			Type: "git",
 			URL:  fmt.Sprintf("https://github.com/%s/%s.git", project.Repository.Owner, project.Repository.Name),
+		}
+
+		// Add goBinary configuration for golang-npm
+		pkg.GoBinary = &GoBinary{
+			Name: binaryName,
+			Path: "./bin",
+			URL:  fmt.Sprintf("https://github.com/%s/%s/releases/download/v{{version}}/%s_{{version}}_{{platform}}_{{arch}}.tar.gz",
+				project.Repository.Owner, project.Repository.Name, binaryName),
 		}
 	}
 
