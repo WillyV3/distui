@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"distui/internal/config"
 	"distui/internal/gitcleanup"
 	"distui/internal/models"
 )
@@ -51,6 +52,10 @@ type ConfigureModel struct {
 	Initialized     bool
 	CurrentView     ViewType
 	Loading         bool
+
+	// Project config for persistence
+	ProjectConfig    *models.ProjectConfig
+	ProjectIdentifier string
 
 	// Sub-models for composable views
 	CleanupModel    *CleanupModel
@@ -165,8 +170,85 @@ func (i CleanupItem) Description() string {
 
 func (i CleanupItem) FilterValue() string { return i.Path }
 
+// saveConfig saves the current configuration to disk
+func (m *ConfigureModel) saveConfig() error {
+	if m.ProjectConfig == nil || m.ProjectIdentifier == "" {
+		return fmt.Errorf("no project config to save")
+	}
+
+	// Update config from current list states
+	if m.ProjectConfig.Config == nil {
+		m.ProjectConfig.Config = &models.ProjectSettings{}
+	}
+
+	// Update distributions (tab 1)
+	items := m.Lists[1].Items()
+	for _, item := range items {
+		if dist, ok := item.(DistributionItem); ok {
+			switch dist.Key {
+			case "github":
+				if m.ProjectConfig.Config.Distributions.GitHubRelease == nil {
+					m.ProjectConfig.Config.Distributions.GitHubRelease = &models.GitHubReleaseConfig{}
+				}
+				m.ProjectConfig.Config.Distributions.GitHubRelease.Enabled = dist.Enabled
+			case "homebrew":
+				if m.ProjectConfig.Config.Distributions.Homebrew == nil {
+					m.ProjectConfig.Config.Distributions.Homebrew = &models.HomebrewConfig{}
+				}
+				m.ProjectConfig.Config.Distributions.Homebrew.Enabled = dist.Enabled
+			case "npm":
+				if m.ProjectConfig.Config.Distributions.NPM == nil {
+					m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
+				}
+				m.ProjectConfig.Config.Distributions.NPM.Enabled = dist.Enabled
+			case "go_install":
+				if m.ProjectConfig.Config.Distributions.GoModule == nil {
+					m.ProjectConfig.Config.Distributions.GoModule = &models.GoModuleConfig{}
+				}
+				m.ProjectConfig.Config.Distributions.GoModule.Enabled = dist.Enabled
+			}
+		}
+	}
+
+	// Update build settings (tab 2)
+	buildItems := m.Lists[2].Items()
+	for i, item := range buildItems {
+		if build, ok := item.(BuildItem); ok {
+			if i == 0 { // Run tests before release
+				if m.ProjectConfig.Config.Release == nil {
+					m.ProjectConfig.Config.Release = &models.ReleaseSettings{}
+				}
+				m.ProjectConfig.Config.Release.SkipTests = !build.Enabled
+			}
+		}
+	}
+
+	// Update advanced settings (tab 3)
+	advItems := m.Lists[3].Items()
+	for i, item := range advItems {
+		if adv, ok := item.(BuildItem); ok {
+			if m.ProjectConfig.Config.Release == nil {
+				m.ProjectConfig.Config.Release = &models.ReleaseSettings{}
+			}
+			switch i {
+			case 0: // Create draft releases
+				m.ProjectConfig.Config.Release.CreateDraft = adv.Enabled
+			case 1: // Mark as pre-release
+				m.ProjectConfig.Config.Release.PreRelease = adv.Enabled
+			case 2: // Generate changelog
+				m.ProjectConfig.Config.Release.GenerateChangelog = adv.Enabled
+			case 3: // Sign commits
+				m.ProjectConfig.Config.Release.SignCommits = adv.Enabled
+			}
+		}
+	}
+
+	// Save to disk
+	return config.SaveProject(m.ProjectConfig)
+}
+
 // Initialize the configure model
-func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount) *ConfigureModel {
+func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount, projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo) *ConfigureModel {
 	// Use provided dimensions or defaults
 	if width <= 0 {
 		width = 100
@@ -175,13 +257,28 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 		height = 30
 	}
 
+	// If no config exists, create initial structure from detected project
+	if projectConfig == nil && detectedProject != nil {
+		projectConfig = &models.ProjectConfig{
+			Project: detectedProject,
+			Config:  &models.ProjectSettings{},
+			History: &models.ReleaseHistory{},
+		}
+	}
+
 	m := &ConfigureModel{
-		ActiveTab:      0,
-		Width:          width,
-		Height:         height,
-		Initialized:    false,
-		Loading:        true,
-		GitHubAccounts: githubAccounts,
+		ActiveTab:         0,
+		Width:             width,
+		Height:            height,
+		Initialized:       false,
+		Loading:           true,
+		GitHubAccounts:    githubAccounts,
+		ProjectConfig:     projectConfig,
+		ProjectIdentifier: "",
+	}
+
+	if projectConfig != nil && projectConfig.Project != nil {
+		m.ProjectIdentifier = projectConfig.Project.Identifier
 	}
 
 	// Initialize repo creation inputs
@@ -239,30 +336,58 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 	cleanupList.SetShowHelp(false)
 	m.Lists[0] = cleanupList
 
-	// Initialize distributions list (tab 1)
+	// Initialize distributions list (tab 1) - load from config
+	githubEnabled := true
+	homebrewEnabled := false
+	npmEnabled := false
+	goInstallEnabled := true
+	homebrewDesc := "Tap: not configured"
+	npmDesc := "Scope: not configured"
+
+	if projectConfig != nil && projectConfig.Config != nil {
+		if projectConfig.Config.Distributions.GitHubRelease != nil {
+			githubEnabled = projectConfig.Config.Distributions.GitHubRelease.Enabled
+		}
+		if projectConfig.Config.Distributions.Homebrew != nil {
+			homebrewEnabled = projectConfig.Config.Distributions.Homebrew.Enabled
+			if projectConfig.Config.Distributions.Homebrew.TapRepo != "" {
+				homebrewDesc = "Tap: " + projectConfig.Config.Distributions.Homebrew.TapRepo
+			}
+		}
+		if projectConfig.Config.Distributions.NPM != nil {
+			npmEnabled = projectConfig.Config.Distributions.NPM.Enabled
+			if projectConfig.Config.Distributions.NPM.PackageName != "" {
+				npmDesc = "Package: " + projectConfig.Config.Distributions.NPM.PackageName
+			}
+		}
+		if projectConfig.Config.Distributions.GoModule != nil {
+			goInstallEnabled = projectConfig.Config.Distributions.GoModule.Enabled
+		}
+	}
+
 	distributions := []list.Item{
 		DistributionItem{
 			Name:    "GitHub Releases",
 			Desc:    "Create releases on GitHub",
-			Enabled: true,
+			Enabled: githubEnabled,
 			Key:     "github",
 		},
 		DistributionItem{
 			Name:    "Homebrew",
-			Desc:    "Tap: willyv3/homebrew-tap",
-			Enabled: true,
+			Desc:    homebrewDesc,
+			Enabled: homebrewEnabled,
 			Key:     "homebrew",
 		},
 		DistributionItem{
 			Name:    "NPM Package",
-			Desc:    "Scope: @williavs",
-			Enabled: false,
+			Desc:    npmDesc,
+			Enabled: npmEnabled,
 			Key:     "npm",
 		},
 		DistributionItem{
 			Name:    "Go Install",
 			Desc:    "Enable 'go install' support",
-			Enabled: true,
+			Enabled: goInstallEnabled,
 			Key:     "go_install",
 		},
 	}
@@ -274,12 +399,21 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 	distList.SetShowHelp(false)
 	m.Lists[1] = distList
 
-	// Initialize build settings list (tab 2)
+	// Initialize build settings list (tab 2) - load from config
+	runTests := true
+	cleanBuild := true
+	allPlatforms := false
+	arm64Builds := false
+
+	if projectConfig != nil && projectConfig.Config != nil && projectConfig.Config.Release != nil {
+		runTests = !projectConfig.Config.Release.SkipTests
+	}
+
 	buildItems := []list.Item{
-		BuildItem{Name: "Run tests before release", Value: "go test ./...", Enabled: true},
-		BuildItem{Name: "Clean build directory", Value: "", Enabled: true},
-		BuildItem{Name: "Build for all platforms", Value: "darwin, linux, windows", Enabled: false},
-		BuildItem{Name: "Include ARM64 builds", Value: "", Enabled: false},
+		BuildItem{Name: "Run tests before release", Value: "go test ./...", Enabled: runTests},
+		BuildItem{Name: "Clean build directory", Value: "", Enabled: cleanBuild},
+		BuildItem{Name: "Build for all platforms", Value: "darwin, linux, windows", Enabled: allPlatforms},
+		BuildItem{Name: "Include ARM64 builds", Value: "", Enabled: arm64Builds},
 	}
 
 	buildList := list.New(buildItems, list.NewDefaultDelegate(), listWidth, listHeight)
@@ -289,12 +423,24 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount)
 	buildList.SetShowHelp(false)
 	m.Lists[2] = buildList
 
-	// Initialize advanced list (tab 3)
+	// Initialize advanced list (tab 3) - load from config
+	createDraft := false
+	preRelease := false
+	generateChangelog := true
+	signCommits := true
+
+	if projectConfig != nil && projectConfig.Config != nil && projectConfig.Config.Release != nil {
+		createDraft = projectConfig.Config.Release.CreateDraft
+		preRelease = projectConfig.Config.Release.PreRelease
+		generateChangelog = projectConfig.Config.Release.GenerateChangelog
+		signCommits = projectConfig.Config.Release.SignCommits
+	}
+
 	advancedItems := []list.Item{
-		BuildItem{Name: "Create draft releases", Value: "", Enabled: false},
-		BuildItem{Name: "Mark as pre-release", Value: "", Enabled: false},
-		BuildItem{Name: "Generate changelog", Value: "", Enabled: true},
-		BuildItem{Name: "Sign commits", Value: "", Enabled: true},
+		BuildItem{Name: "Create draft releases", Value: "", Enabled: createDraft},
+		BuildItem{Name: "Mark as pre-release", Value: "", Enabled: preRelease},
+		BuildItem{Name: "Generate changelog", Value: "", Enabled: generateChangelog},
+		BuildItem{Name: "Sign commits", Value: "", Enabled: signCommits},
 	}
 
 	advList := list.New(advancedItems, list.NewDefaultDelegate(), listWidth, listHeight)
@@ -499,6 +645,12 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 		m.CleanupModel = msg.cleanupModel
 		m.Lists[0].SetItems(m.loadGitStatus())
+
+		// Create project config file if it doesn't exist
+		if m.ProjectConfig != nil && m.ProjectConfig.Project != nil {
+			m.saveConfig() // This will create the file if needed
+		}
+
 		return m, nil
 	case repoCreatedMsg:
 		m.IsCreating = false
@@ -637,11 +789,15 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				items := currentList.Items()
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
+				// Save config after toggle
+				m.saveConfig()
 			} else if i, ok := currentList.SelectedItem().(BuildItem); ok {
 				i.Enabled = !i.Enabled
 				items := currentList.Items()
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
+				// Save config after toggle
+				m.saveConfig()
 			} else if i, ok := currentList.SelectedItem().(CleanupItem); ok {
 				// Special handling for GitHub repo creation
 				if i.Category == "github-new" || i.Category == "github-push" {
