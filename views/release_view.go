@@ -194,8 +194,9 @@ func RenderSuccess(m *handlers.ReleaseModel) string {
 
 	content.WriteString(releaseFieldStyle.Render("Version:  ") + releaseValueStyle.Render(m.Version) + "\n")
 
-	elapsed := time.Since(m.StartTime).Round(time.Second)
-	content.WriteString(releaseFieldStyle.Render("Duration: ") + releaseValueStyle.Render(elapsed.String()) + "\n\n")
+	// Use the captured CompletedDuration instead of recalculating
+	duration := m.CompletedDuration.Round(time.Second)
+	content.WriteString(releaseFieldStyle.Render("Duration: ") + releaseValueStyle.Render(duration.String()) + "\n\n")
 
 	content.WriteString(releaseHeaderStyle.Render("PUBLISHED TO") + "\n")
 	successCount := 0
@@ -226,6 +227,12 @@ func RenderFailure(m *handlers.ReleaseModel) string {
 
 	if m.Error != nil {
 		content.WriteString(releaseFieldStyle.Render("Error: ") + lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(m.Error.Error()) + "\n\n")
+	}
+
+	// Show elapsed time if available
+	if m.CompletedDuration > 0 {
+		duration := m.CompletedDuration.Round(time.Second)
+		content.WriteString(releaseFieldStyle.Render("Elapsed: ") + releaseSubtleStyle.Render(duration.String()) + "\n\n")
 	}
 
 	content.WriteString(releaseHeaderStyle.Render("COMPLETED STEPS") + "\n")

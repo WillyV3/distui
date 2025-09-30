@@ -26,6 +26,7 @@ type ReleaseModel struct {
 	Output      []string
 	Version     string
 	StartTime   time.Time
+	CompletedDuration time.Duration  // Store final duration when release completes
 	Error       error
 	Width       int
 	Height      int
@@ -156,8 +157,10 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 	case models.ReleaseCompleteMsg:
 		if msg.Success {
 			m.Phase = models.PhaseComplete
+			m.CompletedDuration = msg.Duration  // Capture the final duration
 		} else {
 			m.Phase = models.PhaseFailed
+			m.CompletedDuration = msg.Duration  // Capture duration even on failure
 			m.Error = fmt.Errorf("failed at step: %s", msg.FailedStep)
 		}
 		return m, nil
