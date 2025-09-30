@@ -46,9 +46,9 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 		case "q", "ctrl+c":
 			return currentPage, true, tea.Quit, releaseModel
 		case "g":
-			return 1, false, nil, releaseModel // globalView
+			return 1, false, tea.ClearScreen, releaseModel // globalView
 		case "s":
-			return 2, false, nil, releaseModel // settingsView
+			return 2, false, tea.ClearScreen, releaseModel // settingsView
 		case "r":
 			if releaseModel != nil {
 				releaseModel.Phase = models.PhaseVersionSelect
@@ -56,9 +56,9 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 			}
 			return currentPage, false, nil, releaseModel
 		case "c":
-			return 3, false, nil, releaseModel // configureView
+			return 3, false, tea.ClearScreen, releaseModel // configureView
 		case "n":
-			return 4, false, nil, releaseModel // newProjectView
+			return 4, false, tea.ClearScreen, releaseModel // newProjectView
 		case "esc":
 			if previousPage >= 0 {
 				return previousPage, false, nil, releaseModel

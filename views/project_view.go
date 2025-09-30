@@ -97,10 +97,10 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
 		content.WriteString(warningStyle.Render("⚠ You have uncommitted changes") + "\n\n")
 		content.WriteString(infoStyle.Render("Before releasing, you must clean your working tree:") + "\n\n")
-		content.WriteString(infoStyle.Render("1. Press [c] to open the cleanup view") + "\n")
-		content.WriteString(infoStyle.Render("2. Review and commit/stash your changes") + "\n")
+		content.WriteString(infoStyle.Render("1. Press [c] to open the configuration view") + "\n")
+		content.WriteString(infoStyle.Render("2. Use the Cleanup tab to commit/push changes") + "\n")
 		content.WriteString(infoStyle.Render("3. Return here to release") + "\n\n")
-		content.WriteString(subtleStyle.Render("c: cleanup • g: global • s: settings • q: quit"))
+		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
 		return content.String()
 	}
 

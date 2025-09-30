@@ -24,15 +24,21 @@ type HomebrewUpdateResult struct {
 
 func UpdateHomebrewTap(ctx context.Context, projectName string, version string, tapRepo string, repoOwner string, repoName string) tea.Cmd {
 	return func() tea.Msg {
+		// Log for debugging
+		fmt.Printf("UpdateHomebrewTap called: project=%s, version=%s, tapRepo=%s, owner=%s, repo=%s\n",
+			projectName, version, tapRepo, repoOwner, repoName)
+
 		tarballURL := fmt.Sprintf("https://github.com/%s/%s/archive/refs/tags/%s.tar.gz", repoOwner, repoName, version)
+		fmt.Printf("Tarball URL: %s\n", tarballURL)
 
 		sha256sum, err := downloadAndCalculateSHA256(tarballURL)
 		if err != nil {
 			return HomebrewUpdateResult{
 				Success: false,
-				Error:   fmt.Errorf("calculating SHA256: %w", err),
+				Error:   fmt.Errorf("calculating SHA256 for %s: %w", tarballURL, err),
 			}
 		}
+		fmt.Printf("SHA256: %s\n", sha256sum)
 
 		// tapRepo is like "willyv3/homebrew-tap", convert to local path
 		homeDir := os.Getenv("HOME")

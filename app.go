@@ -170,7 +170,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = quitting
 			listWidth := width - 2
 			listHeight := height - 13
-			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight))
+			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), tea.ClearScreen)
 		}
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
