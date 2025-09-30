@@ -101,6 +101,10 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			return fmt.Errorf("starting goreleaser: %w", err)
 		}
 
+		// Collect error messages for better reporting
+		var errorMessages []string
+		var lastError string
+
 		// Read and format output
 		go func() {
 			buf := make([]byte, 1024)
@@ -126,7 +130,7 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			}
 		}()
 
-		// Read stderr too
+		// Read stderr too and capture errors
 		go func() {
 			buf := make([]byte, 1024)
 			for {
@@ -134,10 +138,19 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 				if n > 0 {
 					lines := string(buf[:n])
 					for _, line := range splitLines(lines) {
-						if line != "" && outputChan != nil {
-							select {
-							case outputChan <- line:
-							default:
+						if line != "" {
+							// Capture error messages
+							if strings.Contains(strings.ToLower(line), "error") ||
+							   strings.Contains(strings.ToLower(line), "failed") ||
+							   strings.Contains(line, "✗") {
+								errorMessages = append(errorMessages, line)
+								lastError = line
+							}
+							if outputChan != nil {
+								select {
+								case outputChan <- line:
+								default:
+								}
 							}
 						}
 					}
@@ -151,7 +164,19 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		// Wait for command to complete
 		err = cmd.Wait()
 		if err != nil {
-			return fmt.Errorf("goreleaser failed: %w", err)
+			// Provide more context about the error
+			errorMsg := "GoReleaser failed"
+			if lastError != "" {
+				// Clean up common error prefixes
+				lastError = strings.TrimPrefix(lastError, "• ")
+				lastError = strings.TrimPrefix(lastError, "✗ ")
+				lastError = strings.TrimPrefix(lastError, "⨯ ")
+				lastError = strings.TrimSpace(lastError)
+				errorMsg = lastError
+			} else if len(errorMessages) > 0 {
+				errorMsg = errorMessages[len(errorMessages)-1]
+			}
+			return fmt.Errorf("%s", errorMsg)
 		}
 
 		return nil
