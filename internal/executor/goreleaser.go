@@ -78,20 +78,30 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			goreleaserCmd = os.Getenv("HOME") + "/go/bin/goreleaser"
 		}
 
-		// First, run a check to see what the actual error is
+		// First, run a check to see if config has fatal errors (not deprecations)
 		checkCmd := exec.Command(goreleaserCmd, "check")
 		checkCmd.Dir = projectPath
 		checkCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
 		if checkOutput, checkErr := checkCmd.CombinedOutput(); checkErr != nil {
-			// Extract meaningful error from check output
-			lines := strings.Split(string(checkOutput), "\n")
-			for _, line := range lines {
-				if strings.Contains(strings.ToLower(line), "error") ||
-				   strings.Contains(line, "✗") ||
-				   strings.Contains(strings.ToLower(line), "invalid") {
-					return fmt.Errorf("configuration error: %s", strings.TrimSpace(line))
+			outputStr := string(checkOutput)
+			// Only fail on actual errors, not deprecation warnings
+			if !strings.Contains(outputStr, "configuration is valid, but uses deprecated properties") {
+				// Extract meaningful error from check output
+				lines := strings.Split(outputStr, "\n")
+				for _, line := range lines {
+					if strings.Contains(strings.ToLower(line), "error") &&
+					   !strings.Contains(line, "deprecated") &&
+					   !strings.Contains(line, "configuration is valid") {
+						return fmt.Errorf("configuration error: %s", strings.TrimSpace(line))
+					}
+					if strings.Contains(line, "✗") ||
+					   strings.Contains(strings.ToLower(line), "invalid") {
+						return fmt.Errorf("configuration error: %s", strings.TrimSpace(line))
+					}
 				}
 			}
+			// If we get here with checkErr but no specific error found,
+			// it's probably just deprecation warnings - continue
 		}
 
 		// Create the actual release command
