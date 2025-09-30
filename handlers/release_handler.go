@@ -147,21 +147,60 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 
 	case models.ReleasePhaseMsg:
 		m.Phase = msg.Phase
-		m.Installing = int(msg.Phase) - 1
-		if m.Installing >= 0 && m.Installing < len(m.Packages) {
-			m.Packages[m.Installing].Status = "installing"
+
+		// Map phase to package index
+		var pkgIdx int
+		switch msg.Phase {
+		case models.PhasePreFlight:
+			pkgIdx = 0
+		case models.PhaseTests:
+			pkgIdx = 1
+		case models.PhaseTag:
+			pkgIdx = 2
+		case models.PhaseGoReleaser:
+			pkgIdx = 3
+		case models.PhaseHomebrew:
+			pkgIdx = 4
+		default:
+			pkgIdx = -1
+		}
+
+		if pkgIdx >= 0 && pkgIdx < len(m.Packages) {
+			// Mark previous as done if exists
+			if m.Installing >= 0 && m.Installing < len(m.Packages) && m.Packages[m.Installing].Status == "installing" {
+				m.Packages[m.Installing].Status = "done"
+			}
+			// Mark new one as installing
+			m.Installing = pkgIdx
+			m.Packages[pkgIdx].Status = "installing"
 		}
 		return m, tea.Batch(m.Spinner.Tick, tickProgress())
 
 	case models.ReleasePhaseCompleteMsg:
-		idx := int(msg.Phase) - 1
-		if idx >= 0 && idx < len(m.Packages) {
+		// Map phase to package index
+		var pkgIdx int
+		switch msg.Phase {
+		case models.PhasePreFlight:
+			pkgIdx = 0
+		case models.PhaseTests:
+			pkgIdx = 1
+		case models.PhaseTag:
+			pkgIdx = 2
+		case models.PhaseGoReleaser:
+			pkgIdx = 3
+		case models.PhaseHomebrew:
+			pkgIdx = 4
+		default:
+			pkgIdx = -1
+		}
+
+		if pkgIdx >= 0 && pkgIdx < len(m.Packages) {
 			if msg.Success {
-				m.Packages[idx].Status = "done"
-				m.Packages[idx].Duration = msg.Duration
-				m.Installed = append(m.Installed, idx)
+				m.Packages[pkgIdx].Status = "done"
+				m.Packages[pkgIdx].Duration = msg.Duration
+				m.Installed = append(m.Installed, pkgIdx)
 			} else {
-				m.Packages[idx].Status = "failed"
+				m.Packages[pkgIdx].Status = "failed"
 			}
 		}
 		return m, tickProgress()

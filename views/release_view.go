@@ -107,27 +107,8 @@ func RenderProgress(m *handlers.ReleaseModel) string {
 	w := lipgloss.Width(fmt.Sprintf("%d", n))
 	pkgCount := fmt.Sprintf(" %*d/%*d", w, installed, w, n)
 
-	// Current step being processed
-	currentStepName := ""
-	if m.Installing >= 0 && m.Installing < len(m.Packages) {
-		currentStepName = m.Packages[m.Installing].Name
-		// Show spinner and current step on one line
-		spin := m.Spinner.View() + " "
-		info := releaseCurrentPkgNameStyle.Render(currentStepName)
-		prog := m.Progress.View()
-
-		// Calculate available space for the step name
-		cellsAvail := 60 // Default width
-		pkgNameStyled := releaseCurrentPkgNameStyle.Render(currentStepName)
-		info = lipgloss.NewStyle().MaxWidth(cellsAvail).Render(pkgNameStyled)
-
-		// Single line progress display
-		content.WriteString(spin + info + "\n")
-		content.WriteString(prog + pkgCount + "\n\n")
-	} else {
-		// Just show the progress bar and count
-		content.WriteString(m.Progress.View() + pkgCount + "\n\n")
-	}
+	// Show progress bar with counter
+	content.WriteString(m.Progress.View() + pkgCount + "\n\n")
 
 	// Show all steps with their status
 	for _, pkg := range m.Packages {
