@@ -140,20 +140,9 @@ func (r *ReleaseExecutor) ExecuteReleasePhasesWithOutput(ctx context.Context, ou
 			success:  true,
 		})
 
-		// Update Homebrew tap if enabled
-		if r.config.EnableHomebrew && r.config.HomebrewTap != "" {
-			phaseStart = time.Now()
-			homebrewCmd := UpdateHomebrewTap(ctx, r.config.ProjectName, r.config.Version, r.config.HomebrewTap, r.config.RepoOwner, r.config.RepoName)
-			msg := homebrewCmd()
-			if result, ok := msg.(HomebrewUpdateResult); ok && !result.Success {
-				return r.failureResult(startTime, "homebrew", result.Error, channels)
-			}
+		// Homebrew is handled by GoReleaser's brews configuration
+		if r.config.EnableHomebrew {
 			channels = append(channels, "Homebrew")
-			completedPhases = append(completedPhases, phaseResult{
-				phase:    models.PhaseHomebrew,
-				duration: time.Since(phaseStart),
-				success:  true,
-			})
 		}
 
 		if r.config.EnableNPM {
