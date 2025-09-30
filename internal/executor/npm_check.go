@@ -62,6 +62,16 @@ func generateNameVariations(packageName string) []string {
 	// Generate common variations to check
 	lower := strings.ToLower(packageName)
 
+	// If name already has separators, swap them
+	if strings.Contains(lower, "-") {
+		variations = append(variations, strings.ReplaceAll(lower, "-", "_"))
+		variations = append(variations, strings.ReplaceAll(lower, "-", ""))
+	}
+	if strings.Contains(lower, "_") {
+		variations = append(variations, strings.ReplaceAll(lower, "_", "-"))
+		variations = append(variations, strings.ReplaceAll(lower, "_", ""))
+	}
+
 	// Check variations with hyphens between all word boundaries
 	// For "distui" -> "dist-ui", "di-stui", etc.
 	chars := []rune(lower)

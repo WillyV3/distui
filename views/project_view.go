@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel) string {
+func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel) string {
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true).
@@ -38,6 +38,11 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(successStyle.Render(fmt.Sprintf("✓ GitHub: %s", globalConfig.User.GitHubUsername)) + "\n\n")
 	} else {
 		content.WriteString(warningStyle.Render("⚠ GitHub not configured") + "\n\n")
+	}
+
+	// Regeneration warning
+	if configureModel != nil && configureModel.NeedsRegeneration {
+		content.WriteString(warningStyle.Render("⚠ Configuration changed - Press [c] then [R] to regenerate release files before releasing") + "\n\n")
 	}
 
 	// Check if .goreleaser.yaml exists

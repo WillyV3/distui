@@ -267,7 +267,7 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel)
+	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel)
 }
 
 func (m model) renderGlobalView() string {

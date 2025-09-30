@@ -1329,6 +1329,11 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		case "q", "ctrl+c":
 			return currentPage, true, tea.Quit, configModel
 		case "esc":
+			// If in NPM edit mode, delegate to model's Update to handle cancellation
+			if configModel != nil && configModel.NPMEditMode {
+				newModel, cmd := configModel.Update(msg)
+				return currentPage, false, cmd, newModel
+			}
 			return 0, false, nil, configModel // back to projectView
 		case "r":
 			// Refresh git status in cleanup tab
