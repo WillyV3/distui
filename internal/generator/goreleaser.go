@@ -79,7 +79,7 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 		b.WriteString("    homepage: https://github.com/" + project.Repository.Owner + "/" + project.Repository.Name + "\n")
 		b.WriteString("    description: \"" + project.Module.Name + "\"\n")
 		b.WriteString("    license: MIT\n")
-		b.WriteString("    folder: Formula\n")
+		b.WriteString("    directory: Formula\n")
 		b.WriteString("    commit_author:\n")
 		b.WriteString("      name: distui\n")
 		b.WriteString("      email: distui@users.noreply.github.com\n")

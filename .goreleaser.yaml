@@ -46,7 +46,7 @@ brews:
     homepage: https://github.com/willyv3/distui
     description: "distui"
     license: MIT
-    folder: Formula
+    directory: Formula
     commit_author:
       name: distui
       email: distui@users.noreply.github.com
