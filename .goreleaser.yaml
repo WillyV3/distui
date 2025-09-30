@@ -22,7 +22,6 @@ builds:
 
 archives:
   - format: tar.gz
-    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     format_overrides:
       - goos: windows
         format: zip
@@ -41,7 +40,7 @@ brews:
   - repository:
       owner: willyv3
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     homepage: https://github.com/willyv3/distui
     description: distui
     license: MIT

@@ -46,7 +46,6 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 
 	b.WriteString("archives:\n")
 	b.WriteString("  - format: tar.gz\n")
-	b.WriteString("    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'\n")
 	b.WriteString("    format_overrides:\n")
 	b.WriteString("      - goos: windows\n")
 	b.WriteString("        format: zip\n\n")
