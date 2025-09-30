@@ -53,6 +53,15 @@ type Package struct {
 	Duration time.Duration
 }
 
+// Messages for progress updates
+type ProgressTickMsg struct{}
+
+func tickProgress() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return ProgressTickMsg{}
+	})
+}
+
 func NewReleaseModel(width, height int, projectPath, projectName, currentVersion, repoOwner, repoName string, projectConfig *models.ProjectConfig) *ReleaseModel {
 	s := spinner.New()
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
@@ -127,16 +136,22 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		m.Progress = progressModel.(progress.Model)
 		return m, cmd
 
+	case ProgressTickMsg:
+		// Gradually increment progress while release is running
+		if m.Phase != models.PhaseComplete && m.Phase != models.PhaseFailed && m.Phase != models.PhaseVersionSelect {
+			// Animate progress smoothly
+			cmd := m.Progress.IncrPercent(0.002) // Slow increment
+			return m, tea.Batch(cmd, tickProgress())
+		}
+		return m, nil
+
 	case models.ReleasePhaseMsg:
 		m.Phase = msg.Phase
 		m.Installing = int(msg.Phase) - 1
 		if m.Installing >= 0 && m.Installing < len(m.Packages) {
 			m.Packages[m.Installing].Status = "installing"
 		}
-
-		// Update progress bar
-		progressCmd := m.Progress.SetPercent(float64(m.Installing) / float64(len(m.Packages)))
-		return m, tea.Batch(m.Spinner.Tick, progressCmd)
+		return m, tea.Batch(m.Spinner.Tick, tickProgress())
 
 	case models.ReleasePhaseCompleteMsg:
 		idx := int(msg.Phase) - 1
@@ -149,10 +164,7 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 				m.Packages[idx].Status = "failed"
 			}
 		}
-
-		// Update progress bar
-		progressCmd := m.Progress.SetPercent(float64(len(m.Installed)) / float64(len(m.Packages)))
-		return m, progressCmd
+		return m, tickProgress()
 
 	case models.CommandOutputMsg:
 		m.Output = append(m.Output, msg.Line)
@@ -286,6 +298,7 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 	return m, tea.Batch(
 		m.Spinner.Tick,
 		progressCmd,
+		tickProgress(),  // Start the progress animation
 		releaseExecutor.ExecuteReleasePhases(context.Background()),
 	)
 }
