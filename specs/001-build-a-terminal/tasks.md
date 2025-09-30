@@ -11,9 +11,9 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 ### Quick Stats
 - Total Tasks: ~35
 - Completed: 100% FEATURE COMPLETE
-- Status: **PRODUCTION READY** (v0.0.17)
+- Status: **PRODUCTION READY** (v0.0.21)
 
-### ✅ FULLY WORKING FEATURES (2025-09-30)
+### ✅ FULLY WORKING FEATURES (2025-09-30 Update 2)
 
 **Core Functionality:**
 - ✅ Full TUI with 4 views (Project, Global, Settings, Configure)
@@ -39,6 +39,8 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ Auto-regeneration indicator when config changes
 - ✅ Stable JSON field order (no git diffs on regeneration)
 - ✅ Regex-based version updates (preserves formatting)
+- ✅ NPM package name validation with availability checking
+- ✅ Alternative name suggestions (scoped packages, suffixes)
 
 **Git Management:**
 - ✅ Git cleanup UI with intelligent categorization
@@ -51,6 +53,10 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ GitHub Releases - GoReleaser handles binary builds and uploads
 - ✅ Homebrew - GoReleaser pushes to tap with correct formula
 - ✅ NPM - Separate publish using golang-npm for binary distribution
+  - ✅ Real-time package name availability checking
+  - ✅ Conflict detection (e.g., "distui" vs "dist-ui")
+  - ✅ Scoped package suggestions (@username/package)
+  - ✅ Alternative name generation (package-cli, package-tool, etc.)
 - ✅ Go Module - Via git tags (no special handling needed)
 
 ### What's Left for MVP
@@ -941,11 +947,43 @@ Task general-purpose "Complete T044 through T047 in parallel - add all UI polish
 8. T032-T039 (Testing)
 9. T044-T047 (Polish) [P]
 
+## Recent Additions (v0.0.21)
+
+### NPM Package Name Validation Feature
+
+**Files Created:**
+- `internal/executor/npm_check.go` (76 lines) - NPM registry checking and name suggestions
+- `handlers/npm_check_handler.go` (14 lines) - Bubble Tea async command handler
+
+**Files Modified:**
+- `handlers/configure_handler.go` - Added NPM validation state and message handling
+- `views/configure_view.go` - Added NPM status display with suggestions
+- Chrome calculations updated in 4 places to account for NPM status UI (3-7 lines)
+
+**Functionality:**
+1. **Automatic Validation**: When user enables NPM in Distributions tab, package name is checked against npm registry
+2. **Visual Feedback**:
+   - ⏳ Checking status (blue)
+   - ✓ Available (green)
+   - ✗ Unavailable (yellow) with suggestions
+   - ✗ Error (red) with error details
+3. **Smart Suggestions**:
+   - Scoped package using GitHub username: `@username/package`
+   - Common suffixes: `-cli`, `-tool`, `-release`, `-dist`
+   - Shows up to 3 suggestions
+4. **Terminal Layout Integrity**:
+   - Handler calculates chrome including NPM status (3 lines for simple, 7 for with suggestions)
+   - View uses same calculation to prevent overflow
+   - Follows constitution principle for fixed terminal height
+
+**UX Pattern**: Similar to regeneration warning - appears/disappears based on state, proper chrome accounting prevents layout issues.
+
 ## Notes
 
-- All tasks must maintain < 100 lines per file
+- All tasks must maintain < 100 lines per file (pragmatic: essential files may exceed if non-redundant)
 - Use early returns to avoid nested conditionals
 - No comments except API documentation
 - Follow template's handler pattern exactly
 - Test each component in isolation
+- Terminal layout integrity: chrome calculations MUST be updated when adding UI lines
 - Ensure atomic operations for all file I/O

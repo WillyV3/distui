@@ -271,14 +271,15 @@ func executeReleaseCmd(project *models.Project, version string) tea.Cmd {
 6. ✅ Validation and atomic persistence
 7. ✅ Git integration (repo creation, cleanup, smart commits)
 
-## Production Status (v0.0.17/0.0.18)
+## Production Status (v0.0.21)
 
 ### 🎯 100% Feature Complete
 - **Release Workflow**: Version bumping, pre-release tests, GoReleaser execution, multi-channel distribution
 - **Configuration Management**: 4-tab interface, smart file generation, consent screens, regeneration tracking
+- **NPM Package Validation**: Real-time availability checking, conflict detection, scoped package suggestions
 - **Git Management**: Repo creation, file cleanup, smart commits with categorization
 - **Distribution Channels**: GitHub Releases, Homebrew taps, NPM publishing, Go modules
-- **Terminal Layout**: Fixed height management, no overflow, responsive sizing
+- **Terminal Layout**: Fixed height management, no overflow, responsive sizing, dynamic chrome calculation
 - **Config Files**: Stable JSON field ordering, regex-based version updates, atomic writes
 
 ### 🐛 Known Issues
@@ -286,10 +287,11 @@ func executeReleaseCmd(project *models.Project, version string) tea.Cmd {
 - Settings view is placeholder (low priority)
 
 ### 📚 Key Learnings
-1. **Terminal Height Management**: Height calculations MUST happen at handler level in 3 places (NewModel, Update, WindowSizeMsg), views use handler-calculated dimensions
+1. **Terminal Height Management**: Height calculations MUST happen at handler level in 3 places (NewModel, Update, WindowSizeMsg), views use handler-calculated dimensions. Dynamic chrome calculation based on visible UI elements.
 2. **Package.json Stability**: Manual JSON generation with stable field order + regex version updates prevents git diffs
 3. **NPM Publishing**: Separate workflow after GoReleaser using golang-npm to download binaries from GitHub releases
 4. **Config File Lifecycle**: Smart generation/deletion based on enabled distributions with user consent
+5. **NPM Package Validation**: Async checking using Bubble Tea command pattern, visual feedback with suggestions, proper chrome accounting for status display (3-7 lines)
 
 ## Key Differences from Original Plan
 

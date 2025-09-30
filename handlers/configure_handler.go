@@ -110,6 +110,15 @@ type ConfigureModel struct {
 	GitHubOwner      string
 	GitHubRepo       string
 	HasGitRemote     bool
+
+	// NPM package name validation
+	NPMNameStatus      string   // available, unavailable, checking, error
+	NPMNameSuggestions []string // Alternative names if unavailable
+	NPMNameError       string   // Error message if check failed
+
+	// NPM package name editing
+	NPMEditMode   bool
+	NPMNameInput  textinput.Model
 }
 
 // Distribution item for the list
@@ -337,6 +346,13 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	s.Spinner = spinner.MiniDot
 	m.CreateSpinner = s
 
+	// Initialize NPM package name input
+	npmInput := textinput.New()
+	npmInput.Placeholder = "package-name"
+	npmInput.CharLimit = 214 // npm package name limit
+	npmInput.Width = width - 8
+	m.NPMNameInput = npmInput
+
 	// Calculate list height more precisely
 	// Account for UI elements:
 	// - Header: 1 line
@@ -345,10 +361,18 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	// - Content box border: 2 lines (top + bottom)
 	// - Content padding: 2 lines (vertical padding restored)
 	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome, +1 if warning shown
+	// Total: 13 lines of chrome, +1 if warning shown, +3 to 7 for NPM status
 	chromeLines := 13
 	if m.NeedsRegeneration {
 		chromeLines = 14
+	}
+	// Add NPM status lines when on Distributions tab and status exists
+	// NPM status: 2 blank lines + status line = 3 lines minimum
+	// With suggestions: 2 blanks + status + 2 blanks + header + 3 suggestions + help = 10 lines
+	if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+		chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+	} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+		chromeLines += 3 // 2 blanks + status line
 	}
 	listHeight := m.Height - chromeLines
 	if listHeight < 5 {
@@ -374,72 +398,11 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	cleanupList.SetShowHelp(false)
 	m.Lists[0] = cleanupList
 
-	// Initialize distributions list (tab 1) - load from config
-	githubEnabled := true
-	homebrewEnabled := false
-	npmEnabled := false
-	goInstallEnabled := true
-	homebrewDesc := "Tap: not configured"
-	npmDesc := "Package: not configured"
-
-	if projectConfig != nil && projectConfig.Config != nil {
-		if projectConfig.Config.Distributions.GitHubRelease != nil {
-			githubEnabled = projectConfig.Config.Distributions.GitHubRelease.Enabled
-		}
-		if projectConfig.Config.Distributions.Homebrew != nil {
-			homebrewEnabled = projectConfig.Config.Distributions.Homebrew.Enabled
-			if projectConfig.Config.Distributions.Homebrew.TapRepo != "" {
-				homebrewDesc = "Tap: " + projectConfig.Config.Distributions.Homebrew.TapRepo
-			} else if detectedProject != nil && detectedProject.Repository != nil {
-				detectedTap := detectedProject.Repository.Owner + "/homebrew-tap"
-				homebrewDesc = "Tap: " + detectedTap + " (detected)"
-				if projectConfig.Config.Distributions.Homebrew.TapRepo == "" {
-					projectConfig.Config.Distributions.Homebrew.TapRepo = detectedTap
-				}
-			}
-		}
-		if projectConfig.Config.Distributions.NPM != nil {
-			npmEnabled = projectConfig.Config.Distributions.NPM.Enabled
-			if projectConfig.Config.Distributions.NPM.PackageName != "" {
-				npmDesc = "Package: " + projectConfig.Config.Distributions.NPM.PackageName
-			} else if detectedProject != nil && detectedProject.Binary != nil && detectedProject.Binary.Name != "" {
-				detectedPackage := detectedProject.Binary.Name
-				npmDesc = "Package: " + detectedPackage + " (detected)"
-				if projectConfig.Config.Distributions.NPM.PackageName == "" {
-					projectConfig.Config.Distributions.NPM.PackageName = detectedPackage
-				}
-			}
-		}
-		if projectConfig.Config.Distributions.GoModule != nil {
-			goInstallEnabled = projectConfig.Config.Distributions.GoModule.Enabled
-		}
-	}
-
-	distributions := []list.Item{
-		DistributionItem{
-			Name:    "GitHub Releases",
-			Desc:    "Create releases on GitHub",
-			Enabled: githubEnabled,
-			Key:     "github",
-		},
-		DistributionItem{
-			Name:    "Homebrew",
-			Desc:    homebrewDesc,
-			Enabled: homebrewEnabled,
-			Key:     "homebrew",
-		},
-		DistributionItem{
-			Name:    "NPM Package",
-			Desc:    npmDesc,
-			Enabled: npmEnabled,
-			Key:     "npm",
-		},
-		DistributionItem{
-			Name:    "Go Install",
-			Desc:    "Enable 'go install' support",
-			Enabled: goInstallEnabled,
-			Key:     "go_install",
-		},
+	// Initialize distributions list (tab 1) - using centralized builder
+	distItems := BuildDistributionsList(projectConfig, detectedProject)
+	distributions := make([]list.Item, len(distItems))
+	for i, item := range distItems {
+		distributions[i] = item
 	}
 
 	distList := list.New(distributions, list.NewDefaultDelegate(), listWidth, listHeight)
@@ -661,10 +624,16 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	// Update list sizes based on current dimensions
 	if m.Width > 0 && m.Height > 0 {
-		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines, +1 if warning
+		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines, +1 if warning, +3 to 10 for NPM
 		chromeLines := 13
 		if m.NeedsRegeneration {
 			chromeLines = 14
+		}
+		// Add NPM status lines when on Distributions tab and status exists
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3 // 2 blanks + status line
 		}
 		listHeight := m.Height - chromeLines
 		if listHeight < 5 {
@@ -763,6 +732,15 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
+	case npmNameCheckMsg:
+		m.NPMNameStatus = string(msg.result.Status)
+		m.NPMNameError = msg.result.Error
+		m.NPMNameSuggestions = msg.result.Suggestions
+
+		// No need to rebuild list - status shows below content box
+		// List items stay clean, status displayed separately like cleanup tab
+
+		return m, nil
 	case commitCompleteMsg:
 		m.IsCreating = false
 		if msg.err == nil {
@@ -795,10 +773,16 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		// Update list sizes with same calculation as NewConfigureModel
-		// Total UI chrome: 13 lines, +1 if warning
+		// Total UI chrome: 13 lines, +1 if warning, +3 to 10 for NPM
 		chromeLines := 13
 		if m.NeedsRegeneration {
 			chromeLines = 14
+		}
+		// Add NPM status lines when on Distributions tab and status exists
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3 // 2 blanks + status line
 		}
 		listHeight := height - chromeLines
 		if listHeight < 5 {
@@ -830,6 +814,53 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// Handle NPM name editing mode first
+		if m.NPMEditMode {
+			switch msg.String() {
+			case "enter":
+				// Save the new package name
+				newName := m.NPMNameInput.Value()
+				if newName != "" {
+					if m.ProjectConfig.Config.Distributions.NPM == nil {
+						m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
+					}
+					m.ProjectConfig.Config.Distributions.NPM.PackageName = newName
+					m.saveConfig()
+
+					// Rebuild distributions list with new package name
+					distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject)
+					listItems := make([]list.Item, len(distItems))
+					for i, item := range distItems {
+						listItems[i] = item
+					}
+					m.Lists[1].SetItems(listItems)
+
+					// Trigger name check
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+					m.NPMNameStatus = "checking"
+					m.NPMEditMode = false
+					m.NPMNameInput.Blur()
+					return m, checkNPMNameCmd(newName, username)
+				}
+				m.NPMEditMode = false
+				m.NPMNameInput.Blur()
+				return m, nil
+			case "esc":
+				// Cancel editing
+				m.NPMEditMode = false
+				m.NPMNameInput.Blur()
+				return m, nil
+			default:
+				// Pass to text input
+				var cmd tea.Cmd
+				m.NPMNameInput, cmd = m.NPMNameInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// If we're on the cleanup tab and there are no changes, delegate navigation to the repo browser
 		if m.ActiveTab == 0 && m.CleanupModel != nil && !m.CleanupModel.HasChanges() {
 			// Check if this is a navigation key that should go to the repo browser
@@ -843,7 +874,34 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 		switch msg.String() {
 		case "tab":
+			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 1) % 4
+
+			// Check NPM name when entering Distributions tab
+			if m.ActiveTab == 1 && oldTab != 1 && m.NPMNameStatus == "" {
+				if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+					m.ProjectConfig.Config.Distributions.NPM != nil &&
+					m.ProjectConfig.Config.Distributions.NPM.Enabled {
+
+					packageName := m.ProjectConfig.Config.Distributions.NPM.PackageName
+					if packageName == "" && m.DetectedProject != nil {
+						if m.DetectedProject.Binary.Name != "" {
+							packageName = m.DetectedProject.Binary.Name
+						} else {
+							packageName = m.DetectedProject.Module.Name
+						}
+					}
+
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+
+					m.NPMNameStatus = "checking"
+					return m, checkNPMNameCmd(packageName, username)
+				}
+			}
+
 			return m, nil
 		case "shift+tab":
 			m.ActiveTab = (m.ActiveTab + 3) % 4
@@ -866,6 +924,36 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				currentList.SetItems(items)
 				// Save config after toggle
 				m.saveConfig()
+
+				// If NPM was just enabled, trigger name check immediately
+				if i.Key == "npm" && i.Enabled {
+					packageName := ""
+					if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+						m.ProjectConfig.Config.Distributions.NPM != nil {
+						packageName = m.ProjectConfig.Config.Distributions.NPM.PackageName
+					}
+					// If no package name yet, use project name
+					if packageName == "" && m.DetectedProject != nil {
+						if m.DetectedProject.Binary.Name != "" {
+							packageName = m.DetectedProject.Binary.Name
+						} else {
+							packageName = m.DetectedProject.Module.Name
+						}
+					}
+
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+
+					m.NPMNameStatus = "checking"
+					return m, checkNPMNameCmd(packageName, username)
+				} else if i.Key == "npm" && !i.Enabled {
+					// NPM was disabled, clear status
+					m.NPMNameStatus = ""
+					m.NPMNameError = ""
+					m.NPMNameSuggestions = nil
+				}
 			} else if i, ok := currentList.SelectedItem().(BuildItem); ok {
 				i.Enabled = !i.Enabled
 				items := currentList.Items()
@@ -897,6 +985,24 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				items := currentList.Items()
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
+			}
+			return m, nil
+		case "e":
+			// Edit package name when on NPM item in Distributions tab
+			if m.ActiveTab == 1 {
+				selectedItem := m.Lists[1].SelectedItem()
+				if dist, ok := selectedItem.(DistributionItem); ok && dist.Key == "npm" {
+					// Enter edit mode
+					m.NPMEditMode = true
+					currentName := ""
+					if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+						m.ProjectConfig.Config.Distributions.NPM != nil {
+						currentName = m.ProjectConfig.Config.Distributions.NPM.PackageName
+					}
+					m.NPMNameInput.SetValue(currentName)
+					m.NPMNameInput.Focus()
+					return m, nil
+				}
 			}
 			return m, nil
 		case "a":

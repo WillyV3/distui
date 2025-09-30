@@ -168,6 +168,12 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	if configModel.NeedsRegeneration {
 		chromeLines = 14
 	}
+	// Add NPM status lines when on Distributions tab and status exists
+	if configModel.ActiveTab == 1 && configModel.NPMNameStatus == "unavailable" && len(configModel.NPMNameSuggestions) > 0 {
+		chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+	} else if configModel.ActiveTab == 1 && configModel.NPMNameStatus != "" {
+		chromeLines += 3 // 2 blanks + status line
+	}
 	boxHeight := configModel.Height - chromeLines
 	if boxHeight < 5 {
 		boxHeight = 5
@@ -366,6 +372,55 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 	content.WriteString(renderedContent)
 
+	// Show NPM name edit UI if in edit mode
+	if configModel.NPMEditMode {
+		content.WriteString("\n\n")
+		editStyle := lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("117"))
+		content.WriteString(editStyle.Render("Edit NPM Package Name:"))
+		content.WriteString("\n" + editStyle.Render(configModel.NPMNameInput.View()))
+		content.WriteString("\n" + statusStyle.Render(
+			lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("[Enter] Save  [ESC] Cancel")))
+	} else if configModel.ActiveTab == 1 && configModel.NPMNameStatus != "" {
+		// Show NPM name validation status (only on Distributions tab when not editing)
+		content.WriteString("\n\n")
+
+		statusStyle := lipgloss.NewStyle().Padding(0, 2)
+
+		switch configModel.NPMNameStatus {
+		case "checking":
+			content.WriteString(statusStyle.Render(
+				lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Render("⏳ Checking package name availability...")))
+		case "available":
+			content.WriteString(statusStyle.Render(
+				lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Render("✓ Package name is available")))
+		case "unavailable":
+			// Show the reason (e.g., "similar package exists: dist-ui")
+			reason := "Package name unavailable"
+			if configModel.NPMNameError != "" {
+				reason = configModel.NPMNameError
+			}
+			warningMsg := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true).Render("✗ " + reason)
+			content.WriteString(statusStyle.Render(warningMsg))
+
+			if len(configModel.NPMNameSuggestions) > 0 {
+				content.WriteString("\n\n" + statusStyle.Render(
+					lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("Try one of these alternatives:")))
+				for i, suggestion := range configModel.NPMNameSuggestions {
+					if i >= 3 {
+						break // Show max 3 suggestions
+					}
+					suggestionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+					content.WriteString("\n" + statusStyle.Render("  → "+suggestionStyle.Render(suggestion)))
+				}
+				content.WriteString("\n" + statusStyle.Render(
+					lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("To change: ESC > s > e")))
+			}
+		case "error":
+			content.WriteString(statusStyle.Render(
+				lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("✗ Error checking name: "+configModel.NPMNameError)))
+		}
+	}
+
 	// Controls
 	if configModel.Width > 0 {
 		divider := strings.Repeat("─", configModel.Width)
@@ -392,10 +447,9 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		controlLine1 = "[Space] Cycle  [s] Execute  [r] Refresh"
 		controlLine2 = "[Tab] Next Tab  [ESC] Cancel  [↑/↓] Navigate"
 	} else if configModel.ActiveTab == 1 {
-		// Distributions tab - show hint about editing tap/package
-		controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
+		// Distributions tab - show hint about editing package name
+		controlLine1 = "[Space] Toggle  [a] Check All  [e] Edit Package  [Tab] Next Tab"
 		controlLine2 = "[R] Confirm & Generate Release Files  [ESC] Back"
-		controlLine3 = "To change tap/package: ESC > s > e"
 	} else {
 		// Other tabs controls
 		controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
