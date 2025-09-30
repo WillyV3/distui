@@ -93,7 +93,13 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		return content.String()
 	}
 
-	// CONFIGURED project - check if working tree is clean
+	// Check if release is in progress (not just version selection)
+	if releaseModel != nil && releaseModel.Phase != models.PhaseVersionSelect {
+		// During release, ONLY show the release progress, not project info
+		return renderInlineReleaseSection(releaseModel)
+	}
+
+	// CONFIGURED project - check if working tree is clean (only when not releasing)
 	isClean := gitcleanup.IsWorkingTreeClean()
 
 	if !isClean {
@@ -107,12 +113,6 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(infoStyle.Render("3. Return here to release") + "\n\n")
 		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
 		return content.String()
-	}
-
-	// Check if release is in progress (not just version selection)
-	if releaseModel != nil && releaseModel.Phase != models.PhaseVersionSelect {
-		// During release, ONLY show the release progress, not project info
-		return renderInlineReleaseSection(releaseModel)
 	}
 
 	// CONFIGURED project with clean working tree - full view
