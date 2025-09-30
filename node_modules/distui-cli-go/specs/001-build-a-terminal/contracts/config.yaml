@@ -1,0 +1,100 @@
+# Global Configuration Contract
+# Location: ~/.distui/config.yaml
+
+type: object
+required:
+  - version
+  - user
+  - preferences
+properties:
+  version:
+    type: string
+    pattern: "^\\d+\\.\\d+\\.\\d+$"
+    description: "Schema version for migration support"
+    example: "1.0.0"
+
+  user:
+    type: object
+    required:
+      - github_username
+    properties:
+      github_username:
+        type: string
+        minLength: 1
+        maxLength: 39
+        pattern: "^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$"
+        description: "GitHub username for default operations"
+
+      default_homebrew_tap:
+        type: string
+        pattern: "^[a-zA-Z0-9-]+/[a-zA-Z0-9-]+$"
+        description: "Default Homebrew tap repository"
+        example: "username/homebrew-tap"
+
+      npm_scope:
+        type: string
+        pattern: "^@[a-zA-Z0-9-]+$"
+        description: "NPM scope for packages"
+        example: "@username"
+
+  preferences:
+    type: object
+    properties:
+      confirm_before_release:
+        type: boolean
+        default: true
+        description: "Require confirmation before executing release"
+
+      default_version_bump:
+        type: string
+        enum: ["patch", "minor", "major"]
+        default: "patch"
+        description: "Default version increment type"
+
+      show_command_output:
+        type: boolean
+        default: true
+        description: "Display real-time command output"
+
+      auto_detect_projects:
+        type: boolean
+        default: true
+        description: "Automatically detect project in current directory"
+
+  ui:
+    type: object
+    properties:
+      theme:
+        type: string
+        enum: ["default", "dark", "light", "high-contrast"]
+        default: "default"
+        description: "UI color theme"
+
+      compact_mode:
+        type: boolean
+        default: false
+        description: "Use compact layout for smaller terminals"
+
+      show_hints:
+        type: boolean
+        default: true
+        description: "Display keyboard shortcuts and hints"
+
+  paths:
+    type: object
+    properties:
+      homebrew_tap_location:
+        type: string
+        default: "~/homebrew-tap"
+        description: "Local path to Homebrew tap repository"
+
+      goreleaser_config:
+        type: string
+        default: ".goreleaser.yaml"
+        description: "Default GoReleaser config filename"
+
+validation_rules:
+  - "github_username must not contain consecutive hyphens"
+  - "github_username cannot start or end with hyphen"
+  - "npm_scope must start with @"
+  - "paths must be absolute or start with ~/"

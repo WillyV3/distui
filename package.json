@@ -18,6 +18,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "distui-cli-go": "^0.0.30",
     "golang-npm": "^0.0.6"
   },
   "goBinary": {
