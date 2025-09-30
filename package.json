@@ -1,6 +1,6 @@
 {
   "name": "distui",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "distui - distributed via distui",
   "bin": {
     "distui": "./bin/distui"
