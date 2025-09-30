@@ -72,15 +72,29 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			return fmt.Errorf("getting GitHub token: %w", err)
 		}
 
-		os.Setenv("GITHUB_TOKEN", token)
-
 		// Try goreleaser in PATH first, then ~/go/bin
 		goreleaserCmd := "goreleaser"
 		if _, err := exec.LookPath("goreleaser"); err != nil {
 			goreleaserCmd = os.Getenv("HOME") + "/go/bin/goreleaser"
 		}
 
-		// Create the command
+		// First, run a check to see what the actual error is
+		checkCmd := exec.Command(goreleaserCmd, "check")
+		checkCmd.Dir = projectPath
+		checkCmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
+		if checkOutput, checkErr := checkCmd.CombinedOutput(); checkErr != nil {
+			// Extract meaningful error from check output
+			lines := strings.Split(string(checkOutput), "\n")
+			for _, line := range lines {
+				if strings.Contains(strings.ToLower(line), "error") ||
+				   strings.Contains(line, "✗") ||
+				   strings.Contains(strings.ToLower(line), "invalid") {
+					return fmt.Errorf("configuration error: %s", strings.TrimSpace(line))
+				}
+			}
+		}
+
+		// Create the actual release command
 		cmd := exec.Command(goreleaserCmd, "release", "--clean")
 		cmd.Dir = projectPath
 		cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+token)
@@ -101,11 +115,11 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			return fmt.Errorf("starting goreleaser: %w", err)
 		}
 
-		// Collect error messages for better reporting
-		var errorMessages []string
-		var lastError string
+		// Collect all output including errors
+		var allOutput []string
+		var lastErrorLine string
 
-		// Read and format output
+		// Read and format stdout
 		go func() {
 			buf := make([]byte, 1024)
 			for {
@@ -114,6 +128,13 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 					lines := string(buf[:n])
 					for _, line := range splitLines(lines) {
 						if line != "" {
+							allOutput = append(allOutput, line)
+							// Track potential error lines
+							if strings.Contains(strings.ToLower(line), "error") ||
+							   strings.Contains(strings.ToLower(line), "failed") ||
+							   strings.Contains(line, "✗") {
+								lastErrorLine = line
+							}
 							formattedLine := formatGoReleaserOutput(line)
 							if outputChan != nil {
 								select {
@@ -130,7 +151,7 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 			}
 		}()
 
-		// Read stderr too and capture errors
+		// Read stderr and capture errors
 		go func() {
 			buf := make([]byte, 1024)
 			for {
@@ -139,12 +160,10 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 					lines := string(buf[:n])
 					for _, line := range splitLines(lines) {
 						if line != "" {
-							// Capture error messages
-							if strings.Contains(strings.ToLower(line), "error") ||
-							   strings.Contains(strings.ToLower(line), "failed") ||
-							   strings.Contains(line, "✗") {
-								errorMessages = append(errorMessages, line)
-								lastError = line
+							allOutput = append(allOutput, line)
+							// stderr is more likely to contain the actual error
+							if line != "" {
+								lastErrorLine = line
 							}
 							if outputChan != nil {
 								select {
@@ -164,18 +183,32 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		// Wait for command to complete
 		err = cmd.Wait()
 		if err != nil {
-			// Provide more context about the error
-			errorMsg := "GoReleaser failed"
-			if lastError != "" {
-				// Clean up common error prefixes
-				lastError = strings.TrimPrefix(lastError, "• ")
-				lastError = strings.TrimPrefix(lastError, "✗ ")
-				lastError = strings.TrimPrefix(lastError, "⨯ ")
-				lastError = strings.TrimSpace(lastError)
-				errorMsg = lastError
-			} else if len(errorMessages) > 0 {
-				errorMsg = errorMessages[len(errorMessages)-1]
+			// Find the most relevant error message
+			errorMsg := "release failed"
+
+			// Try to extract a meaningful error
+			if lastErrorLine != "" {
+				// Clean up common prefixes
+				errorMsg = strings.TrimPrefix(lastErrorLine, "• ")
+				errorMsg = strings.TrimPrefix(errorMsg, "✗ ")
+				errorMsg = strings.TrimPrefix(errorMsg, "⨯ ")
+				errorMsg = strings.TrimPrefix(errorMsg, "   ⨯ ")
+				errorMsg = strings.TrimSpace(errorMsg)
+			} else {
+				// Look through all output for clues
+				for i := len(allOutput) - 1; i >= 0 && i > len(allOutput)-10; i-- {
+					if i < len(allOutput) {
+						line := allOutput[i]
+						if strings.Contains(strings.ToLower(line), "error") ||
+						   strings.Contains(strings.ToLower(line), "failed") ||
+						   strings.Contains(strings.ToLower(line), "release is already") {
+							errorMsg = strings.TrimSpace(line)
+							break
+						}
+					}
+				}
 			}
+
 			return fmt.Errorf("%s", errorMsg)
 		}
 
