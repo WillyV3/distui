@@ -308,13 +308,11 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	} else if configModel.ActiveTab == 0 {
 		// Special handling for Cleanup tab - show status instead of list
 		// Add status message if present
-		statusContent := RenderCleanupStatus(configModel.CleanupModel)
+		statusMessage := ""
 		if configModel.CreateStatus != "" && !configModel.IsCreating {
-			statusContent = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("82")).
-				Bold(true).
-				Render(configModel.CreateStatus) + "\n\n" + statusContent
+			statusMessage = configModel.CreateStatus
 		}
+		statusContent := RenderCleanupStatusWithMessage(configModel.CleanupModel, statusMessage)
 		baseContent = statusContent
 	} else if configModel.Initialized {
 		// Wrap list content in the content box

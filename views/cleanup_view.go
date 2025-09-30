@@ -9,6 +9,10 @@ import (
 )
 
 func RenderCleanupStatus(model *handlers.CleanupModel) string {
+	return RenderCleanupStatusWithMessage(model, "")
+}
+
+func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage string) string {
 	if model == nil {
 		return "Loading repository status..."
 	}
@@ -41,6 +45,14 @@ func RenderCleanupStatus(model *handlers.CleanupModel) string {
 			warningText = fmt.Sprintf("⚠ %d unpushed commits", model.RepoInfo.UnpushedCommits)
 		}
 		lines = append(lines, "  "+warningStyle.Render(warningText+" - [P] to push!"))
+	}
+
+	// Show status message (commit/push success) inline if provided
+	if statusMessage != "" {
+		successStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("82")).
+			Bold(true)
+		lines = append(lines, "  "+successStyle.Render(statusMessage))
 	}
 
 	// Add blank line after header
