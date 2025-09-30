@@ -108,7 +108,7 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 	if total == 0 && model.RepoInfo.UnpushedCommits == 0 {
 		lines = append(lines, "")
 		syncedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-		lines = append(lines, "  "+syncedStyle.Render("✓ All synced! Repository is clean and up to date."))
+		lines = append(lines, "  "+syncedStyle.Render("Repository is clean and up to date."))
 	}
 
 	// Divider with padding
