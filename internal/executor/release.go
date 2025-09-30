@@ -209,6 +209,7 @@ func (r *ReleaseExecutor) failureResult(startTime time.Time, step string, err er
 		Channels:   channels,
 		TotalSteps: r.countSteps(),
 		FailedStep: step,
+		Error:      err,
 	}
 }
 

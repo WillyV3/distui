@@ -70,6 +70,7 @@ type ReleaseCompleteMsg struct {
 	Channels     []string
 	TotalSteps   int
 	FailedStep   string
+	Error        error
 }
 
 type ReleaseErrorMsg struct {

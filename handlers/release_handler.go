@@ -273,7 +273,11 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		} else {
 			m.Phase = models.PhaseFailed
 			m.CompletedDuration = msg.Duration  // Capture duration even on failure
-			m.Error = fmt.Errorf("failed at step: %s", msg.FailedStep)
+			if msg.Error != nil {
+				m.Error = msg.Error
+			} else {
+				m.Error = fmt.Errorf("failed at step: %s", msg.FailedStep)
+			}
 
 			// Mark the failed step and any after it
 			failedFound := false
@@ -327,6 +331,24 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			var cmd tea.Cmd
 			m.VersionInput, cmd = m.VersionInput.Update(msg)
 			return m, cmd
+		}
+	}
+
+	// Handle retry on failure
+	if m.Phase == models.PhaseFailed {
+		switch msg.String() {
+		case "r", "R":
+			// Reset to version selection for retry
+			m.Phase = models.PhaseVersionSelect
+			m.Output = []string{}
+			m.Error = nil
+			m.Installing = -1
+			m.Installed = []int{}
+			// Reset packages status
+			for i := range m.Packages {
+				m.Packages[i].Status = "pending"
+			}
+			return m, nil
 		}
 	}
 
@@ -427,15 +449,48 @@ func (m *ReleaseModel) getSelectedVersion() string {
 }
 
 func bumpPatch(version string) string {
-	return version
+	// Parse version like v1.2.3 or 1.2.3
+	v := strings.TrimPrefix(version, "v")
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return version // Return unchanged if not semantic
+	}
+
+	// Parse patch number
+	patch := 0
+	fmt.Sscanf(parts[2], "%d", &patch)
+
+	return fmt.Sprintf("v%s.%s.%d", parts[0], parts[1], patch+1)
 }
 
 func bumpMinor(version string) string {
-	return version
+	// Parse version like v1.2.3 or 1.2.3
+	v := strings.TrimPrefix(version, "v")
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return version // Return unchanged if not semantic
+	}
+
+	// Parse minor number
+	minor := 0
+	fmt.Sscanf(parts[1], "%d", &minor)
+
+	return fmt.Sprintf("v%s.%d.0", parts[0], minor+1)
 }
 
 func bumpMajor(version string) string {
-	return version
+	// Parse version like v1.2.3 or 1.2.3
+	v := strings.TrimPrefix(version, "v")
+	parts := strings.Split(v, ".")
+	if len(parts) != 3 {
+		return version // Return unchanged if not semantic
+	}
+
+	// Parse major number
+	major := 0
+	fmt.Sscanf(parts[0], "%d", &major)
+
+	return fmt.Sprintf("v%d.0.0", major+1)
 }
 
 func UpdateReleaseView(currentPage, previousPage int, msg tea.Msg, releaseModel *ReleaseModel) (int, bool, tea.Cmd, *ReleaseModel) {
