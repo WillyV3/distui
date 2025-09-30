@@ -48,6 +48,12 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 
 func (r *ReleaseExecutor) ExecuteReleasePhasesWithOutput(ctx context.Context, outputChan chan<- string) tea.Cmd {
 	return func() tea.Msg {
+		defer func() {
+			if outputChan != nil {
+				close(outputChan)
+			}
+		}()
+
 		startTime := time.Now()
 		channels := []string{"GitHub"}
 

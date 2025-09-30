@@ -378,39 +378,9 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 
 func (m *ReleaseModel) runReleaseWithOutput(config executor.ReleaseConfig) tea.Cmd {
 	return func() tea.Msg {
-		// Stream output to channel
-		go func() {
-			defer close(m.outputChan)
-
-			// Simulate phase outputs
-			m.outputChan <- "Starting pre-flight checks..."
-			time.Sleep(2 * time.Second)
-			m.outputChan <- "✓ Pre-flight checks passed"
-
-			if !config.SkipTests {
-				m.outputChan <- "Running tests..."
-				time.Sleep(2 * time.Second)
-				m.outputChan <- "✓ All tests passed"
-			}
-
-			m.outputChan <- "Creating and pushing tag..."
-			time.Sleep(2 * time.Second)
-			m.outputChan <- "✓ Tag created: " + config.Version
-
-			m.outputChan <- "Running GoReleaser..."
-			time.Sleep(3 * time.Second)
-			m.outputChan <- "✓ GoReleaser completed"
-
-			if config.EnableHomebrew {
-				m.outputChan <- "Updating Homebrew tap..."
-				time.Sleep(2 * time.Second)
-				m.outputChan <- "✓ Homebrew tap updated"
-			}
-		}()
-
-		// Actually run the release
+		// Actually run the release with real output streaming
 		releaseExecutor := executor.NewReleaseExecutor(m.ProjectPath, config)
-		return releaseExecutor.ExecuteReleasePhases(context.Background())()
+		return releaseExecutor.ExecuteReleasePhasesWithOutput(context.Background(), m.outputChan)()
 	}
 }
 
