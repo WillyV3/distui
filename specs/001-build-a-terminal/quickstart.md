@@ -1,238 +1,305 @@
-# distui Quick Start Guide
+# Quickstart: Testing Smart Commit Preferences & Workflow Generation
 
-## Installation
-
-### Via Homebrew
-```bash
-brew install yourusername/tap/distui
-```
-
-### Via Go Install
-```bash
-go install github.com/yourusername/distui@latest
-```
-
-### From Source
-```bash
-git clone https://github.com/yourusername/distui.git
-cd distui
-go build -o distui cmd/distui/main.go
-mv distui /usr/local/bin/
-```
+**Feature**: distui v0.0.32 enhancements
+**Date**: 2025-09-30
+**Purpose**: Validate new features work end-to-end
 
 ## Prerequisites
 
-Ensure you have these tools installed:
-- `git` - Version control
-- `gh` - GitHub CLI (authenticated)
-- `goreleaser` - For building releases
-- `brew` - If using Homebrew distribution
+- distui v0.0.31 installed and working
+- Go project with git repository
+- GitHub CLI (`gh`) authenticated
 
-## First Launch
+## Test Scenarios
 
-1. **Start distui in your Go project directory:**
+### Scenario 1: Custom Smart Commit Preferences
+
+**Goal**: Verify users can customize file categorization rules
+
+**Steps**:
+1. Launch `distui` in a Go project directory
+2. Press `c` to open Configure view
+3. Navigate to Advanced tab (press TAB until reached)
+4. Find "Smart Commit Preferences" section
+5. Toggle "Use Custom Rules" to enabled
+6. Select "code" category
+7. Add custom extension: `.proto`
+8. Add custom pattern: `**/internal/**`
+9. Press `s` to save preferences
+10. Return to Configure > Cleanup tab
+11. Verify `.proto` files show as "code" category
+12. Verify files in `internal/` show as "code" category
+
+**Expected Outcome**:
+- Custom rules toggle works
+- Extensions can be added/removed
+- Patterns can be added/removed
+- Files categorized according to custom rules
+- Changes persist after restart
+- Config saved to `~/.distui/projects/<id>/config.yaml`
+
+**Validation**:
 ```bash
-cd ~/code/my-go-project
-distui
+# Check config file
+cat ~/.distui/projects/github-com-user-repo.yaml | grep -A 20 "smart_commit:"
+
+# Should show:
+# smart_commit:
+#   enabled: true
+#   use_custom_rules: true
+#   categories:
+#     code:
+#       extensions: [".go", ".proto"]
+#       patterns: ["**/src/**", "**/internal/**"]
 ```
 
-2. **Initial setup (first time only):**
-   - distui detects your project automatically
-   - Confirms GitHub repository from git remotes
-   - Finds your Homebrew tap (if exists)
-   - Saves configuration to `~/.distui/`
+### Scenario 2: Reset to Default Rules
 
-## Basic Usage
+**Goal**: Verify users can revert custom rules
 
-### Navigation
-- **TAB** - Cycle through views (Project → Global → Settings)
-- **P** - Jump to Project view
-- **G** - Jump to Global view (all projects)
-- **S** - Jump to Settings
+**Steps**:
+1. With custom rules enabled (from Scenario 1)
+2. Navigate to Smart Commit Preferences
+3. Press `r` to reset to defaults
+4. Confirm reset action
+5. Verify categories show default extensions/patterns
+6. Return to Cleanup tab
+7. Verify files categorized with default rules
 
-### Release Your Project
+**Expected Outcome**:
+- Reset button works
+- Defaults restored
+- Custom rules cleared from config
+- Files re-categorized immediately
 
-1. **In Project View, press `r` to start a release**
+### Scenario 3: GitHub Workflow Generation (Opt-In)
 
-2. **Select version bump type:**
-   - Patch (1.2.3 → 1.2.4)
-   - Minor (1.2.3 → 1.3.0)
-   - Major (1.2.3 → 2.0.0)
-   - Custom version
+**Goal**: Verify workflow can be generated with user consent
 
-3. **Watch the release execute:**
-   ```
-   ✓ Running tests
-   ✓ Creating git tag v1.2.4
-   ✓ Running GoReleaser
-   ✓ Updating Homebrew tap
-   ⠋ Publishing to NPM...
-   ```
+**Steps**:
+1. Navigate to Configure > Advanced tab
+2. Find "GitHub Workflow Generation" section
+3. Toggle "Enable Workflow Generation" to enabled
+4. Configure options:
+   - Include tests: Yes
+   - Distribution channels: (auto-detected from project)
+5. Press `p` to preview workflow
+6. Review YAML in preview modal
+7. Press ESC to close preview
+8. Press `g` to generate workflow
+9. Confirm file creation
+10. Check `.github/workflows/release.yml` was created
 
-4. **Release complete in < 30 seconds!**
+**Expected Outcome**:
+- Toggle works
+- Preview shows valid GitHub Actions YAML
+- File created only after confirmation
+- Workflow includes correct distribution channels
+- Required secrets documented in workflow comments
 
-## Managing Multiple Projects
-
-### View All Projects
-1. Press **G** to open Global view
-2. See all your configured projects
-3. Press **Enter** to switch to a project
-4. Press **N** to add a new project
-
-### Quick Project Switching
+**Validation**:
 ```bash
-# Run distui from any project directory
-cd ~/code/another-project
-distui
-# Automatically loads this project's configuration
+# Check workflow file exists
+ls -la .github/workflows/release.yml
+
+# Check workflow content
+cat .github/workflows/release.yml | grep "name: Release"
+
+# Verify includes GoReleaser step
+cat .github/workflows/release.yml | grep "goreleaser"
+
+# If NPM enabled, verify NPM publish step
+cat .github/workflows/release.yml | grep "npm publish"
 ```
 
-## Configuration
+### Scenario 4: Workflow Regeneration
 
-### Configure Current Project
-1. In Project view, press **C**
-2. Navigate tabs with **Tab**:
-   - **Distributions**: Enable/disable GitHub, Homebrew, NPM
-   - **Build**: GoReleaser settings, test commands
-   - **CI/CD**: GitHub Actions generation
+**Goal**: Verify workflow updates when config changes
 
-3. Edit fields with **Enter**
-4. Save with **S**
+**Steps**:
+1. With workflow generation enabled
+2. Navigate to Distributions tab
+3. Enable NPM distribution (if not already)
+4. Save configuration
+5. Return to Advanced tab
+6. Verify "Regenerate Workflow" warning appears
+7. Press `g` to regenerate
+8. Check `.github/workflows/release.yml` updated
 
-### Global Settings
-1. Press **S** for Settings view
-2. Configure:
-   - Default Homebrew tap location
-   - NPM scope
-   - UI preferences
-   - Release defaults
+**Expected Outcome**:
+- Warning shown when distribution config changes
+- Regeneration preserves user comments
+- New distribution steps added to workflow
 
-## Distribution Channels
+### Scenario 5: Disable Workflow Generation
 
-### GitHub Releases (Default)
-- Automatically enabled for all projects
-- Creates releases with assets from GoReleaser
-- Generates changelogs from commits
+**Goal**: Verify workflow generation can be disabled (respects user agency)
 
-### Homebrew Tap
-1. Enable in project configuration
-2. Specify your tap repository
-3. distui updates formula automatically
+**Steps**:
+1. With workflow generation enabled and file created
+2. Navigate to Advanced tab
+3. Toggle "Enable Workflow Generation" to disabled
+4. Verify workflow file NOT deleted (user owns the file)
+5. Make distribution config changes
+6. Verify no regeneration warning (generation disabled)
 
-### NPM Packages
-1. Enable for projects with JavaScript bindings
-2. Configure package name and scope
-3. Publishes after GitHub release
+**Expected Outcome**:
+- Disabling generation doesn't delete existing file
+- No auto-regeneration when disabled
+- User maintains full control
 
-## Advanced Features
+### Scenario 6: Dot File Bug Fix
 
-### Custom Test Commands
-```yaml
-# In project configuration
-build:
-  test_command: "make test"
+**Goal**: Verify dot files can be committed
+
+**Steps**:
+1. Create test dot file: `touch .github/workflows/test.yml`
+2. Add content: `echo "test" > .github/workflows/test.yml`
+3. Launch distui, press `c` for Configure > Cleanup tab
+4. Verify `.github/workflows/test.yml` appears in file list
+5. Select file and choose "commit" action
+6. Verify commit succeeds
+7. Check git log shows commit with dot file
+
+**Expected Outcome**:
+- Dot files visible in cleanup tab
+- Can select and commit dot files
+- No errors or special handling needed
+
+**Validation**:
+```bash
+git log -1 --name-only | grep ".github"
+# Should show .github/workflows/test.yml
 ```
 
-### GitHub Actions Generation
-1. In Configure view, go to CI/CD tab
-2. Enable GitHub Actions
-3. distui generates `.github/workflows/release.yml`
-4. Push to repository for automated releases
+## Integration Test: Full Workflow
 
-### Release History
-- Press **H** in Project view
-- See last 10 releases
-- View success/failure status
-- Check release duration
+**Goal**: Test all features together
 
-## Keyboard Shortcuts
+**Steps**:
+1. Start with clean Go project
+2. Configure custom smart commit rules
+3. Create test files matching custom patterns
+4. Enable workflow generation
+5. Generate workflow file
+6. Commit workflow file using smart commit (uses custom rules)
+7. Verify workflow file committed with correct category
+8. Push to GitHub
+9. Create tag to trigger workflow
+10. Verify GitHub Actions runs successfully
 
-### Global
-- `q` - Quit
-- `?` - Help
-- `TAB` - Next view
-- `/` - Search (in lists)
+**Expected Outcome**:
+- All features work together seamlessly
+- No conflicts or errors
+- Configuration persists correctly
+- Workflow executes successfully on GitHub
 
-### Project View
-- `r` - New release
-- `c` - Configure
-- `h` - History
-- `t` - Test build
+## Performance Validation
 
-### Global View
-- `↑/↓` - Navigate projects
-- `Enter` - Open project
-- `n` - New project
-- `d` - Delete project
+**Test**: Pattern matching performance
+
+**Steps**:
+1. Create project with 200+ files
+2. Add custom patterns with wildcards
+3. Open Cleanup tab
+4. Measure categorization time
+
+**Expected Outcome**:
+- Categorization completes in <100ms
+- UI remains responsive
+- No lag when switching tabs
+
+**Measurement**:
+```bash
+# Add timing to categorize function (development only)
+time distui
+# Should show instant UI response
+```
+
+## Error Scenarios
+
+### Invalid Pattern
+
+**Steps**:
+1. Try to add invalid glob pattern: `[[[invalid`
+2. Press save
+
+**Expected Outcome**:
+- Error message shown
+- Pattern not saved
+- Config remains valid
+
+### Missing Workflow Directory
+
+**Steps**:
+1. Enable workflow generation
+2. Delete `.github/` directory
+3. Generate workflow
+
+**Expected Outcome**:
+- Directory created automatically
+- Workflow file generated successfully
+- No errors
+
+### No Write Permission
+
+**Steps**:
+1. Make `~/.distui/projects/` read-only
+2. Try to save custom rules
+
+**Expected Outcome**:
+- Error message shown clearly
+- User informed of permission issue
+- Graceful degradation (read-only mode)
+
+## Cleanup
+
+After testing:
+```bash
+# Remove test workflow file
+rm -rf .github/workflows/release.yml
+
+# Reset custom rules (via TUI)
+# OR manually:
+# Edit ~/.distui/projects/<id>/config.yaml
+# Set use_custom_rules: false
+
+# Remove test commits if desired
+git reset --soft HEAD~N  # N = number of test commits
+```
+
+## Success Criteria
+
+All scenarios pass when:
+- ✅ Custom rules can be added/edited/removed
+- ✅ Rules persist across restarts
+- ✅ Workflow generation is opt-in
+- ✅ Preview works before file creation
+- ✅ Workflows can be disabled
+- ✅ Dot files handled correctly
+- ✅ Performance meets targets (<100ms)
+- ✅ Error cases handled gracefully
+- ✅ All features follow constitution (user agency, no forced changes)
+
+## Known Limitations
+
+- Custom patterns use doublestar syntax (same as .gitignore)
+- Workflow generation requires .github directory
+- Pattern validation may reject complex but valid patterns (conservative validation)
 
 ## Troubleshooting
 
-### "gh CLI not authenticated"
-```bash
-gh auth login
-```
+**Issue**: Custom rules not applied
+- Check `use_custom_rules: true` in config
+- Verify patterns use correct syntax
+- Check file paths match patterns
 
-### "Homebrew tap not found"
-1. Create tap repository on GitHub
-2. Clone locally:
-   ```bash
-   git clone git@github.com:yourusername/homebrew-tap.git ~/homebrew-tap
-   ```
-3. Update path in distui settings
+**Issue**: Workflow not generated
+- Verify `.github/` directory exists
+- Check file permissions
+- Review preview for errors
 
-### "Release failed"
-- Check error message in output
-- Ensure all prerequisites installed
-- Verify GitHub permissions
-- Check network connectivity
-
-## Configuration Files
-
-distui stores all configuration in `~/.distui/`:
-```
-~/.distui/
-├── config.yaml                    # Global settings
-├── projects/
-│   └── github-com-user-*.yaml    # Per-project configs
-└── cache/                         # Temporary files
-```
-
-## Tips & Tricks
-
-### Fast Release
-```bash
-# Combine navigation and action
-distui && r && Enter
-# Opens distui, starts release, uses defaults
-```
-
-### Dry Run
-- Hold **Shift** while pressing **R** for dry-run mode
-- See what would happen without executing
-
-### Verbose Output
-- Press **V** during release for detailed command output
-- Helpful for debugging issues
-
-## Getting Help
-
-### In-App Help
-Press **?** at any time for context-sensitive help
-
-### Documentation
-Visit https://github.com/yourusername/distui/docs
-
-### Report Issues
-https://github.com/yourusername/distui/issues
-
-## Next Steps
-
-1. Configure your first project
-2. Try a test release
-3. Add more projects
-4. Customize your workflow
-5. Share with your team!
-
----
-
-**Remember**: distui never adds files to your repositories. All configuration is stored globally in `~/.distui/`.
+**Issue**: Dot files still not visible
+- Check git status shows them as modified
+- Verify not in .gitignore
+- Check file actually exists in working directory
