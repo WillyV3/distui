@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"os"
 
 	"distui/internal/generator"
@@ -75,22 +76,103 @@ func GenerateConfigFiles(detectedProject *models.ProjectInfo, projectConfig *mod
 	return nil
 }
 
+func DeleteConfigFiles(projectPath string, files []string) error {
+	for _, fileName := range files {
+		var fullPath string
+		if fileName == ".goreleaser.yaml" {
+			// Try both .yaml and .yml variants
+			yamlPath := projectPath + "/.goreleaser.yaml"
+			ymlPath := projectPath + "/.goreleaser.yml"
+
+			if _, err := os.Stat(yamlPath); err == nil {
+				fullPath = yamlPath
+			} else if _, err := os.Stat(ymlPath); err == nil {
+				fullPath = ymlPath
+			}
+		} else {
+			fullPath = projectPath + "/" + fileName
+		}
+
+		if fullPath != "" {
+			if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("deleting %s: %w", fileName, err)
+			}
+		}
+	}
+	return nil
+}
+
+type ConfigFileChanges struct {
+	FilesToGenerate []string
+	FilesToDelete   []string
+}
+
 func GetConfigFilesForRegeneration(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig) []string {
+	changes := GetConfigFileChanges(detectedProject, projectConfig)
+	return changes.FilesToGenerate
+}
+
+func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig) ConfigFileChanges {
 	if detectedProject == nil || projectConfig == nil {
-		return nil
+		return ConfigFileChanges{}
 	}
 
-	var files []string
+	var changes ConfigFileChanges
+	projectPath := detectedProject.Path
 
-	// Always include .goreleaser.yaml for regeneration
-	files = append(files, ".goreleaser.yaml")
+	// Check if GoReleaser is needed (for GitHub Releases or Homebrew)
+	needsGoreleaser := false
+	if projectConfig.Config != nil {
+		if projectConfig.Config.Distributions.GitHubRelease != nil &&
+			projectConfig.Config.Distributions.GitHubRelease.Enabled {
+			needsGoreleaser = true
+		}
+		if projectConfig.Config.Distributions.Homebrew != nil &&
+			projectConfig.Config.Distributions.Homebrew.Enabled {
+			needsGoreleaser = true
+		}
+	}
 
-	// Include package.json if NPM is enabled
+	// Check if .goreleaser.yaml exists
+	goreleaserExists := false
+	goreleaserPaths := []string{
+		projectPath + "/.goreleaser.yaml",
+		projectPath + "/.goreleaser.yml",
+	}
+	for _, p := range goreleaserPaths {
+		if _, err := os.Stat(p); err == nil {
+			goreleaserExists = true
+			break
+		}
+	}
+
+	// Determine GoReleaser action
+	if needsGoreleaser {
+		changes.FilesToGenerate = append(changes.FilesToGenerate, ".goreleaser.yaml")
+	} else if goreleaserExists {
+		changes.FilesToDelete = append(changes.FilesToDelete, ".goreleaser.yaml")
+	}
+
+	// Check if NPM is enabled
+	npmEnabled := false
 	if projectConfig.Config != nil &&
 		projectConfig.Config.Distributions.NPM != nil &&
 		projectConfig.Config.Distributions.NPM.Enabled {
-		files = append(files, "package.json")
+		npmEnabled = true
 	}
 
-	return files
+	// Check if package.json exists
+	packageJsonExists := false
+	if _, err := os.Stat(projectPath + "/package.json"); err == nil {
+		packageJsonExists = true
+	}
+
+	// Determine package.json action
+	if npmEnabled {
+		changes.FilesToGenerate = append(changes.FilesToGenerate, "package.json")
+	} else if packageJsonExists {
+		changes.FilesToDelete = append(changes.FilesToDelete, "package.json")
+	}
+
+	return changes
 }

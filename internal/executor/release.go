@@ -2,7 +2,10 @@ package executor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -145,8 +148,38 @@ func (r *ReleaseExecutor) ExecuteReleasePhasesWithOutput(ctx context.Context, ou
 			channels = append(channels, "Homebrew")
 		}
 
+		// NPM publish runs AFTER GoReleaser (needs the GitHub release to exist)
 		if r.config.EnableNPM {
-			channels = append(channels, "NPM")
+			sendOutput("Publishing to NPM...")
+			phaseStart = time.Now()
+
+			// Get package name from package.json
+			pkgPath := filepath.Join(r.projectPath, "package.json")
+			pkgData, err := os.ReadFile(pkgPath)
+			if err != nil {
+				sendOutput("✗ NPM publish failed: " + err.Error())
+				// Don't fail the entire release, just log the error
+			} else {
+				var pkg map[string]interface{}
+				if err := json.Unmarshal(pkgData, &pkg); err == nil {
+					if pkgName, ok := pkg["name"].(string); ok {
+						// Run NPM publish
+						if err := PublishToNPM(r.projectPath, r.config.Version, pkgName, outputChan); err != nil {
+							sendOutput("✗ NPM publish failed: " + err.Error())
+							// Don't fail the entire release, NPM is optional
+						} else {
+							sendOutput("✓ NPM publish completed successfully")
+							channels = append(channels, "NPM")
+						}
+					}
+				}
+			}
+
+			completedPhases = append(completedPhases, phaseResult{
+				phase:    models.PhaseNPM,
+				duration: time.Since(phaseStart),
+				success:  true, // Mark as success even if NPM failed (non-blocking)
+			})
 		}
 
 		// Return success with all phases marked complete

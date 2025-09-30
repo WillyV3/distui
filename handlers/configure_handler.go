@@ -37,10 +37,21 @@ type filesGeneratedMsg struct {
 	err error
 }
 
-func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, files []string) tea.Cmd {
+func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
 	return func() tea.Msg {
-		err := GenerateConfigFiles(detectedProject, projectConfig, files)
-		return filesGeneratedMsg{err: err}
+		// Delete files first
+		if len(filesToDelete) > 0 {
+			if err := DeleteConfigFiles(detectedProject.Path, filesToDelete); err != nil {
+				return filesGeneratedMsg{err: err}
+			}
+		}
+		// Then generate new files
+		if len(filesToGenerate) > 0 {
+			if err := GenerateConfigFiles(detectedProject, projectConfig, filesToGenerate); err != nil {
+				return filesGeneratedMsg{err: err}
+			}
+		}
+		return filesGeneratedMsg{err: nil}
 	}
 }
 
@@ -76,9 +87,11 @@ type ConfigureModel struct {
 
 	// Config generation consent
 	PendingGenerateFiles []string // Files that need to be generated
+	PendingDeleteFiles   []string // Files that need to be deleted
 	DetectedProject      *models.ProjectInfo
 	GeneratingFiles      bool   // Currently generating files
 	GenerateStatus       string // Status message for generation
+	NeedsRegeneration    bool   // Config changed, files need regeneration
 
 	// Legacy fields (to be removed)
 	CreatingRepo       bool
@@ -260,6 +273,9 @@ func (m *ConfigureModel) saveConfig() error {
 		}
 	}
 
+	// Mark that regeneration is needed when config changes
+	m.NeedsRegeneration = true
+
 	// Save to disk
 	return config.SaveProject(m.ProjectConfig)
 }
@@ -329,8 +345,12 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	// - Content box border: 2 lines (top + bottom)
 	// - Content padding: 2 lines (vertical padding restored)
 	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome
-	listHeight := m.Height - 13
+	// Total: 13 lines of chrome, +1 if warning shown
+	chromeLines := 13
+	if m.NeedsRegeneration {
+		chromeLines = 14
+	}
+	listHeight := m.Height - chromeLines
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -641,8 +661,12 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	// Update list sizes based on current dimensions
 	if m.Width > 0 && m.Height > 0 {
-		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines
-		listHeight := m.Height - 13
+		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines, +1 if warning
+		chromeLines := 13
+		if m.NeedsRegeneration {
+			chromeLines = 14
+		}
+		listHeight := m.Height - chromeLines
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -725,9 +749,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	case filesGeneratedMsg:
 		m.GeneratingFiles = false
 		if msg.err == nil {
-			m.GenerateStatus = "✓ Release files generated successfully!"
+			m.GenerateStatus = "✓ Release files updated successfully!"
 			m.CurrentView = TabView
 			m.PendingGenerateFiles = nil
+			m.PendingDeleteFiles = nil
+			m.NeedsRegeneration = false
 			// Reload git status to show the newly generated files
 			m.Lists[0].SetItems(m.loadGitStatus())
 		} else {
@@ -769,8 +795,12 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		// Update list sizes with same calculation as NewConfigureModel
-		// Total UI chrome: 13 lines
-		listHeight := height - 13
+		// Total UI chrome: 13 lines, +1 if warning
+		chromeLines := 13
+		if m.NeedsRegeneration {
+			chromeLines = 14
+		}
+		listHeight := height - chromeLines
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -996,11 +1026,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.GenerateStatus = "Generating release files..."
 				return currentPage, false, tea.Batch(
 					configModel.CreateSpinner.Tick,
-					generateFilesCmd(configModel.DetectedProject, configModel.ProjectConfig, configModel.PendingGenerateFiles),
+					generateFilesCmd(configModel.DetectedProject, configModel.ProjectConfig, configModel.PendingGenerateFiles, configModel.PendingDeleteFiles),
 				), configModel
 			case "n", "N", "esc":
 				configModel.CurrentView = TabView
 				configModel.PendingGenerateFiles = nil
+				configModel.PendingDeleteFiles = nil
 				return currentPage, false, nil, configModel
 			}
 		} else if configModel.CurrentView == GitHubView {
@@ -1037,9 +1068,12 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			if len(missing) > 0 {
 				// Files don't exist - show consent for creation
 				configModel.PendingGenerateFiles = missing
+				configModel.PendingDeleteFiles = nil
 			} else {
-				// Files exist - regenerate based on current config
-				configModel.PendingGenerateFiles = GetConfigFilesForRegeneration(configModel.DetectedProject, configModel.ProjectConfig)
+				// Files exist - check what needs to be regenerated/deleted
+				changes := GetConfigFileChanges(configModel.DetectedProject, configModel.ProjectConfig)
+				configModel.PendingGenerateFiles = changes.FilesToGenerate
+				configModel.PendingDeleteFiles = changes.FilesToDelete
 			}
 			configModel.CurrentView = GenerateConfigConsent
 			return currentPage, false, nil, configModel

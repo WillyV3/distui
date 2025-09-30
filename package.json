@@ -1,9 +1,12 @@
 {
   "name": "distui",
-  "version": "0.0.12",
+  "version": "0.0.14",
   "description": "distui - distributed via distui",
   "bin": {
     "distui": "./bin/distui"
+  },
+  "scripts": {
+    "postinstall": "golang-npm install"
   },
   "repository": {
     "type": "git",
@@ -13,5 +16,13 @@
     "cli",
     "tool"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "golang-npm": "^0.0.6"
+  },
+  "goBinary": {
+    "name": "distui",
+    "path": "./bin",
+    "url": "https://github.com/willyv3/distui/releases/download/v{{version}}/distui_{{version}}_{{platform}}_{{arch}}.tar.gz"
+  }
 }

@@ -53,7 +53,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	case handlers.CommitView:
 		return RenderCommitView(configModel.CommitModel)
 	case handlers.GenerateConfigConsent:
-		return RenderGenerateConfigConsent(configModel.PendingGenerateFiles, configModel.Width, configModel.Height)
+		return RenderGenerateConfigConsent(configModel.PendingGenerateFiles, configModel.PendingDeleteFiles, configModel.Width, configModel.Height)
 	}
 
 	headerStyle := lipgloss.NewStyle().
@@ -162,7 +162,13 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	if boxWidth < 40 {
 		boxWidth = 40
 	}
-	boxHeight := configModel.Height - 13
+	// Calculate box height: handler already subtracted chrome based on warning state
+	// Use the same calculation as the handler
+	chromeLines := 13
+	if configModel.NeedsRegeneration {
+		chromeLines = 14
+	}
+	boxHeight := configModel.Height - chromeLines
 	if boxHeight < 5 {
 		boxHeight = 5
 	}
@@ -366,6 +372,14 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		content.WriteString("\n" + controlStyle.Render(divider))
 	} else {
 		content.WriteString("\n" + controlStyle.Render("──────────────────────────────────────────"))
+	}
+
+	// Show regeneration needed indicator
+	if configModel.NeedsRegeneration && configModel.ActiveTab != 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Bold(true)
+		content.WriteString("\n" + warningStyle.Render("⚠ Configuration changed - Press [R] to regenerate release files"))
 	}
 
 	// Show appropriate controls based on active tab

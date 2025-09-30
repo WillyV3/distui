@@ -1,20 +1,18 @@
 <!--
 Sync Impact Report
-Version change: 1.1.0 → 1.2.0 (Pragmatic repository files amendment)
-Modified principles:
-  - "Zero Repository Pollution" → "Pragmatic Repository Files" - Allow essential distribution config files with user consent
-  - "Structural Discipline" (Code Quality Standards) - Maintained pragmatic file size guidance
-Added sections: None
+Version change: 1.2.0 → 1.3.0 (TUI Layout Integrity principle added)
+Modified principles: None
+Added sections:
+  - "TUI Layout Integrity" - New code quality standard for maintaining fixed terminal height
 Removed sections: None
 Templates requiring updates:
-  - ⚠ plan-template.md (update for allowed repo files: .goreleaser.yaml, package.json, CI workflows)
-  - ⚠ tasks-template.md (add tasks for config file generation)
-  - ✅ constitution command (this file)
+  - ✅ CLAUDE.md (add TUI layout rules and height management patterns)
+  - ⚠ plan-template.md (consider adding UI layout verification step)
+  - ⚠ tasks-template.md (add task type for UI layout verification)
 Follow-up TODOs:
-  - Implement .goreleaser.yaml generation from distui config
-  - Implement package.json generation when NPM enabled
-  - Add user consent flow before generating repo files
-  - Consider refactoring configure_handler.go (989 lines) into smaller composable modules
+  - Document all chrome line calculations in handlers
+  - Add automated test to verify terminal height doesn't overflow
+  - Review all view files for handler/view dimension consistency
 -->
 
 # distui Constitution
@@ -126,6 +124,39 @@ Nesting and control flow:
 - Business errors handled through types, not catches
 - Errors bubble up, not swept under rugs
 
+### TUI Layout Integrity
+Terminal UI layout MUST maintain fixed height - no overflow, no scrolling.
+When adding UI elements (warnings, indicators, new sections):
+
+**REQUIRED APPROACH:**
+- Height adjustments MUST be made at the **handler level** where dimensions are calculated
+- Handlers calculate content dimensions (listHeight, boxHeight) by subtracting chrome
+- Views MUST use handler-calculated dimensions, never adding their own chrome calculations
+- Adding a UI element means: update handler's chrome calculation, not view layout
+
+**FORBIDDEN APPROACH:**
+- DO NOT add lines in views without adjusting handler dimensions
+- DO NOT have both handler and view subtract the same chrome
+- DO NOT assume "it will fit" - always account for every line
+
+**Pattern to follow:**
+```go
+// In handler (configure_handler.go):
+chromeLines := 13  // base chrome
+if showingWarning {
+    chromeLines = 14  // +1 for warning
+}
+listHeight := m.Height - chromeLines
+
+// In view (configure_view.go):
+boxHeight := configModel.Height - chromeLines  // use SAME calculation
+if showingWarning {
+    content.WriteString("\n" + warning)  // warning already accounted for
+}
+```
+
+This prevents terminal overflow where UI elements push content beyond screen bounds.
+
 ## Development Workflow
 
 ### Test-Driven Development
@@ -169,4 +200,4 @@ This constitution evolves with the project but changes are deliberate and
 documented. Each amendment requires clear rationale and migration plan if
 breaking existing patterns.
 
-**Version**: 1.2.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-29
+**Version**: 1.3.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-30
