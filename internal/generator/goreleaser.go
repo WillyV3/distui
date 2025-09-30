@@ -49,10 +49,11 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 	b.WriteString("\n")
 
 	b.WriteString("archives:\n")
-	b.WriteString("  - format: tar.gz\n")
+	b.WriteString("  - format_overrides:\n")
+	b.WriteString("      - goos: windows\n")
+	b.WriteString("        format: zip\n")
 	b.WriteString("    files:\n")
-	b.WriteString("      - none*\n")
-	b.WriteString("    rlcp: true\n\n")
+	b.WriteString("      - none*\n\n")
 
 	b.WriteString("checksum:\n")
 	b.WriteString("  name_template: 'checksums.txt'\n\n")
@@ -70,10 +71,10 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 
 	if config.Config != nil && config.Config.Distributions.Homebrew != nil && config.Config.Distributions.Homebrew.Enabled {
 		b.WriteString("brews:\n")
-		b.WriteString("  - repository:\n")
+		b.WriteString("  - name: " + project.Module.Name + "\n")
+		b.WriteString("    repository:\n")
 		b.WriteString(fmt.Sprintf("      owner: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[0]))
 		b.WriteString(fmt.Sprintf("      name: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[1]))
-		b.WriteString("    directory: Formula\n")
 		b.WriteString("    homepage: https://github.com/" + project.Repository.Owner + "/" + project.Repository.Name + "\n")
 		b.WriteString("    description: " + project.Module.Name + "\n")
 		b.WriteString("    license: MIT\n\n")

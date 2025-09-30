@@ -21,10 +21,11 @@ builds:
     binary: distui
 
 archives:
-  - format: tar.gz
+  - format_overrides:
+      - goos: windows
+        format: zip
     files:
       - none*
-    rlcp: true
 
 checksum:
   name_template: 'checksums.txt'
@@ -37,10 +38,10 @@ changelog:
       - '^test:'
 
 brews:
-  - repository:
+  - name: distui
+    repository:
       owner: willyv3
       name: homebrew-tap
-    directory: Formula
     homepage: https://github.com/willyv3/distui
     description: distui
     license: MIT
