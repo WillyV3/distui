@@ -76,8 +76,12 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 		b.WriteString(fmt.Sprintf("      owner: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[0]))
 		b.WriteString(fmt.Sprintf("      name: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[1]))
 		b.WriteString("    homepage: https://github.com/" + project.Repository.Owner + "/" + project.Repository.Name + "\n")
-		b.WriteString("    description: " + project.Module.Name + "\n")
-		b.WriteString("    license: MIT\n\n")
+		b.WriteString("    description: \"" + project.Module.Name + "\"\n")
+		b.WriteString("    license: MIT\n")
+		b.WriteString("    # Important: GoReleaser automatically creates formula for pre-built binaries\n")
+		b.WriteString("    # The formula will download from GitHub releases, not build from source\n")
+		b.WriteString("    test: |\n")
+		b.WriteString("      system \"#{bin}/" + project.Module.Name + "\", \"--version\"\n\n")
 	}
 
 	if config.Config != nil && config.Config.Distributions.NPM != nil && config.Config.Distributions.NPM.Enabled {
