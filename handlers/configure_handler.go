@@ -64,6 +64,7 @@ const (
 	CommitView
 	SmartCommitConfirm
 	GenerateConfigConsent
+	SmartCommitPrefsView
 )
 
 // ConfigureModel holds the state for the configure view
@@ -81,9 +82,10 @@ type ConfigureModel struct {
 	ProjectIdentifier string
 
 	// Sub-models for composable views
-	CleanupModel    *CleanupModel
-	GitHubModel     *GitHubModel
-	CommitModel     *CommitModel
+	CleanupModel         *CleanupModel
+	GitHubModel          *GitHubModel
+	CommitModel          *CommitModel
+	SmartCommitPrefsModel *SmartCommitPrefsModel
 
 	// Config generation consent
 	PendingGenerateFiles []string // Files that need to be generated
@@ -810,6 +812,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		if m.CommitModel != nil {
 			m.CommitModel.SetSize(listWidth, listHeight)
 		}
+		if m.SmartCommitPrefsModel != nil {
+			m.SmartCommitPrefsModel.SetSize(listWidth, listHeight)
+		}
 		for i := range m.Lists {
 			m.Lists[i].SetWidth(listWidth)
 			m.Lists[i].SetHeight(listHeight)
@@ -1175,6 +1180,20 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.GitHubModel = newModel
 				return currentPage, false, cmd, configModel
 			}
+		} else if configModel.CurrentView == SmartCommitPrefsView {
+			switch msg.String() {
+			case "esc":
+				configModel.CurrentView = TabView
+				// Save any changes before returning
+				if configModel.ProjectConfig != nil {
+					config.SaveProject(configModel.ProjectConfig)
+				}
+				return currentPage, false, nil, configModel
+			default:
+				newModel, cmd := configModel.SmartCommitPrefsModel.Update(msg)
+				configModel.SmartCommitPrefsModel = newModel
+				return currentPage, false, cmd, configModel
+			}
 		}
 
 		// G key handler removed - repo browser is now embedded in cleanup view
@@ -1191,6 +1210,15 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
+		// Handle 'p' key to switch to Smart Commit Preferences view (only in TabView, Cleanup tab)
+		if msg.String() == "p" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
+			// Initialize preferences model if needed
+			if configModel.SmartCommitPrefsModel == nil {
+				configModel.SmartCommitPrefsModel = NewSmartCommitPrefsModel(configModel.ProjectConfig, configModel.Width-2, configModel.Height-13)
+			}
+			configModel.CurrentView = SmartCommitPrefsView
+			return currentPage, false, nil, configModel
+		}
 
 		// Handle 'R' key to confirm and generate/regenerate release files (only in TabView, not on Cleanup tab)
 		if (msg.String() == "r" || msg.String() == "R") && configModel.CurrentView == TabView && configModel.ActiveTab != 0 {

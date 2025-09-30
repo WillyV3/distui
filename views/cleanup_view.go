@@ -208,22 +208,22 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		if needsGitHubRepo {
 			// Show both commit and GitHub repo creation
 			actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-			lines = append(lines, "  [C] Commit  [s] Smart commit  "+actionStyle.Render("[G] Create GitHub Repo")+"  [r] Refresh")
+			lines = append(lines, "  [C] Commit  [s] Smart commit  "+actionStyle.Render("[G] Create GitHub Repo")+"  [p] Preferences  [r] Refresh")
 		} else {
-			lines = append(lines, "  [C] Commit  [s] Smart commit  [r] Refresh")
+			lines = append(lines, "  [C] Commit  [s] Smart commit  [p] Preferences  [r] Refresh")
 		}
 	} else if model.RepoInfo != nil && model.RepoInfo.UnpushedCommits > 0 {
-		lines = append(lines, "  [P] Push to remote  [r] Refresh")
+		lines = append(lines, "  [P] Push to remote  [p] Preferences  [r] Refresh")
 	} else if needsGitHubRepo {
 		// Remote is configured but repo doesn't exist on GitHub
 		actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-		lines = append(lines, "  "+actionStyle.Render("[G] Create Repository on GitHub")+"  [r] Refresh")
+		lines = append(lines, "  "+actionStyle.Render("[G] Create Repository on GitHub")+"  [p] Preferences  [r] Refresh")
 	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
-		lines = append(lines, "  [r] Refresh")
+		lines = append(lines, "  [p] Preferences  [r] Refresh")
 	} else if model.NeedsGitHub() {
-		lines = append(lines, "  [G] Set up GitHub  [r] Refresh")
+		lines = append(lines, "  [G] Set up GitHub  [p] Preferences  [r] Refresh")
 	} else {
-		lines = append(lines, "  [r] Refresh")
+		lines = append(lines, "  [p] Preferences  [r] Refresh")
 	}
 
 	return strings.Join(lines, "\n")

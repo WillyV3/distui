@@ -1166,29 +1166,32 @@ type SmartCommitPrefsModel struct {
 **Estimate**: 4 points
 **Dependencies**: T-V32-009
 
-### ☐ T-V32-011: Integrate Smart Commit Prefs into Configure View Advanced Tab
-**Files**: handlers/configure_handler.go, views/configure_view.go
-**Description**: Add smart commit preferences section to Advanced tab
-**Changes in configure_handler.go**:
-- Add `SmartCommitPrefsModel` field to ConfigureModel
-- Initialize in NewConfigureModel()
-- Add key binding 'p' for preferences in Advanced tab
-- Route to preferences model when 'p' pressed
-**Changes in configure_view.go**:
-- Add "Smart Commit Preferences" section in Advanced tab render
-- Show toggle state and shortcut '[p] Edit Preferences'
-- Display current rule count if custom enabled
+### ☑ T-V32-011: Integrate Smart Commit Prefs into Configure View Cleanup Tab [COMPLETED]
+**Files**: handlers/configure_handler.go, views/configure_view.go, views/cleanup_view.go, handlers/smart_commit_prefs_handler.go
+**Description**: Added smart commit preferences as nested view in Cleanup tab (project-level settings)
+**Implementation**:
+- Added `SmartCommitPrefsView` to ViewType enum
+- Added `SmartCommitPrefsModel` field to ConfigureModel
+- Added 'p' key handler in Cleanup tab to open preferences
+- Added view delegation case in UpdateConfigureView
+- Updated configure_view.go to render SmartCommitPrefsView
+- Updated cleanup_view.go actions to show [p] Preferences hint
+- Added SetSize method for proper dimension handling
+- Updated WindowSizeMsg handling to resize SmartCommitPrefsModel
+**Pattern**: Follows exact pattern of GitHubView and CommitView integration
 **Estimate**: 3 points
 **Dependencies**: T-V32-009, T-V32-010
 
-### ☐ T-V32-012: Add Default Rules Reset Functionality
+### ☑ T-V32-012: Add Default Rules Reset Functionality [COMPLETED]
 **File**: handlers/smart_commit_prefs_handler.go
-**Description**: Implement reset to defaults with confirmation
-**Actions**:
-- Add confirmation modal: "Reset custom rules to defaults?"
-- On confirm: set UseCustomRules = false, clear Categories map
-- Save config after reset
-- Return to preferences view showing defaults
+**Description**: Implemented reset to defaults with confirmation
+**Implementation**:
+- Added ShowConfirm bool field to model
+- Added handleConfirm method that handles 'y' and 'n' keys
+- Added resetToDefaults method: sets UseCustomRules = false, clears Categories map, saves config
+- Pressing 'r' in normal mode triggers ShowConfirm = true
+- View renders confirmation modal: "Reset custom rules to defaults?" with [y] Yes [n] No
+- After reset, returns to preferences view showing defaults
 **Estimate**: 2 points
 **Dependencies**: T-V32-009
 

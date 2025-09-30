@@ -54,6 +54,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return RenderCommitView(configModel.CommitModel)
 	case handlers.GenerateConfigConsent:
 		return RenderGenerateConfigConsent(configModel.PendingGenerateFiles, configModel.PendingDeleteFiles, configModel.Width, configModel.Height)
+	case handlers.SmartCommitPrefsView:
+		return RenderSmartCommitPrefs(configModel.SmartCommitPrefsModel)
 	}
 
 	headerStyle := lipgloss.NewStyle().

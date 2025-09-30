@@ -30,7 +30,7 @@ const (
 	ModeAddPattern
 )
 
-func NewSmartCommitPrefsModel(projectConfig *models.ProjectConfig) *SmartCommitPrefsModel {
+func NewSmartCommitPrefsModel(projectConfig *models.ProjectConfig, width, height int) *SmartCommitPrefsModel {
 	if projectConfig.Config.SmartCommit == nil {
 		projectConfig.Config.SmartCommit = &models.SmartCommitPrefs{
 			Enabled:        true,
@@ -42,10 +42,12 @@ func NewSmartCommitPrefsModel(projectConfig *models.ProjectConfig) *SmartCommitP
 	extInput := textinput.New()
 	extInput.Placeholder = ".ext"
 	extInput.CharLimit = 32
+	extInput.Width = width - 4
 
 	patInput := textinput.New()
 	patInput.Placeholder = "**/*.ext"
 	patInput.CharLimit = 128
+	patInput.Width = width - 4
 
 	categories := []string{"code", "config", "docs", "build", "test", "assets", "data"}
 
@@ -56,6 +58,8 @@ func NewSmartCommitPrefsModel(projectConfig *models.ProjectConfig) *SmartCommitP
 		ExtensionInput:   extInput,
 		PatternInput:     patInput,
 		EditMode:         ModeNormal,
+		Width:            width,
+		Height:           height,
 	}
 }
 
@@ -88,7 +92,7 @@ func (m *SmartCommitPrefsModel) handleNormalMode(msg tea.KeyMsg) (*SmartCommitPr
 		if m.SelectedCategory < len(m.Categories)-1 {
 			m.SelectedCategory++
 		}
-	case "space":
+	case " ", "space":
 		m.toggleCustomRules()
 	case "e":
 		m.EditMode = ModeAddExtension
@@ -227,4 +231,11 @@ func (m *SmartCommitPrefsModel) saveConfig() {
 		return
 	}
 	config.SaveProject(m.ProjectConfig)
+}
+
+func (m *SmartCommitPrefsModel) SetSize(width, height int) {
+	m.Width = width
+	m.Height = height
+	m.ExtensionInput.Width = width - 4
+	m.PatternInput.Width = width - 4
 }
