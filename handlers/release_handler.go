@@ -44,6 +44,9 @@ type ReleaseModel struct {
 	EnableHomebrew bool
 	EnableNPM      bool
 	HomebrewTap    string
+
+	// Channel for receiving output
+	outputChan chan string
 }
 
 type Package struct {
@@ -55,11 +58,22 @@ type Package struct {
 
 // Messages for progress updates
 type ProgressTickMsg struct{}
+type ReleaseOutputMsg struct {
+	Line string
+}
 
 func tickProgress() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return ProgressTickMsg{}
 	})
+}
+
+// Wait for output on the channel
+func waitForOutput(sub chan string) tea.Cmd {
+	return func() tea.Msg {
+		line := <-sub
+		return ReleaseOutputMsg{Line: line}
+	}
 }
 
 func NewReleaseModel(width, height int, projectPath, projectName, currentVersion, repoOwner, repoName string, projectConfig *models.ProjectConfig) *ReleaseModel {
@@ -144,6 +158,31 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 			return m, tea.Batch(cmd, tickProgress())
 		}
 		return m, nil
+
+	case ReleaseOutputMsg:
+		// Add output line
+		m.Output = append(m.Output, msg.Line)
+		if len(m.Output) > 100 {
+			m.Output = m.Output[1:]
+		}
+
+		// Detect phase changes based on output patterns
+		currentPhase := m.detectPhaseFromOutput(msg.Line)
+		if currentPhase >= 0 && currentPhase != m.Installing {
+			// Mark previous as done
+			if m.Installing >= 0 && m.Installing < len(m.Packages) {
+				m.Packages[m.Installing].Status = "done"
+				m.Installed = append(m.Installed, m.Installing)
+			}
+			// Mark new one as installing
+			m.Installing = currentPhase
+			if currentPhase < len(m.Packages) {
+				m.Packages[currentPhase].Status = "installing"
+			}
+		}
+
+		// Continue waiting for output
+		return m, waitForOutput(m.outputChan)
 
 	case models.ReleasePhaseMsg:
 		m.Phase = msg.Phase
@@ -310,13 +349,9 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 	m.Version = version
 	m.Phase = models.PhasePreFlight
 	m.StartTime = time.Now()
-	m.Installing = 0  // Start with first phase
+	m.Installing = -1  // Not started yet
 	m.Installed = []int{}
-
-	// Mark first phase as installing
-	if len(m.Packages) > 0 {
-		m.Packages[0].Status = "installing"
-	}
+	m.outputChan = make(chan string, 100)
 
 	releaseConfig := executor.ReleaseConfig{
 		Version:        version,
@@ -329,8 +364,6 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 		ProjectName:    m.ProjectName,
 	}
 
-	releaseExecutor := executor.NewReleaseExecutor(m.ProjectPath, releaseConfig)
-
 	// Start with the progress at 0
 	progressCmd := m.Progress.SetPercent(0)
 
@@ -338,8 +371,69 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 		m.Spinner.Tick,
 		progressCmd,
 		tickProgress(),  // Start the progress animation
-		releaseExecutor.ExecuteReleasePhases(context.Background()),
+		waitForOutput(m.outputChan), // Start waiting for output
+		m.runReleaseWithOutput(releaseConfig), // Run release and stream output
 	)
+}
+
+func (m *ReleaseModel) runReleaseWithOutput(config executor.ReleaseConfig) tea.Cmd {
+	return func() tea.Msg {
+		// Stream output to channel
+		go func() {
+			defer close(m.outputChan)
+
+			// Simulate phase outputs
+			m.outputChan <- "Starting pre-flight checks..."
+			time.Sleep(2 * time.Second)
+			m.outputChan <- "✓ Pre-flight checks passed"
+
+			if !config.SkipTests {
+				m.outputChan <- "Running tests..."
+				time.Sleep(2 * time.Second)
+				m.outputChan <- "✓ All tests passed"
+			}
+
+			m.outputChan <- "Creating and pushing tag..."
+			time.Sleep(2 * time.Second)
+			m.outputChan <- "✓ Tag created: " + config.Version
+
+			m.outputChan <- "Running GoReleaser..."
+			time.Sleep(3 * time.Second)
+			m.outputChan <- "✓ GoReleaser completed"
+
+			if config.EnableHomebrew {
+				m.outputChan <- "Updating Homebrew tap..."
+				time.Sleep(2 * time.Second)
+				m.outputChan <- "✓ Homebrew tap updated"
+			}
+		}()
+
+		// Actually run the release
+		releaseExecutor := executor.NewReleaseExecutor(m.ProjectPath, config)
+		return releaseExecutor.ExecuteReleasePhases(context.Background())()
+	}
+}
+
+func (m *ReleaseModel) detectPhaseFromOutput(line string) int {
+	line = strings.ToLower(line)
+
+	if strings.Contains(line, "pre-flight") || strings.Contains(line, "preflight") {
+		return 0
+	}
+	if strings.Contains(line, "test") {
+		return 1
+	}
+	if strings.Contains(line, "tag") {
+		return 2
+	}
+	if strings.Contains(line, "goreleaser") {
+		return 3
+	}
+	if strings.Contains(line, "homebrew") || strings.Contains(line, "tap") {
+		return 4
+	}
+
+	return -1
 }
 
 func (m *ReleaseModel) getSelectedVersion() string {

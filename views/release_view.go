@@ -99,62 +99,34 @@ func RenderProgress(m *handlers.ReleaseModel) string {
 
 	content.WriteString(releaseHeaderStyle.Render("RELEASING "+m.Version) + "\n\n")
 
-	// Calculate progress
-	n := len(m.Packages)
-	installed := len(m.Installed)
+	// Show progress bar
+	content.WriteString(m.Progress.View() + "\n\n")
 
-	// Format counter with consistent width
-	w := lipgloss.Width(fmt.Sprintf("%d", n))
-	pkgCount := fmt.Sprintf(" %*d/%*d", w, installed, w, n)
+	// Show output stream (last 10 lines)
+	if len(m.Output) > 0 {
+		outputStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 
-	// Show progress bar with counter
-	content.WriteString(m.Progress.View() + pkgCount + "\n\n")
-
-	// Show all steps with their status
-	for _, pkg := range m.Packages {
-		status := ""
-		style := releaseSubtleStyle
-
-		switch pkg.Status {
-		case "done":
-			status = releaseCheckMark.String()
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-		case "failed":
-			status = releaseCrossMark.String()
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-		case "installing":
-			status = m.Spinner.View()
-			style = releaseCurrentPkgNameStyle
-		default:
-			status = "○"
-			style = releaseSubtleStyle
+		start := 0
+		if len(m.Output) > 10 {
+			start = len(m.Output) - 10
 		}
 
-		line := fmt.Sprintf("%s %s", status, style.Render(pkg.Name))
-
-		// Add duration for completed steps
-		if pkg.Status == "done" && pkg.Duration > 0 {
-			line += releaseSubtleStyle.Render(fmt.Sprintf(" (%s)", pkg.Duration.Round(time.Millisecond)))
+		for _, line := range m.Output[start:] {
+			// Highlight successful completions
+			if strings.Contains(line, "✓") {
+				content.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render(line) + "\n")
+			} else if strings.Contains(line, "...") {
+				// Current action
+				content.WriteString(m.Spinner.View() + " " + outputStyle.Render(line) + "\n")
+			} else {
+				content.WriteString(outputStyle.Render(line) + "\n")
+			}
 		}
-
-		content.WriteString(line + "\n")
 	}
 
-	// Show condensed output (last few lines only)
-	if len(m.Output) > 0 && m.Installing >= 0 {
+	// Add some spacing
+	for i := len(m.Output); i < 10; i++ {
 		content.WriteString("\n")
-		// Show only last 3 lines of output
-		start := 0
-		if len(m.Output) > 3 {
-			start = len(m.Output) - 3
-		}
-		for _, line := range m.Output[start:] {
-			// Truncate long lines
-			if len(line) > 70 {
-				line = line[:67] + "..."
-			}
-			content.WriteString(releaseSubtleStyle.Render("  " + line) + "\n")
-		}
 	}
 
 	elapsed := time.Since(m.StartTime).Round(time.Second)

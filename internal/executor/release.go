@@ -43,125 +43,98 @@ func NewReleaseExecutor(projectPath string, config ReleaseConfig) *ReleaseExecut
 }
 
 func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
-	// Start with the first phase
-	return r.executePhase(ctx, models.PhasePreFlight, time.Now(), []string{"GitHub"}, 0)
-}
-
-func (r *ReleaseExecutor) executePhase(ctx context.Context, phase models.ReleasePhase, startTime time.Time, channels []string, completedCount int) tea.Cmd {
 	return func() tea.Msg {
+		startTime := time.Now()
+		channels := []string{"GitHub"}
 
-		var err error
+		// We'll track completed phases in a slice to send back
+		type phaseResult struct {
+			phase    models.ReleasePhase
+			duration time.Duration
+			success  bool
+		}
+		completedPhases := []phaseResult{}
+
+		// Pre-flight checks
 		phaseStart := time.Now()
+		if err := r.ValidatePreFlight(); err != nil {
+			return r.failureResult(startTime, "preflight", err, channels)
+		}
+		completedPhases = append(completedPhases, phaseResult{
+			phase:    models.PhasePreFlight,
+			duration: time.Since(phaseStart),
+			success:  true,
+		})
 
-		// Execute the current phase
-		switch phase {
-		case models.PhasePreFlight:
-			err = r.ValidatePreFlight()
-
-		case models.PhaseTests:
-			if !r.config.SkipTests {
-				testCmd := RunTests(ctx, r.projectPath)
-				msg := testCmd()
-				if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
-					if completeMsg.ExitCode != 0 {
-						err = completeMsg.Error
-					}
+		// Tests
+		if !r.config.SkipTests {
+			phaseStart = time.Now()
+			testCmd := RunTests(ctx, r.projectPath)
+			msg := testCmd()
+			if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
+				if completeMsg.ExitCode != 0 {
+					return r.failureResult(startTime, "tests", completeMsg.Error, channels)
 				}
 			}
-
-		case models.PhaseTag:
-			err = r.createAndPushTag(ctx)
-
-		case models.PhaseGoReleaser:
-			goreleaserCmd := RunGoReleaser(ctx, r.projectPath, r.config.Version)
-			msg := goreleaserCmd()
-			if errMsg, ok := msg.(error); ok {
-				err = errMsg
-			}
-
-		case models.PhaseHomebrew:
-			if r.config.EnableHomebrew && r.config.HomebrewTap != "" {
-				homebrewCmd := UpdateHomebrewTap(ctx, r.config.ProjectName, r.config.Version, r.config.HomebrewTap, r.config.RepoOwner, r.config.RepoName)
-				msg := homebrewCmd()
-				if result, ok := msg.(HomebrewUpdateResult); ok && !result.Success {
-					err = result.Error
-				} else {
-					channels = append(channels, "Homebrew")
-				}
-			}
+			completedPhases = append(completedPhases, phaseResult{
+				phase:    models.PhaseTests,
+				duration: time.Since(phaseStart),
+				success:  true,
+			})
 		}
 
-		// If there was an error, return failure
-		if err != nil {
-			return r.failureResult(startTime, phase.String(), err, channels)
+		// Create and push tag
+		phaseStart = time.Now()
+		if err := r.createAndPushTag(ctx); err != nil {
+			return r.failureResult(startTime, "tag", err, channels)
+		}
+		completedPhases = append(completedPhases, phaseResult{
+			phase:    models.PhaseTag,
+			duration: time.Since(phaseStart),
+			success:  true,
+		})
+
+		// Run GoReleaser
+		phaseStart = time.Now()
+		goreleaserCmd := RunGoReleaser(ctx, r.projectPath, r.config.Version)
+		msg := goreleaserCmd()
+		if err, ok := msg.(error); ok {
+			return r.failureResult(startTime, "goreleaser", err, channels)
+		}
+		completedPhases = append(completedPhases, phaseResult{
+			phase:    models.PhaseGoReleaser,
+			duration: time.Since(phaseStart),
+			success:  true,
+		})
+
+		// Update Homebrew tap if enabled
+		if r.config.EnableHomebrew && r.config.HomebrewTap != "" {
+			phaseStart = time.Now()
+			homebrewCmd := UpdateHomebrewTap(ctx, r.config.ProjectName, r.config.Version, r.config.HomebrewTap, r.config.RepoOwner, r.config.RepoName)
+			msg := homebrewCmd()
+			if result, ok := msg.(HomebrewUpdateResult); ok && !result.Success {
+				return r.failureResult(startTime, "homebrew", result.Error, channels)
+			}
+			channels = append(channels, "Homebrew")
+			completedPhases = append(completedPhases, phaseResult{
+				phase:    models.PhaseHomebrew,
+				duration: time.Since(phaseStart),
+				success:  true,
+			})
 		}
 
-		// Mark this phase as complete
-		completedCount++
-
-		// Determine next phase
-		var nextPhase models.ReleasePhase
-		var hasNext bool
-
-		switch phase {
-		case models.PhasePreFlight:
-			if r.config.SkipTests {
-				nextPhase = models.PhaseTag
-			} else {
-				nextPhase = models.PhaseTests
-			}
-			hasNext = true
-
-		case models.PhaseTests:
-			nextPhase = models.PhaseTag
-			hasNext = true
-
-		case models.PhaseTag:
-			nextPhase = models.PhaseGoReleaser
-			hasNext = true
-
-		case models.PhaseGoReleaser:
-			if r.config.EnableHomebrew && r.config.HomebrewTap != "" {
-				nextPhase = models.PhaseHomebrew
-				hasNext = true
-			}
-
-		case models.PhaseHomebrew:
-			// No more phases
-			hasNext = false
+		if r.config.EnableNPM {
+			channels = append(channels, "NPM")
 		}
 
-		// If no more phases, we're done
-		if !hasNext {
-			return models.ReleaseCompleteMsg{
-				Success:    true,
-				Version:    r.config.Version,
-				Duration:   time.Since(startTime),
-				Channels:   channels,
-				TotalSteps: r.countSteps(),
-			}
+		// Return success with all phases marked complete
+		return models.ReleaseCompleteMsg{
+			Success:    true,
+			Version:    r.config.Version,
+			Duration:   time.Since(startTime),
+			Channels:   channels,
+			TotalSteps: r.countSteps(),
 		}
-
-		// Continue to next phase
-		return tea.Batch(
-			// Mark current phase as complete
-			func() tea.Msg {
-				return models.ReleasePhaseCompleteMsg{
-					Phase:    phase,
-					Duration: time.Since(phaseStart),
-					Success:  true,
-				}
-			},
-			// Start next phase
-			func() tea.Msg {
-				return models.ReleasePhaseMsg{
-					Phase:     nextPhase,
-					StartTime: time.Now(),
-				}
-			},
-			// Continue with next phase execution
-			r.executePhase(ctx, nextPhase, startTime, channels, completedCount),
-		)
 	}
 }
 
