@@ -1,10 +1,10 @@
 package generator
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"distui/internal/models"
 )
@@ -97,12 +97,64 @@ func GeneratePackageJSON(project *models.ProjectInfo, config *models.ProjectConf
 		}
 	}
 
-	jsonBytes, err := json.MarshalIndent(pkg, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshaling package.json: %w", err)
+	// Build JSON manually to preserve standard npm field order and avoid git diffs
+	// Standard order: name, version, description, main, bin, scripts, repository, keywords, author, license, dependencies, goBinary
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	sb.WriteString(fmt.Sprintf("  \"name\": \"%s\",\n", pkg.Name))
+	sb.WriteString(fmt.Sprintf("  \"version\": \"%s\",\n", pkg.Version))
+	sb.WriteString(fmt.Sprintf("  \"description\": \"%s\",\n", pkg.Description))
+
+	// bin
+	sb.WriteString("  \"bin\": {\n")
+	sb.WriteString(fmt.Sprintf("    \"%s\": \"./bin/%s\"\n", binaryName, binaryName))
+	sb.WriteString("  },\n")
+
+	// scripts
+	sb.WriteString("  \"scripts\": {\n")
+	sb.WriteString("    \"postinstall\": \"golang-npm install\"\n")
+	sb.WriteString("  },\n")
+
+	// repository
+	if pkg.Repository != nil {
+		sb.WriteString("  \"repository\": {\n")
+		sb.WriteString(fmt.Sprintf("    \"type\": \"%s\",\n", pkg.Repository.Type))
+		sb.WriteString(fmt.Sprintf("    \"url\": \"%s\"\n", pkg.Repository.URL))
+		sb.WriteString("  },\n")
 	}
 
-	return string(jsonBytes) + "\n", nil
+	// keywords
+	sb.WriteString("  \"keywords\": [\n")
+	for i, kw := range pkg.Keywords {
+		if i < len(pkg.Keywords)-1 {
+			sb.WriteString(fmt.Sprintf("    \"%s\",\n", kw))
+		} else {
+			sb.WriteString(fmt.Sprintf("    \"%s\"\n", kw))
+		}
+	}
+	sb.WriteString("  ],\n")
+
+	// license
+	sb.WriteString(fmt.Sprintf("  \"license\": \"%s\",\n", pkg.License))
+
+	// dependencies
+	sb.WriteString("  \"dependencies\": {\n")
+	sb.WriteString("    \"golang-npm\": \"^0.0.6\"\n")
+	sb.WriteString("  }")
+
+	// goBinary (last, no comma)
+	if pkg.GoBinary != nil {
+		sb.WriteString(",\n")
+		sb.WriteString("  \"goBinary\": {\n")
+		sb.WriteString(fmt.Sprintf("    \"name\": \"%s\",\n", pkg.GoBinary.Name))
+		sb.WriteString(fmt.Sprintf("    \"path\": \"%s\",\n", pkg.GoBinary.Path))
+		sb.WriteString(fmt.Sprintf("    \"url\": \"%s\"\n", pkg.GoBinary.URL))
+		sb.WriteString("  }")
+	}
+
+	sb.WriteString("\n}\n")
+
+	return sb.String(), nil
 }
 
 func WritePackageJSON(projectPath string, content string) error {
