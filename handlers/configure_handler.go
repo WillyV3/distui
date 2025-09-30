@@ -211,6 +211,10 @@ func (i CleanupItem) Description() string {
 func (i CleanupItem) FilterValue() string { return i.Path }
 
 func (m *ConfigureModel) saveConfig() error {
+	return m.saveConfigWithRegenFlag(true)
+}
+
+func (m *ConfigureModel) saveConfigWithRegenFlag(needsRegen bool) error {
 	if m.ProjectConfig == nil || m.ProjectIdentifier == "" {
 		return fmt.Errorf("no project config to save")
 	}
@@ -283,7 +287,9 @@ func (m *ConfigureModel) saveConfig() error {
 	}
 
 	// Mark that regeneration is needed when config changes
-	m.NeedsRegeneration = true
+	if needsRegen {
+		m.NeedsRegeneration = true
+	}
 
 	// Save to disk
 	return config.SaveProject(m.ProjectConfig)
@@ -671,7 +677,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 		// Create project config file if it doesn't exist
 		if m.ProjectConfig != nil && m.ProjectConfig.Project != nil {
-			m.saveConfig() // This will create the file if needed
+			m.saveConfigWithRegenFlag(false) // Don't trigger regen warning on initial load
 		}
 
 		return m, nil
@@ -878,9 +884,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.ActiveTab = (m.ActiveTab + 1) % 4
 
 			// Refresh cleanup tab when entering it
-			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel != nil {
-				m.CleanupModel.Refresh()
-				m.Lists[0].SetItems(m.loadGitStatus())
+			if m.ActiveTab == 0 && oldTab != 0 {
+				m.Loading = true
+				listWidth := m.Width - 2
+				listHeight := m.Height - 13
+				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
 			}
 
 			// Check NPM name when entering Distributions tab
@@ -914,9 +922,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.ActiveTab = (m.ActiveTab + 3) % 4
 
 			// Refresh cleanup tab when entering it
-			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel != nil {
-				m.CleanupModel.Refresh()
-				m.Lists[0].SetItems(m.loadGitStatus())
+			if m.ActiveTab == 0 && oldTab != 0 {
+				m.Loading = true
+				listWidth := m.Width - 2
+				listHeight := m.Height - 13
+				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
 			}
 
 			return m, nil
