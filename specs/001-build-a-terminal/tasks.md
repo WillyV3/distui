@@ -770,25 +770,7 @@ case projectView:
 ### ~~T028-T029: New Project Wizard [REMOVED]~~
 **Reason**: Configure view IS the project setup. Once user configures distributions/build settings, they just run releases from project page. No separate wizard needed.
 
-## Message and Command Types
 
-### T030: [P] Define Message Types
-**File**: internal/models/messages.go
-- Define projectDetectedMsg struct
-- Define commandOutputMsg struct
-- Define releaseProgressMsg struct
-- Define configSavedMsg struct
-- Define errorMsg struct
-**Estimate**: 1 point
-
-### T031: [P] Define Command Functions
-**File**: internal/models/commands.go
-- Create detectProjectCmd function
-- Create loadProjectCmd function
-- Create saveConfigCmd function
-- Create executeReleaseCmd function
-- All return tea.Cmd
-**Estimate**: 2 points
 
 ## Testing Tasks
 
@@ -864,72 +846,7 @@ case projectView:
 - Verify atomic writes
 **Estimate**: 2 points
 
-## Integration Tasks
 
-### T040: Wire Up Main Application
-**File**: app.go (update existing)
-- Add distui state fields to appModel
-- Initialize with project detection on startup
-- Connect handlers to model updates
-- Implement proper state management
-- Add command batching
-**Estimate**: 3 points
-
-### T041: Implement Main Entry Point
-**File**: main.go (create new)
-- Create cmd/distui/main.go
-- Initialize Bubble Tea program
-- Detect current directory project
-- Handle command line flags
-- Start TUI application
-**Estimate**: 2 points
-
-### T042: Add Keyboard Navigation
-**File**: internal/tui/keys.go (create)
-- Define global key bindings
-- Implement TAB cycling logic
-- Add direct navigation shortcuts
-- Handle modal key events
-- Keep consistent across views
-**Estimate**: 2 points
-
-### T043: Add Styling Consistency
-**File**: internal/tui/styles.go (create)
-- Define color scheme constants
-- Create reusable style functions
-- Implement progress bar styles
-- Define border styles
-- Ensure theme consistency
-**Estimate**: 2 points
-
-## Polish Tasks
-
-### T044: [P] Add Loading Spinner
-**File**: views/common.go (create)
-- Create reusable spinner component
-- Show during detection
-- Display during release
-- Animate during saves
-- Integrate with all views
-**Estimate**: 1 point
-
-### T045: [P] Add Error Modal
-**File**: views/error_modal.go (create)
-- Create error display modal
-- Show error details
-- Provide recovery suggestions
-- Handle dismissal
-- Style with warning colors
-**Estimate**: 2 points
-
-### T046: [P] Add Progress Indicators
-**File**: views/progress.go (create)
-- Create progress bar component
-- Calculate release progress
-- Show step indicators
-- Display time remaining
-- Update in real-time
-**Estimate**: 2 points
 
 ### T047: [P] Add Help Screen
 **File**: views/help.go (create)
@@ -1016,3 +933,805 @@ Task general-purpose "Complete T044 through T047 in parallel - add all UI polish
 - Test each component in isolation
 - Terminal layout integrity: chrome calculations MUST be updated when adding UI lines
 - Ensure atomic operations for all file I/O
+---
+
+# v0.0.32 Enhancement Tasks
+
+**Target Version**: v0.0.32
+**Date Added**: 2025-09-30
+**Status**: Ready for Implementation
+**Features**: Smart Commit Preferences, GitHub Workflow Generation, Dot File Bug Fix
+
+## Overview
+
+This section adds tasks for three enhancements to the production-ready v0.0.31 release:
+1. Project-level smart commit file categorization customization
+2. Optional GitHub Actions workflow generation (opt-in)
+3. Bug fix for dot file handling in commit settings
+
+### Task Count
+- Setup: 3 tasks
+- Bug Fix: 2 tasks  
+- Smart Commit Preferences: 10 tasks
+- Workflow Generation: 10 tasks
+- Integration: 5 tasks
+- Polish: 4 tasks
+**Total**: 34 new tasks
+
+---
+
+## Phase 1: Setup Tasks (v0.0.32)
+
+### ☑ T-V32-001: Add doublestar Dependency to go.mod [COMPLETED]
+**File**: go.mod
+**Description**: Add github.com/bmatcuk/doublestar/v4 for glob pattern matching
+**Actions**:
+- Run `go get github.com/bmatcuk/doublestar/v4`
+- Run `go mod tidy`
+- Verify import works with `go build`
+**Estimate**: 1 point
+**Dependencies**: None
+
+### ☑ T-V32-002: Create internal/workflow Package Structure [COMPLETED]
+**Files**: internal/workflow/
+**Description**: Create new package directory for workflow generation logic
+**Actions**:
+- Create `internal/workflow/` directory
+- Add package declaration placeholder
+- No implementation yet, just structure
+**Estimate**: 1 point
+**Dependencies**: None
+
+### ☑ T-V32-003: Update internal/models/types.go with New Structs [COMPLETED]
+**File**: internal/models/types.go
+**Description**: Add CategoryRules, SmartCommitPrefs, WorkflowConfig struct definitions
+**Actions**:
+```go
+type CategoryRules struct {
+    Extensions []string `yaml:"extensions"`
+    Patterns   []string `yaml:"patterns"`
+}
+
+type SmartCommitPrefs struct {
+    Enabled        bool                        `yaml:"enabled"`
+    UseCustomRules bool                        `yaml:"use_custom_rules"`
+    Categories     map[string]CategoryRules    `yaml:"categories"`
+}
+
+type WorkflowConfig struct {
+    Enabled          bool     `yaml:"enabled"`
+    WorkflowPath     string   `yaml:"workflow_path"`
+    AutoRegenerate   bool     `yaml:"auto_regenerate"`
+    IncludeTests     bool     `yaml:"include_tests"`
+    Environments     []string `yaml:"environments"`
+    SecretsRequired  []string `yaml:"secrets_required"`
+}
+```
+- Add to existing ProjectConfig struct fields
+- Follow existing YAML tag patterns
+**Estimate**: 2 points
+**Dependencies**: None
+
+---
+
+## Phase 2: Bug Fix Tasks (High Priority)
+
+### ☑ T-V32-004: Fix Dot File Handling in Git Cleanup [COMPLETED]
+**File**: internal/gitcleanup/categorize.go
+**Description**: Fix bug where files/directories starting with "." cannot be modified in commit settings
+**Root Cause**: Likely over-aggressive hidden file filtering
+**Actions**:
+- Review file listing logic
+- Ensure dot files included (except .git/ itself)
+- Test with .github/, .goreleaser.yaml, .env files
+- Verify categorization works for dot files
+**Acceptance**:
+- .github/workflows/test.yml can be committed
+- .goreleaser.yaml shows in cleanup tab
+- .git/ directory still excluded
+**Estimate**: 2 points
+**Dependencies**: None
+
+### ☐ T-V32-005: [P] Add Test for Dot File Categorization
+**File**: internal/gitcleanup/categorize_test.go
+**Description**: Add table-driven test covering dot file scenarios
+**Test Cases**:
+- `.github/workflows/release.yml` → build category
+- `.goreleaser.yaml` → build category
+- `.env` → config category
+- `.gitignore` → config category
+- `.git/config` → should be excluded
+**Estimate**: 2 points
+**Dependencies**: T-V32-004
+
+---
+
+## Phase 3: Smart Commit Preferences Tasks
+
+### ☑ T-V32-006: [P] Add smart_commit Section Parsing to Config Loader [COMPLETED]
+**File**: internal/config/loader.go
+**Description**: Update LoadProject() to parse smart_commit YAML section
+**Actions**:
+- Add parsing for smart_commit section
+- Set defaults if section missing:
+  ```go
+  if config.Config.SmartCommit == nil {
+      config.Config.SmartCommit = getDefaultSmartCommitPrefs()
+  }
+  ```
+- Implement getDefaultSmartCommitPrefs() with hardcoded rules
+- Update SaveProject() to serialize smart_commit
+**Estimate**: 3 points
+**Dependencies**: T-V32-003
+
+### ☑ T-V32-007: [P] Create Pattern Matching Logic with doublestar [COMPLETED]
+**File**: internal/gitcleanup/matcher.go (NEW)
+**Description**: Implement pattern matching functions using doublestar library
+**Functions Needed**:
+```go
+// MatchesPattern checks if path matches any pattern in list
+func MatchesPattern(path string, patterns []string) (bool, error)
+
+// MatchesExtension checks if file has extension in list
+func MatchesExtension(path string, extensions []string) bool
+
+// CategorizeWithRules applies custom or default rules
+func CategorizeWithRules(path string, rules map[string]CategoryRules) string
+```
+**Actions**:
+- Import doublestar: `github.com/bmatcuk/doublestar/v4`
+- Handle errors from glob matching
+- Use case-insensitive extension matching
+- Return "other" if no category matches
+**Estimate**: 3 points
+**Dependencies**: T-V32-001, T-V32-003
+
+### ☑ T-V32-008: Update Categorize.go to Use Custom Rules [COMPLETED]
+**File**: internal/gitcleanup/categorize.go
+**Description**: Modify CategorizeFile() to check for custom rules and use them
+**Logic**:
+```go
+func CategorizeFile(path string, projectConfig *models.ProjectConfig) string {
+    if projectConfig.Config.SmartCommit != nil && 
+       projectConfig.Config.SmartCommit.UseCustomRules {
+        return CategorizeWithRules(path, projectConfig.Config.SmartCommit.Categories)
+    }
+    return categorizeWithDefaults(path) // existing logic
+}
+```
+**Actions**:
+- Add projectConfig parameter to CategorizeFile
+- Check UseCustomRules flag
+- Fall back to defaults if custom disabled
+- Maintain backward compatibility
+**Estimate**: 2 points
+**Dependencies**: T-V32-004, T-V32-006, T-V32-007
+
+### ☑ T-V32-009: Create handlers/smart_commit_prefs_handler.go [COMPLETED]
+**File**: handlers/smart_commit_prefs_handler.go (NEW)
+**Description**: Create Bubble Tea handler for smart commit preferences editing
+**Model Struct**:
+```go
+type SmartCommitPrefsModel struct {
+    ProjectConfig     *models.ProjectConfig
+    SelectedCategory  int          // Index in category list
+    EditMode          bool         // Editing extensions/patterns
+    ExtensionInput    textinput.Model
+    PatternInput      textinput.Model
+    Width             int
+    Height            int
+}
+```
+**Key Functions**:
+- `NewSmartCommitPrefsModel()` - Initialize with project config
+- `Update()` - Handle key presses (↑/↓ navigate, e edit, a add, d delete, r reset, s save)
+- `ToggleCustomRules()` - Enable/disable custom rules
+- `AddExtension()`, `RemoveExtension()` - Modify extension list
+- `AddPattern()`, `RemovePattern()` - Modify pattern list
+- `ResetToDefaults()` - Clear custom rules, use defaults
+**Actions**:
+- Keep file under 300 lines (constitution guideline)
+- Use early returns, no nested conditionals
+- Self-documenting names
+**Estimate**: 5 points
+**Dependencies**: T-V32-006, T-V32-007
+
+### ☑ T-V32-010: Create views/smart_commit_prefs_view.go [COMPLETED]
+**File**: views/smart_commit_prefs_view.go (NEW)
+**Description**: Render UI for smart commit preferences
+**Layout**:
+```
+┌─ Smart Commit Preferences ─────────┐
+│ [✓] Use Custom Rules               │
+│                                     │
+│ Categories:                         │
+│ > code                              │
+│   config                            │
+│   docs                              │
+│   ...                               │
+│                                     │
+│ code Category:                      │
+│ Extensions: .go, .js, .ts          │
+│ Patterns: **/src/**, **/lib/**     │
+│                                     │
+│ [r] Reset  [s] Save  [ESC] Cancel  │
+└─────────────────────────────────────┘
+```
+**Actions**:
+- Use lipgloss for styling
+- Show selected category highlighted
+- Display extensions and patterns for selected category
+- Show keyboard hints at bottom
+- Keep under 200 lines
+**Estimate**: 4 points
+**Dependencies**: T-V32-009
+
+### ☐ T-V32-011: Integrate Smart Commit Prefs into Configure View Advanced Tab
+**Files**: handlers/configure_handler.go, views/configure_view.go
+**Description**: Add smart commit preferences section to Advanced tab
+**Changes in configure_handler.go**:
+- Add `SmartCommitPrefsModel` field to ConfigureModel
+- Initialize in NewConfigureModel()
+- Add key binding 'p' for preferences in Advanced tab
+- Route to preferences model when 'p' pressed
+**Changes in configure_view.go**:
+- Add "Smart Commit Preferences" section in Advanced tab render
+- Show toggle state and shortcut '[p] Edit Preferences'
+- Display current rule count if custom enabled
+**Estimate**: 3 points
+**Dependencies**: T-V32-009, T-V32-010
+
+### ☐ T-V32-012: Add Default Rules Reset Functionality
+**File**: handlers/smart_commit_prefs_handler.go
+**Description**: Implement reset to defaults with confirmation
+**Actions**:
+- Add confirmation modal: "Reset custom rules to defaults?"
+- On confirm: set UseCustomRules = false, clear Categories map
+- Save config after reset
+- Return to preferences view showing defaults
+**Estimate**: 2 points
+**Dependencies**: T-V32-009
+
+### ☐ T-V32-013: [P] Write Unit Tests for Pattern Matching
+**File**: internal/gitcleanup/matcher_test.go (NEW)
+**Description**: Table-driven tests for pattern matching logic
+**Test Cases**:
+- Extension matching: ".go" matches "file.go"
+- Pattern matching: "**/src/**" matches "project/src/main.go"
+- Globstar: "**/test/**" matches "a/b/c/test/d/file.go"
+- Case insensitive: ".GO" matches ".go"
+- No match: returns "other"
+- Multiple patterns: first match wins
+**Estimate**: 3 points
+**Dependencies**: T-V32-007
+
+### ☐ T-V32-014: [P] Write Integration Tests for Preferences UI
+**File**: handlers/smart_commit_prefs_handler_test.go (NEW)
+**Description**: Test handler update logic with Bubble Tea test messages
+**Test Scenarios**:
+- Toggle custom rules on/off
+- Navigate categories with arrow keys
+- Add extension: press 'a', type ".proto", press enter
+- Remove extension: select, press 'd'
+- Reset to defaults: press 'r', confirm
+- Save preferences: press 's'
+**Estimate**: 3 points
+**Dependencies**: T-V32-009
+
+---
+
+## Phase 4: Workflow Generation Tasks
+
+### ☑ T-V32-015: [P] Create internal/workflow/template.go with Embedded YAML [COMPLETED]
+**File**: internal/workflow/template.go (NEW)
+**Description**: Define GitHub Actions workflow template as Go text/template
+**Template Structure**:
+```yaml
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      {{if .IncludeTests}}
+      - name: Run tests
+        run: go test ./...
+      {{end}}
+      - uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          {{if .NPMEnabled}}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          {{end}}
+```
+**Actions**:
+- Use `text/template` package
+- Define template variables: IncludeTests, NPMEnabled, HomebrewEnabled
+- Add comments documenting required secrets
+- Keep template readable and maintainable
+**Estimate**: 4 points
+**Dependencies**: T-V32-002
+
+### ☑ T-V32-016: [P] Create internal/workflow/generator.go [COMPLETED]
+**File**: internal/workflow/generator.go (NEW)
+**Description**: Implement workflow generation logic
+**Functions Needed**:
+```go
+// GenerateWorkflow creates YAML from template and config
+func GenerateWorkflow(config *models.ProjectConfig) (string, error)
+
+// ValidateWorkflow checks generated YAML is valid
+func ValidateWorkflow(yamlContent string) error
+
+// GetRequiredSecrets returns list of secrets needed
+func GetRequiredSecrets(config *models.ProjectConfig) []string
+
+// WriteWorkflowFile writes YAML to .github/workflows/release.yml
+func WriteWorkflowFile(projectPath, yamlContent string) error
+```
+**Actions**:
+- Execute template with config data
+- Validate YAML syntax (basic check)
+- Create .github/workflows/ directory if needed
+- Atomic write (temp file + rename)
+- Return list of required secrets
+**Estimate**: 4 points
+**Dependencies**: T-V32-015
+
+### ☑ T-V32-017: Add workflow_generation Section Parsing to Config Loader [COMPLETED]
+**File**: internal/config/loader.go
+**Description**: Parse ci_cd.github_actions section from YAML
+**Actions**:
+- Add parsing for ci_cd.github_actions section
+- Set defaults if missing:
+  ```go
+  if config.Config.CICD.GitHubActions == nil {
+      config.Config.CICD.GitHubActions = &models.WorkflowConfig{
+          Enabled: false,
+          WorkflowPath: ".github/workflows/release.yml",
+          IncludeTests: true,
+      }
+  }
+  ```
+- Update SaveProject() to serialize workflow config
+**Estimate**: 2 points
+**Dependencies**: T-V32-003, T-V32-006
+
+### ☑ T-V32-018: Create handlers/workflow_gen_handler.go [COMPLETED]
+**File**: handlers/workflow_gen_handler.go (NEW)
+**Description**: Handler for workflow generation UI
+**Model Struct**:
+```go
+type WorkflowGenModel struct {
+    ProjectConfig     *models.ProjectConfig
+    PreviewMode       bool
+    PreviewContent    string
+    GeneratedYAML     string
+    RequiredSecrets   []string
+    ShowConfirmation  bool
+    Width             int
+    Height            int
+}
+```
+**Key Functions**:
+- `NewWorkflowGenModel()` - Initialize
+- `Update()` - Handle key presses (space toggle, p preview, g generate, ESC cancel)
+- `ToggleEnabled()` - Enable/disable workflow generation
+- `PreviewWorkflow()` - Generate and show YAML preview
+- `GenerateWorkflow()` - Create file with user confirmation
+- `CheckIfWorkflowExists()` - Detect existing workflow file
+**Actions**:
+- Check if file exists before overwriting
+- Show required secrets list
+- Add confirmation modal before file creation
+- Keep under 300 lines
+**Estimate**: 5 points
+**Dependencies**: T-V32-016, T-V32-017
+
+### ☑ T-V32-019: Create views/workflow_gen_view.go [COMPLETED]
+**File**: views/workflow_gen_view.go (NEW)
+**Description**: Render workflow generation UI
+**Layout**:
+```
+┌─ GitHub Actions Workflow ──────────┐
+│ [✓] Enable Workflow Generation     │
+│                                     │
+│ Options:                            │
+│ [✓] Include Tests                  │
+│ [✓] Auto-regenerate on config      │
+│                                     │
+│ Required Secrets:                   │
+│  • GITHUB_TOKEN (automatic)        │
+│  • NPM_TOKEN (if NPM enabled)      │
+│                                     │
+│ [p] Preview  [g] Generate          │
+│ [ESC] Cancel                        │
+└─────────────────────────────────────┘
+```
+**Preview Modal**:
+```
+┌─ Workflow Preview ──────────────────┐
+│ name: Release                       │
+│ on:                                 │
+│   push:                             │
+│     tags: ['v*']                    │
+│ ...                                 │
+│                                     │
+│ [ESC] Close                         │
+└─────────────────────────────────────┘
+```
+**Actions**:
+- Use lipgloss for styling
+- Syntax highlighting for YAML (basic, optional)
+- Scrollable preview if content too long
+- Keep under 200 lines
+**Estimate**: 4 points
+**Dependencies**: T-V32-018
+
+### ☐ T-V32-020: Integrate Workflow Gen into Configure View Advanced Tab
+**Files**: handlers/configure_handler.go, views/configure_view.go
+**Description**: Add workflow generation section to Advanced tab
+**Changes in configure_handler.go**:
+- Add `WorkflowGenModel` field to ConfigureModel
+- Initialize in NewConfigureModel()
+- Add key binding 'w' for workflow in Advanced tab
+- Route to workflow model when 'w' pressed
+**Changes in configure_view.go**:
+- Add "GitHub Workflow Generation" section in Advanced tab
+- Show enabled state and shortcut '[w] Configure Workflow'
+- Display warning if secrets missing
+**Estimate**: 3 points
+**Dependencies**: T-V32-018, T-V32-019
+
+### ☐ T-V32-021: Add Preview Modal for Workflow YAML
+**File**: views/workflow_gen_view.go
+**Description**: Implement scrollable preview modal showing generated YAML
+**Features**:
+- Full-screen modal overlay
+- Scrollable content (↑/↓ or j/k)
+- Line numbers optional
+- ESC to close
+- Proper word wrapping for long lines
+**Actions**:
+- Use lipgloss.Place() for centering
+- Add scroll state to WorkflowGenModel
+- Handle WindowSizeMsg for responsive sizing
+**Estimate**: 3 points
+**Dependencies**: T-V32-019
+
+### ☐ T-V32-022: Add File Generation with User Consent
+**File**: handlers/workflow_gen_handler.go
+**Description**: Implement workflow file creation with confirmation modal
+**Confirmation Flow**:
+1. User presses 'g' to generate
+2. Check if .github/workflows/release.yml exists
+3. If exists: "File exists. Overwrite?" [y/n]
+4. If new: "Create workflow file?" [y/n]
+5. On confirm: call WriteWorkflowFile()
+6. Show success message with file path
+**Actions**:
+- Add confirmation modal state
+- Handle yes/no key presses
+- Create directory if needed
+- Show error if write fails (permissions, etc.)
+**Estimate**: 3 points
+**Dependencies**: T-V32-018, T-V32-021
+
+### ☐ T-V32-023: [P] Write Tests for Template Generation
+**File**: internal/workflow/template_test.go (NEW)
+**Description**: Test workflow template with various configs
+**Test Cases**:
+- NPM enabled: includes NPM_TOKEN secret
+- NPM disabled: no NPM_TOKEN
+- Tests enabled: includes test step
+- Tests disabled: no test step
+- Homebrew: handled by GoReleaser (no special workflow changes)
+- All combinations: NPM+Tests, NPM only, Tests only, neither
+**Estimate**: 3 points
+**Dependencies**: T-V32-015, T-V32-016
+
+### ☐ T-V32-024: [P] Write Tests for Workflow Validation
+**File**: internal/workflow/generator_test.go (NEW)
+**Description**: Test workflow generation and validation
+**Test Cases**:
+- Generated YAML is valid
+- Required secrets detected correctly
+- File write creates .github/workflows/ directory
+- Overwrites existing file correctly
+- Handles permission errors gracefully
+**Estimate**: 3 points
+**Dependencies**: T-V32-016
+
+---
+
+## Phase 5: Integration Tasks
+
+### ☐ T-V32-025: Update Configure View to Handle Advanced Tab Expansion
+**File**: handlers/configure_handler.go
+**Description**: Expand Advanced tab to accommodate two new feature sections
+**Actions**:
+- Increase Advanced tab height allocation if needed
+- Add routing logic for 'p' (prefs) and 'w' (workflow) keys
+- Update chrome calculations for new UI lines
+- Ensure scrolling works if content exceeds screen
+**Chrome Update**:
+- Smart Commit Prefs section: +3 lines
+- Workflow Generation section: +4 lines
+- Total Advanced tab increase: +7 lines
+**Estimate**: 2 points
+**Dependencies**: T-V32-011, T-V32-020
+
+### ☐ T-V32-026: Add Navigation Between Smart Commit Prefs and Workflow Gen
+**File**: handlers/configure_handler.go
+**Description**: Allow seamless navigation between the two features
+**Navigation**:
+- From Advanced tab: 'p' for prefs, 'w' for workflow
+- From Prefs: ESC back to Advanced tab
+- From Workflow: ESC back to Advanced tab
+- From Prefs: 'w' to switch to Workflow (optional)
+- From Workflow: 'p' to switch to Prefs (optional)
+**Actions**:
+- Add view state tracking (advanced/prefs/workflow)
+- Route key presses to appropriate sub-model
+- Maintain scroll position when navigating back
+**Estimate**: 2 points
+**Dependencies**: T-V32-011, T-V32-020
+
+### ☐ T-V32-027: Wire Up Save/Load for Both Feature Configs
+**File**: internal/config/loader.go
+**Description**: Ensure both smart_commit and ci_cd sections persist correctly
+**Actions**:
+- Test save after modifying smart commit prefs
+- Test save after enabling workflow generation
+- Verify YAML serialization is correct
+- Test load on app restart
+- Ensure atomic writes work for both sections
+**Test Manually**:
+```bash
+# Edit prefs, save, restart
+distui # verify prefs loaded
+
+# Enable workflow, save, restart
+distui # verify workflow config loaded
+```
+**Estimate**: 2 points
+**Dependencies**: T-V32-006, T-V32-017
+
+### ☐ T-V32-028: Test Full Integration with Existing Features
+**Description**: Manual integration testing of new features with v0.0.31 features
+**Test Scenarios**:
+1. **Smart Commit with Custom Rules**:
+   - Configure custom rules for .proto → code
+   - Create .proto file
+   - Open Cleanup tab
+   - Verify .proto categorized as "code"
+   - Commit file using smart commit
+
+2. **Workflow Generation with NPM**:
+   - Enable NPM distribution
+   - Enable workflow generation
+   - Preview workflow
+   - Verify NPM_TOKEN in required secrets
+   - Generate workflow file
+   - Verify .github/workflows/release.yml created
+
+3. **Dot File Handling**:
+   - Create .github/workflows/test.yml
+   - Open Cleanup tab
+   - Verify file visible and committable
+
+4. **Configuration Persistence**:
+   - Set custom rules + enable workflow
+   - Save, exit distui
+   - Restart distui
+   - Verify settings loaded correctly
+
+**Acceptance**: All scenarios pass without errors
+**Estimate**: 3 points
+**Dependencies**: T-V32-011, T-V32-020, T-V32-027
+
+### ☐ T-V32-029: Update Quickstart.md Validation
+**File**: specs/001-build-a-terminal/quickstart.md
+**Description**: Validate all quickstart scenarios work with implementation
+**Actions**:
+- Run through all 6 test scenarios
+- Verify expected outcomes match actual behavior
+- Update any steps that changed during implementation
+- Add troubleshooting notes if needed
+- Mark all scenarios as validated
+**Estimate**: 2 points
+**Dependencies**: T-V32-028
+
+---
+
+## Phase 6: Polish Tasks
+
+### ☐ T-V32-030: [P] Add Error Handling for Invalid Patterns
+**Files**: internal/gitcleanup/matcher.go, handlers/smart_commit_prefs_handler.go
+**Description**: Validate glob patterns before saving
+**Validation Rules**:
+- Reject patterns with unmatched brackets: `[[[invalid`
+- Reject empty patterns
+- Test pattern with doublestar before saving
+- Show error message to user if invalid
+**Error Messages**:
+- "Invalid pattern: [pattern]"
+- "Pattern must not be empty"
+- "Pattern syntax error: [details]"
+**Actions**:
+- Add ValidatePattern() function
+- Call before adding pattern to list
+- Display error in UI (red text)
+**Estimate**: 2 points
+**Dependencies**: T-V32-007, T-V32-009
+
+### ☐ T-V32-031: [P] Add Loading States for Async Operations
+**Files**: handlers/smart_commit_prefs_handler.go, handlers/workflow_gen_handler.go
+**Description**: Show spinner during file I/O operations
+**Operations to Cover**:
+- Loading project config
+- Saving preferences
+- Generating workflow file
+- Validating workflow YAML
+**Actions**:
+- Add spinner model to handlers
+- Show "Saving..." with spinner
+- Show "Generating..." with spinner
+- Hide spinner on completion or error
+**Estimate**: 2 points
+**Dependencies**: T-V32-009, T-V32-018
+
+### ☐ T-V32-032: [P] Add Keyboard Shortcuts Documentation
+**File**: README.md or docs/SHORTCUTS.md (if exists)
+**Description**: Document new keyboard shortcuts for v0.0.32
+**New Shortcuts**:
+- Advanced Tab:
+  - `p` - Edit Smart Commit Preferences
+  - `w` - Configure GitHub Workflow
+- Smart Commit Prefs:
+  - `↑/↓` - Navigate categories
+  - `e` - Edit selected category
+  - `a` - Add extension/pattern
+  - `d` - Delete extension/pattern
+  - `r` - Reset to defaults
+  - `s` - Save preferences
+- Workflow Gen:
+  - `space` - Toggle enabled
+  - `p` - Preview workflow
+  - `g` - Generate file
+**Estimate**: 1 point
+**Dependencies**: None (documentation only)
+
+### ☐ T-V32-033: [P] Performance Testing for Pattern Matching
+**File**: internal/gitcleanup/matcher_bench_test.go (NEW)
+**Description**: Benchmark pattern matching performance
+**Benchmarks**:
+```go
+func BenchmarkMatchesPattern(b *testing.B)
+func BenchmarkMatchesExtension(b *testing.B)
+func BenchmarkCategorizeWithRules(b *testing.B)
+```
+**Performance Targets** (from research.md):
+- Pattern matching: <1ms for 100 files
+- Extension matching: <0.1ms per file
+- Full categorization: <100ms for typical project
+**Actions**:
+- Run benchmarks: `go test -bench=. ./internal/gitcleanup`
+- Verify meets performance targets
+- Optimize if needed (unlikely)
+**Estimate**: 2 points
+**Dependencies**: T-V32-007
+
+---
+
+## Execution Guide for v0.0.32
+
+### Sequential Task Order
+1. Run Setup tasks (T-V32-001 to T-V32-003) first
+2. Run Bug Fix tasks (T-V32-004 to T-V32-005)
+3. Run Smart Commit Preferences tasks (T-V32-006 to T-V32-014)
+4. Run Workflow Generation tasks (T-V32-015 to T-V32-024)
+5. Run Integration tasks (T-V32-025 to T-V32-029)
+6. Run Polish tasks (T-V32-030 to T-V32-033)
+
+### Parallel Execution Opportunities
+
+**Can Run in Parallel After Setup**:
+```bash
+# After T-V32-003, run these together:
+- T-V32-005 (dot file test)
+- T-V32-006 (config parsing)
+- T-V32-007 (pattern matching)
+```
+
+**Smart Commit Tests (Parallel)**:
+```bash
+# After T-V32-012, run these together:
+- T-V32-013 (pattern matching tests)
+- T-V32-014 (UI integration tests)
+```
+
+**Workflow Tasks (Parallel)**:
+```bash
+# After T-V32-002, run these together:
+- T-V32-015 (template)
+- T-V32-016 (generator)
+```
+
+**Workflow Tests (Parallel)**:
+```bash
+# After T-V32-022, run these together:
+- T-V32-023 (template tests)
+- T-V32-024 (generator tests)
+```
+
+**Polish Tasks (All Parallel After Integration)**:
+```bash
+# After T-V32-029, run these together:
+- T-V32-030 (error handling)
+- T-V32-031 (loading states)
+- T-V32-032 (documentation)
+- T-V32-033 (performance testing)
+```
+
+### Testing Checkpoints
+- After T-V32-005: Run dot file tests
+- After T-V32-013: Run pattern matching tests
+- After T-V32-014: Run preferences UI tests
+- After T-V32-023: Run workflow template tests
+- After T-V32-024: Run workflow generator tests
+- After T-V32-028: Full integration testing
+- After T-V32-033: Performance validation
+
+### Success Criteria
+- All 34 tasks completed
+- All tests passing (unit + integration)
+- Performance targets met (<100ms categorization)
+- Quickstart scenarios validated
+- No regressions in v0.0.31 features
+- Ready for v0.0.32 release
+
+---
+
+## Implementation Notes for v0.0.32
+
+### Code Quality Reminders
+- Keep files under 300 lines (strong refactoring target)
+- Use early returns, avoid nested conditionals
+- No comments except API docs
+- Self-documenting names
+- Test each component in isolation
+
+### Constitutional Compliance
+- Smart commit prefs in ~/.distui (not in repo)
+- Workflow generation requires explicit user consent
+- Easy to disable all new features
+- User maintains full control
+- No forced behaviors
+
+### Terminal Layout Integrity
+When adding UI elements:
+- **Smart Commit Prefs section in Advanced**: +3 lines
+- **Workflow Generation section in Advanced**: +4 lines
+- Update chrome calculations in configure_handler.go
+- Test with small terminal size (80x24)
+- Ensure no overflow/scrolling issues
+
+### Integration with Existing Code
+- Smart commit prefs integrates with Cleanup tab
+- Workflow generation reads from Distributions config
+- Both use existing config loader patterns
+- No breaking changes to existing APIs
+
+---

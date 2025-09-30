@@ -223,19 +223,71 @@ distui-app/
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
 **Task Generation Strategy**:
-- Load `.specify/templates/tasks-template.md` as base
-- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
+
+1. **Setup Tasks**:
+   - T-SETUP-1: Add doublestar dependency to go.mod
+   - T-SETUP-2: Create internal/workflow package structure
+   - T-SETUP-3: Update internal/models/types.go with new structs
+
+2. **Bug Fix Tasks** (High Priority):
+   - T-BUG-1: Fix dot file handling in internal/gitcleanup/categorize.go
+   - T-BUG-2: Add test for dot file categorization
+
+3. **Smart Commit Preferences Tasks**:
+   - T-SCP-1: [P] Create CategoryRules model in internal/models/types.go
+   - T-SCP-2: [P] Add smart_commit section parsing to internal/config/loader.go
+   - T-SCP-3: [P] Create pattern matching logic with doublestar
+   - T-SCP-4: Update internal/gitcleanup/categorize.go to use custom rules
+   - T-SCP-5: Create handlers/smart_commit_prefs_handler.go
+   - T-SCP-6: Create views/smart_commit_prefs_view.go
+   - T-SCP-7: Integrate into Configure View Advanced tab
+   - T-SCP-8: Add default rules reset functionality
+   - T-SCP-9: [P] Write unit tests for pattern matching
+   - T-SCP-10: [P] Write integration tests for preferences UI
+
+4. **Workflow Generation Tasks**:
+   - T-WF-1: [P] Create internal/workflow/template.go with embedded YAML
+   - T-WF-2: [P] Create internal/workflow/generator.go
+   - T-WF-3: Add workflow_generation section parsing to config loader
+   - T-WF-4: Create handlers/workflow_gen_handler.go
+   - T-WF-5: Create views/workflow_gen_view.go
+   - T-WF-6: Integrate into Configure View Advanced tab
+   - T-WF-7: Add preview modal for workflow YAML
+   - T-WF-8: Add file generation with user consent
+   - T-WF-9: [P] Write tests for template generation
+   - T-WF-10: [P] Write tests for workflow validation
+
+5. **Integration Tasks**:
+   - T-INT-1: Update Configure View to handle Advanced tab expansion
+   - T-INT-2: Add navigation between smart commit prefs and workflow gen
+   - T-INT-3: Wire up save/load for both feature configs
+   - T-INT-4: Test full integration with existing features
+   - T-INT-5: Update quickstart.md scenarios
+
+6. **Polish Tasks**:
+   - T-POL-1: Add error handling for invalid patterns
+   - T-POL-2: Add loading states for async operations
+   - T-POL-3: Add keyboard shortcuts documentation
+   - T-POL-4: Performance testing for pattern matching
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
+- Setup first (dependencies, models)
+- Bug fix next (blocks smart commit improvements)
+- Features in parallel where independent
+- Integration after both features complete
+- Polish last
 
-**Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
+**Dependency Rules**:
+- T-SETUP-* must complete before feature tasks
+- T-BUG-* should complete before T-SCP-4
+- T-SCP-1,2,3 can run parallel
+- T-WF-1,2 can run parallel
+- T-SCP-5,6,7 depend on T-SCP-1,2,3,4
+- T-WF-4,5,6 depend on T-WF-1,2,3
+- T-INT-* depend on all feature tasks
+- T-POL-* can run parallel after integration
+
+**Estimated Output**: ~35 tasks in tasks.md
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
@@ -259,18 +311,28 @@ distui-app/
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
-- [ ] Phase 3: Tasks generated (/tasks command)
+- [x] Phase 0: Research complete (/plan command) - research.md created
+- [x] Phase 1: Design complete (/plan command) - data-model.md updated, contracts updated, quickstart.md created, CLAUDE.md updated
+- [x] Phase 2: Task planning complete (/plan command - describe approach only) - 35 tasks planned
+- [ ] Phase 3: Tasks generated (/tasks command) - READY TO EXECUTE
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS - All 10 principles met
+- [x] Post-Design Constitution Check: PASS - No new violations
+- [x] All NEEDS CLARIFICATION resolved - No unknowns remain
+- [x] Complexity deviations documented - NONE (no violations)
+
+**Artifacts Created**:
+- [x] `/specs/001-build-a-terminal/plan.md` - This file
+- [x] `/specs/001-build-a-terminal/research.md` - Technical decisions documented
+- [x] `/specs/001-build-a-terminal/quickstart.md` - Integration test scenarios
+- [x] `/specs/001-build-a-terminal/data-model.md` - Updated with new entities (already existed)
+- [x] `/specs/001-build-a-terminal/contracts/project.yaml` - Updated with new config sections (already done)
+- [x] `/CLAUDE.md` - Updated with new dependencies
+
+**Ready for Next Phase**: Execute `/tasks` command to generate tasks.md
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.3.0 (TUI Layout Integrity) - See `.specify/memory/constitution.md`*

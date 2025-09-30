@@ -3,6 +3,8 @@ package gitcleanup
 import (
 	"path/filepath"
 	"strings"
+
+	"distui/internal/models"
 )
 
 // FileCategory represents how a file should be handled
@@ -16,15 +18,53 @@ const (
 )
 
 // CategorizeFile determines the category of a file based on its path
+// If projectConfig is provided and has custom rules enabled, uses those rules
+// Otherwise falls back to default categorization
 func CategorizeFile(path string) FileCategory {
+	return CategorizeFileWithConfig(path, nil)
+}
+
+// CategorizeFileWithConfig determines the category using optional custom rules
+func CategorizeFileWithConfig(path string, projectConfig *models.ProjectConfig) FileCategory {
+	// Check if custom smart commit rules are enabled
+	if projectConfig != nil && projectConfig.Config != nil &&
+		projectConfig.Config.SmartCommit != nil &&
+		projectConfig.Config.SmartCommit.UseCustomRules {
+		category := CategorizeWithRules(path, projectConfig.Config.SmartCommit.Categories)
+		if category != "other" {
+			return mapCategoryToFileCategory(category)
+		}
+	}
+
+	// Fall back to default categorization
+	return categorizeWithDefaults(path)
+}
+
+func mapCategoryToFileCategory(category string) FileCategory {
+	switch category {
+	case "code", "config", "build":
+		return CategoryAuto
+	case "docs":
+		return CategoryDocs
+	default:
+		return CategoryOther
+	}
+}
+
+func categorizeWithDefaults(path string) FileCategory {
 	ext := strings.ToLower(filepath.Ext(path))
 	base := filepath.Base(path)
 	dir := filepath.Dir(path)
 
 	// Ignore patterns first (binaries and temp files)
 	ignoreExtensions := []string{".out", ".exe", ".dll", ".so", ".dylib", ".test", ".a"}
-	ignoreDirs := []string{"bin", "dist", "node_modules", ".git", "vendor"}
+	ignoreDirs := []string{"bin", "dist", "node_modules", "vendor"}
 	ignoreFiles := []string{".DS_Store", "thumbs.db", "distui", "tuitemplate"}
+
+	// Special check: exclude .git/ directory itself but allow .github/, .goreleaser.yaml, etc.
+	if strings.HasPrefix(path, ".git/") || path == ".git" {
+		return CategoryIgnore
+	}
 
 	// Check if path starts with dist/ or is dist directory
 	if strings.HasPrefix(path, "dist/") || path == "dist" {
