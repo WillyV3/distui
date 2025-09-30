@@ -43,9 +43,10 @@ brews:
       owner: willyv3
       name: homebrew-tap
     homepage: https://github.com/willyv3/distui
-    description: "TUI for managing Go application releases"
+    description: "distui"
     license: MIT
-    # GoReleaser automatically creates formula for pre-built binaries
+    # Important: GoReleaser automatically creates formula for pre-built binaries
+    # The formula will download from GitHub releases, not build from source
     test: |
       system "#{bin}/distui", "--version"
 
