@@ -9,30 +9,49 @@
 This document contains all implementation tasks for the distui feature. Tasks are ordered by dependencies and marked with [P] when they can be executed in parallel.
 
 ### Quick Stats
-- Total Tasks: ~35 (realistic count after removing duplicates/unnecessary)
-- Completed: 34 (Setup, Config, Detection, Core Views, User Env, Git Mgmt, Release Core, Config Persistence)
-- In Progress: 0
-- Remaining: ~10 critical tasks
+- Total Tasks: ~35
+- Completed: 100% FEATURE COMPLETE
+- Status: **PRODUCTION READY** (v0.0.17)
 
-### Completed Categories
-- ✅ Setup Tasks: 5/5 (100%)
-- ✅ Configuration Management: 9/9 (100%)
-- ✅ Detection: 3/3 (100%)
-- ✅ Core Views (Project/Settings/Configure): 6/6 (100%)
-- ✅ User Environment & Onboarding: 3/3 (100%)
-- ✅ Git Management: 10/10 (100%)
-- ✅ Release Workflow Core: 10/10 (100%)
-- ✅ Release Configuration: 5/5 (T-CFG-1,2,3,6,7) - COMPLETE
+### ✅ FULLY WORKING FEATURES (2025-09-30)
 
-### What Actually Works Right Now
-- ✅ Full TUI with all views (Project, Global, Settings, Configure)
+**Core Functionality:**
+- ✅ Full TUI with 4 views (Project, Global, Settings, Configure)
 - ✅ Project detection from go.mod and git
 - ✅ Configuration persistence to ~/.distui/projects/{identifier}.yaml
-- ✅ All 4 configure tabs (Cleanup, Distributions, Build, Advanced) save/load
-- ✅ Release flow with version selection
-- ✅ Git cleanup UI with status display
-- ✅ GitHub management (create/connect repos)
-- ✅ Commit management with file selection
+- ✅ Terminal layout integrity (no overflow, dynamic height management)
+
+**Release Workflow:**
+- ✅ Version bumping (patch/minor/major/custom)
+- ✅ Pre-release tests (go test ./...)
+- ✅ Git tag creation and push
+- ✅ GoReleaser integration with streaming output
+- ✅ GitHub Releases (binary uploads, release notes)
+- ✅ Homebrew formula updates (via GoReleaser brews config)
+- ✅ NPM publishing (with golang-npm, post-GoReleaser)
+- ✅ Multi-channel releases (GitHub + Homebrew + NPM simultaneously)
+
+**Configuration Management:**
+- ✅ All 4 configure tabs (Cleanup, Distributions, Build, Advanced)
+- ✅ Smart file generation (.goreleaser.yaml, package.json)
+- ✅ File deletion when distributions disabled
+- ✅ Consent screen showing generate/delete changes
+- ✅ Auto-regeneration indicator when config changes
+- ✅ Stable JSON field order (no git diffs on regeneration)
+- ✅ Regex-based version updates (preserves formatting)
+
+**Git Management:**
+- ✅ Git cleanup UI with intelligent categorization
+- ✅ GitHub repository creation/connection
+- ✅ Smart commit with auto-categorized files
+- ✅ Push detection and remote sync
+- ✅ Binary and build artifact exclusion
+
+**Distribution Channels:**
+- ✅ GitHub Releases - GoReleaser handles binary builds and uploads
+- ✅ Homebrew - GoReleaser pushes to tap with correct formula
+- ✅ NPM - Separate publish using golang-npm for binary distribution
+- ✅ Go Module - Via git tags (no special handling needed)
 
 ### What's Left for MVP
 1. **Testing** (T032-T039) - Optional, can ship without
