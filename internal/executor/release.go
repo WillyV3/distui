@@ -91,6 +91,15 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 }
 
 func (r *ReleaseExecutor) createAndPushTag(ctx context.Context) error {
+	// Try to delete existing tag (ignore errors if it doesn't exist)
+	deleteCmd := RunCommandStreaming(ctx, "git", []string{"tag", "-d", r.config.Version}, r.projectPath)
+	deleteCmd() // Ignore result
+
+	// Try to delete remote tag (ignore errors if it doesn't exist)
+	pushDeleteCmd := RunCommandStreaming(ctx, "git", []string{"push", "origin", ":refs/tags/" + r.config.Version}, r.projectPath)
+	pushDeleteCmd() // Ignore result
+
+	// Create new tag
 	tagCmd := RunCommandStreaming(ctx, "git", []string{"tag", r.config.Version}, r.projectPath)
 	msg := tagCmd()
 	if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
@@ -99,6 +108,7 @@ func (r *ReleaseExecutor) createAndPushTag(ctx context.Context) error {
 		}
 	}
 
+	// Push tag
 	pushCmd := RunCommandStreaming(ctx, "git", []string{"push", "origin", r.config.Version}, r.projectPath)
 	msg = pushCmd()
 	if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {

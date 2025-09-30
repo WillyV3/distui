@@ -987,10 +987,8 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				return currentPage, false, nil, configModel
 			}
 		} else if configModel.CurrentView == GenerateConfigConsent {
-			fmt.Printf("[DEBUG] In GenerateConfigConsent view, key pressed: %s\n", msg.String())
 			switch msg.String() {
 			case "y", "Y":
-				fmt.Printf("[DEBUG] Y pressed - starting generation for files: %v\n", configModel.PendingGenerateFiles)
 				// Start async file generation with spinner
 				configModel.GeneratingFiles = true
 				configModel.GenerateStatus = "Generating release files..."
@@ -999,7 +997,6 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 					generateFilesCmd(configModel.DetectedProject, configModel.ProjectConfig, configModel.PendingGenerateFiles),
 				), configModel
 			case "n", "N", "esc":
-				fmt.Printf("[DEBUG] N/ESC pressed - cancelling\n")
 				configModel.CurrentView = TabView
 				configModel.PendingGenerateFiles = nil
 				return currentPage, false, nil, configModel
@@ -1034,19 +1031,14 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 
 		// Handle 'R' key to confirm and generate/regenerate release files (only in TabView, not on Cleanup tab)
 		if (msg.String() == "r" || msg.String() == "R") && configModel.CurrentView == TabView && configModel.ActiveTab != 0 {
-			fmt.Printf("[DEBUG] R pressed - CurrentView=%v, ActiveTab=%d\n", configModel.CurrentView, configModel.ActiveTab)
 			missing := CheckMissingConfigFiles(configModel.DetectedProject, configModel.ProjectConfig)
-			fmt.Printf("[DEBUG] Missing files: %v\n", missing)
 			if len(missing) > 0 {
 				// Files don't exist - show consent for creation
 				configModel.PendingGenerateFiles = missing
 			} else {
 				// Files exist - regenerate based on current config
-				regen := GetConfigFilesForRegeneration(configModel.DetectedProject, configModel.ProjectConfig)
-				fmt.Printf("[DEBUG] Regen files: %v\n", regen)
-				configModel.PendingGenerateFiles = regen
+				configModel.PendingGenerateFiles = GetConfigFilesForRegeneration(configModel.DetectedProject, configModel.ProjectConfig)
 			}
-			fmt.Printf("[DEBUG] Setting CurrentView to GenerateConfigConsent, pending files: %v\n", configModel.PendingGenerateFiles)
 			configModel.CurrentView = GenerateConfigConsent
 			return currentPage, false, nil, configModel
 		}
