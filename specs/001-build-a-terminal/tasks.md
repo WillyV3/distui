@@ -11,9 +11,10 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 ### Quick Stats
 - Total Tasks: ~35
 - Completed: 100% FEATURE COMPLETE
-- Status: **PRODUCTION READY** (v0.0.21)
+- Status: **PRODUCTION READY** (v0.0.31)
+- Latest Release: v0.0.31 (NPM published and working)
 
-### ✅ FULLY WORKING FEATURES (2025-09-30 Update 2)
+### ✅ FULLY WORKING FEATURES (2025-09-30 Update 3)
 
 **Core Functionality:**
 - ✅ Full TUI with 4 views (Project, Global, Settings, Configure)
@@ -40,7 +41,13 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ Stable JSON field order (no git diffs on regeneration)
 - ✅ Regex-based version updates (preserves formatting)
 - ✅ NPM package name validation with availability checking
-- ✅ Alternative name suggestions (scoped packages, suffixes)
+  - ✅ Ownership detection (distinguishes user's packages from others)
+  - ✅ Similarity detection (checks variations with hyphens/underscores)
+  - ✅ Alternative name suggestions (scoped packages, suffixes)
+  - ✅ Inline package name editing in Distributions tab
+  - ✅ Auto-trigger checking when tab opens or NPM enabled
+- ✅ Release blocking when regeneration needed
+- ✅ Tab refresh with loading spinner (Cleanup tab auto-refreshes)
 
 **Git Management:**
 - ✅ Git cleanup UI with intelligent categorization
@@ -54,10 +61,32 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ Homebrew - GoReleaser pushes to tap with correct formula
 - ✅ NPM - Separate publish using golang-npm for binary distribution
   - ✅ Real-time package name availability checking
-  - ✅ Conflict detection (e.g., "distui" vs "dist-ui")
+  - ✅ Ownership detection (recognizes user's existing packages)
+  - ✅ Conflict detection (e.g., "distui" vs "dist-ui", "distui-cli" vs "distui_cli")
   - ✅ Scoped package suggestions (@username/package)
   - ✅ Alternative name generation (package-cli, package-tool, etc.)
+  - ✅ Automatic package.json version bump on publish
+  - ✅ Auto-commit and push package.json changes post-publish
+  - ✅ Verified working: `npm install -g distui-cli-go` installs and runs successfully
 - ✅ Go Module - Via git tags (no special handling needed)
+
+**UI/UX Improvements:**
+- ✅ Release success screen with ESC to dismiss
+- ✅ Project view shows NPM and Homebrew distribution info
+- ✅ Distribution info hidden during active release
+- ✅ Working tree check moved after release check (prevents flash during NPM publish)
+- ✅ Clean project view after successful release (no dirty tree warnings)
+- ✅ All warnings preserved (regeneration, working tree, GitHub auth, config missing)
+
+**Recent Bug Fixes (v0.0.28-0.0.31):**
+- ✅ Fixed NPM checker incorrectly flagging user's own packages as unavailable
+- ✅ Fixed ESC not canceling NPM package name edit mode
+- ✅ Fixed cleanup tab not refreshing after config changes in other tabs
+- ✅ Fixed "WORKING TREE NOT CLEAN" flashing during NPM publish
+- ✅ Fixed release blocking not working when regeneration needed
+- ✅ Fixed NPM variation checker to detect underscore/hyphen swaps
+- ✅ Added loading spinner when switching to cleanup tab
+- ✅ Removed all debug statements from NPM publisher
 
 ### What's Left for MVP
 1. **Testing** (T032-T039) - Optional, can ship without
