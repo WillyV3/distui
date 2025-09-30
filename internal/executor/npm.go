@@ -109,6 +109,35 @@ func (n *NPMPublisher) Publish(outputChan chan<- string) error {
 	return nil
 }
 
+func (n *NPMPublisher) CommitAndPush() error {
+	version := n.version
+	if strings.HasPrefix(version, "v") {
+		version = version[1:]
+	}
+
+	commitMsg := fmt.Sprintf("chore: bump package.json to %s", version)
+
+	addCmd := exec.Command("git", "add", "package.json")
+	addCmd.Dir = n.projectPath
+	if err := addCmd.Run(); err != nil {
+		return fmt.Errorf("git add failed: %w", err)
+	}
+
+	commitCmd := exec.Command("git", "commit", "-m", commitMsg)
+	commitCmd.Dir = n.projectPath
+	if err := commitCmd.Run(); err != nil {
+		return fmt.Errorf("git commit failed: %w", err)
+	}
+
+	pushCmd := exec.Command("git", "push")
+	pushCmd.Dir = n.projectPath
+	if err := pushCmd.Run(); err != nil {
+		return fmt.Errorf("git push failed: %w", err)
+	}
+
+	return nil
+}
+
 func PublishToNPM(projectPath, version, packageName string, outputChan chan<- string) error {
 	publisher := NewNPMPublisher(projectPath, version, packageName)
 
@@ -123,6 +152,12 @@ func PublishToNPM(projectPath, version, packageName string, outputChan chan<- st
 	if err := publisher.Publish(outputChan); err != nil {
 		return err
 	}
+
+	outputChan <- "Committing package.json version bump..."
+	if err := publisher.CommitAndPush(); err != nil {
+		return fmt.Errorf("committing version bump: %w", err)
+	}
+	outputChan <- "✓ Committed and pushed package.json"
 
 	return nil
 }
