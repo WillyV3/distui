@@ -99,57 +99,80 @@ func RenderProgress(m *handlers.ReleaseModel) string {
 
 	content.WriteString(releaseHeaderStyle.Render("RELEASING "+m.Version) + "\n\n")
 
+	// Calculate progress
 	n := len(m.Packages)
-	w := lipgloss.Width(fmt.Sprintf("%d", n))
-
 	installed := len(m.Installed)
+
+	// Format counter with consistent width
+	w := lipgloss.Width(fmt.Sprintf("%d", n))
 	pkgCount := fmt.Sprintf(" %*d/%*d", w, installed, w, n)
 
-	spin := m.Spinner.View() + " "
-	prog := m.Progress.View()
-
-	currentPkg := ""
+	// Current step being processed
+	currentStepName := ""
 	if m.Installing >= 0 && m.Installing < len(m.Packages) {
-		currentPkg = m.Packages[m.Installing].Name
+		currentStepName = m.Packages[m.Installing].Name
+		// Show spinner and current step on one line
+		spin := m.Spinner.View() + " "
+		info := releaseCurrentPkgNameStyle.Render(currentStepName)
+		prog := m.Progress.View()
+
+		// Calculate available space for the step name
+		cellsAvail := 60 // Default width
+		pkgNameStyled := releaseCurrentPkgNameStyle.Render(currentStepName)
+		info = lipgloss.NewStyle().MaxWidth(cellsAvail).Render(pkgNameStyled)
+
+		// Single line progress display
+		content.WriteString(spin + info + "\n")
+		content.WriteString(prog + pkgCount + "\n\n")
+	} else {
+		// Just show the progress bar and count
+		content.WriteString(m.Progress.View() + pkgCount + "\n\n")
 	}
 
-	info := releaseCurrentPkgNameStyle.Render(currentPkg)
-
-	content.WriteString(spin + info + "\n")
-	content.WriteString(prog + pkgCount + "\n\n")
-
-	for i, pkg := range m.Packages {
+	// Show all steps with their status
+	for _, pkg := range m.Packages {
 		status := ""
+		style := releaseSubtleStyle
+
 		switch pkg.Status {
 		case "done":
 			status = releaseCheckMark.String()
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 		case "failed":
 			status = releaseCrossMark.String()
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 		case "installing":
 			status = m.Spinner.View()
+			style = releaseCurrentPkgNameStyle
 		default:
-			status = releaseSubtleStyle.Render("○")
+			status = "○"
+			style = releaseSubtleStyle
 		}
 
-		line := fmt.Sprintf("%s %s", status, pkg.Name)
-		if pkg.Duration > 0 {
+		line := fmt.Sprintf("%s %s", status, style.Render(pkg.Name))
+
+		// Add duration for completed steps
+		if pkg.Status == "done" && pkg.Duration > 0 {
 			line += releaseSubtleStyle.Render(fmt.Sprintf(" (%s)", pkg.Duration.Round(time.Millisecond)))
 		}
-		content.WriteString(line + "\n")
 
-		if i < installed {
-			content.WriteString(releaseCheckMark.String() + " " + pkg.Name + "\n")
-		}
+		content.WriteString(line + "\n")
 	}
 
-	if len(m.Output) > 0 {
-		content.WriteString("\n" + releaseHeaderStyle.Render("OUTPUT") + "\n")
+	// Show condensed output (last few lines only)
+	if len(m.Output) > 0 && m.Installing >= 0 {
+		content.WriteString("\n")
+		// Show only last 3 lines of output
 		start := 0
-		if len(m.Output) > 10 {
-			start = len(m.Output) - 10
+		if len(m.Output) > 3 {
+			start = len(m.Output) - 3
 		}
 		for _, line := range m.Output[start:] {
-			content.WriteString(releaseSubtleStyle.Render(line) + "\n")
+			// Truncate long lines
+			if len(line) > 70 {
+				line = line[:67] + "..."
+			}
+			content.WriteString(releaseSubtleStyle.Render("  " + line) + "\n")
 		}
 	}
 
@@ -162,7 +185,12 @@ func RenderProgress(m *handlers.ReleaseModel) string {
 func RenderSuccess(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
-	content.WriteString(releaseCheckMark.String() + " " + releaseHeaderStyle.Render("RELEASE COMPLETE") + "\n\n")
+	successHeaderStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("42")).
+		Bold(true).
+		Padding(0, 1)
+
+	content.WriteString(releaseCheckMark.String() + " " + successHeaderStyle.Render("RELEASE COMPLETE") + "\n\n")
 
 	content.WriteString(releaseFieldStyle.Render("Version:  ") + releaseValueStyle.Render(m.Version) + "\n")
 
@@ -170,13 +198,23 @@ func RenderSuccess(m *handlers.ReleaseModel) string {
 	content.WriteString(releaseFieldStyle.Render("Duration: ") + releaseValueStyle.Render(elapsed.String()) + "\n\n")
 
 	content.WriteString(releaseHeaderStyle.Render("PUBLISHED TO") + "\n")
+	successCount := 0
 	for _, pkg := range m.Packages {
 		if pkg.Status == "done" {
-			content.WriteString(releaseCheckMark.String() + " " + pkg.Name + "\n")
+			content.WriteString("  " + releaseCheckMark.String() + " " + pkg.Name)
+			if pkg.Duration > 0 {
+				content.WriteString(releaseSubtleStyle.Render(fmt.Sprintf(" (%s)", pkg.Duration.Round(time.Second))))
+			}
+			content.WriteString("\n")
+			successCount++
 		}
 	}
 
-	content.WriteString("\n" + releaseSubtleStyle.Render("Press ESC to return"))
+	// Show summary
+	content.WriteString("\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Render(
+		fmt.Sprintf("Successfully completed %d/%d steps", successCount, len(m.Packages))))
+
+	content.WriteString("\n\n" + releaseSubtleStyle.Render("Press ESC to return"))
 
 	return content.String()
 }
