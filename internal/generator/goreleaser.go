@@ -46,9 +46,9 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 
 	b.WriteString("archives:\n")
 	b.WriteString("  - format: tar.gz\n")
-	b.WriteString("    format_overrides:\n")
-	b.WriteString("      - goos: windows\n")
-	b.WriteString("        format: zip\n\n")
+	b.WriteString("    files:\n")
+	b.WriteString("      - none*\n")
+	b.WriteString("    rlcp: true\n\n")
 
 	b.WriteString("checksum:\n")
 	b.WriteString("  name_template: 'checksums.txt'\n\n")

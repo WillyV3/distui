@@ -10,9 +10,16 @@ import (
 )
 
 func CheckGoReleaserInstalled() bool {
+	// First check PATH
 	cmd := exec.Command("goreleaser", "--version")
-	err := cmd.Run()
-	return err == nil
+	if err := cmd.Run(); err == nil {
+		return true
+	}
+
+	// Check in ~/go/bin
+	goreleaserPath := os.Getenv("HOME") + "/go/bin/goreleaser"
+	cmd = exec.Command(goreleaserPath, "--version")
+	return cmd.Run() == nil
 }
 
 func GetGitHubToken() (string, error) {
@@ -43,7 +50,13 @@ func RunGoReleaser(ctx context.Context, projectPath string, version string) tea.
 
 		os.Setenv("GITHUB_TOKEN", token)
 
-		return RunCommandStreaming(ctx, "goreleaser", []string{"release", "--clean"}, projectPath)()
+		// Try goreleaser in PATH first, then ~/go/bin
+		goreleaserCmd := "goreleaser"
+		if _, err := exec.LookPath("goreleaser"); err != nil {
+			goreleaserCmd = os.Getenv("HOME") + "/go/bin/goreleaser"
+		}
+
+		return RunCommandStreaming(ctx, goreleaserCmd, []string{"release", "--clean"}, projectPath)()
 	}
 }
 
