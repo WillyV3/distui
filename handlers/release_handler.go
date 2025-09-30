@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
@@ -132,7 +133,10 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		if m.Installing >= 0 && m.Installing < len(m.Packages) {
 			m.Packages[m.Installing].Status = "installing"
 		}
-		return m, m.Spinner.Tick
+
+		// Update progress bar
+		progressCmd := m.Progress.SetPercent(float64(m.Installing) / float64(len(m.Packages)))
+		return m, tea.Batch(m.Spinner.Tick, progressCmd)
 
 	case models.ReleasePhaseCompleteMsg:
 		idx := int(msg.Phase) - 1
@@ -145,7 +149,10 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 				m.Packages[idx].Status = "failed"
 			}
 		}
-		return m, nil
+
+		// Update progress bar
+		progressCmd := m.Progress.SetPercent(float64(len(m.Installed)) / float64(len(m.Packages)))
+		return m, progressCmd
 
 	case models.CommandOutputMsg:
 		m.Output = append(m.Output, msg.Line)
@@ -158,12 +165,54 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		if msg.Success {
 			m.Phase = models.PhaseComplete
 			m.CompletedDuration = msg.Duration  // Capture the final duration
+
+			// Mark all steps as complete
+			for i := range m.Packages {
+				if m.Packages[i].Status != "failed" {
+					m.Packages[i].Status = "done"
+					// Set a duration if not already set
+					if m.Packages[i].Duration == 0 {
+						m.Packages[i].Duration = msg.Duration / time.Duration(len(m.Packages))
+					}
+				}
+			}
+			m.Installed = make([]int, len(m.Packages))
+			for i := range m.Installed {
+				m.Installed[i] = i
+			}
 		} else {
 			m.Phase = models.PhaseFailed
 			m.CompletedDuration = msg.Duration  // Capture duration even on failure
 			m.Error = fmt.Errorf("failed at step: %s", msg.FailedStep)
+
+			// Mark the failed step and any after it
+			failedFound := false
+			for i, pkg := range m.Packages {
+				if strings.ToLower(pkg.Name) == strings.ToLower(msg.FailedStep) ||
+				   strings.Contains(strings.ToLower(pkg.Name), strings.ToLower(msg.FailedStep)) {
+					m.Packages[i].Status = "failed"
+					failedFound = true
+				} else if failedFound {
+					// Leave subsequent steps as pending
+					m.Packages[i].Status = "pending"
+				} else {
+					// Steps before failure are complete
+					m.Packages[i].Status = "done"
+					m.Installed = append(m.Installed, i)
+				}
+			}
 		}
-		return m, nil
+
+		// Update progress to 100% if success, or proportional if failed
+		var progressPercent float64
+		if msg.Success {
+			progressPercent = 1.0
+		} else {
+			progressPercent = float64(len(m.Installed)) / float64(len(m.Packages))
+		}
+		progressCmd := m.Progress.SetPercent(progressPercent)
+
+		return m, progressCmd
 	}
 
 	return m, nil
@@ -210,6 +259,13 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 	m.Version = version
 	m.Phase = models.PhasePreFlight
 	m.StartTime = time.Now()
+	m.Installing = 0  // Start with first phase
+	m.Installed = []int{}
+
+	// Mark first phase as installing
+	if len(m.Packages) > 0 {
+		m.Packages[0].Status = "installing"
+	}
 
 	releaseConfig := executor.ReleaseConfig{
 		Version:        version,
@@ -224,8 +280,12 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 
 	releaseExecutor := executor.NewReleaseExecutor(m.ProjectPath, releaseConfig)
 
+	// Start with the progress at 0
+	progressCmd := m.Progress.SetPercent(0)
+
 	return m, tea.Batch(
 		m.Spinner.Tick,
+		progressCmd,
 		releaseExecutor.ExecuteReleasePhases(context.Background()),
 	)
 }

@@ -104,6 +104,12 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		return content.String()
 	}
 
+	// Check if release is in progress (not just version selection)
+	if releaseModel != nil && releaseModel.Phase != models.PhaseVersionSelect {
+		// During release, ONLY show the release progress, not project info
+		return renderInlineReleaseSection(releaseModel)
+	}
+
 	// CONFIGURED project with clean working tree - full view
 	content.WriteString(headerStyle.Render(project.Module.Name) + "\n\n")
 	content.WriteString(infoStyle.Render(fmt.Sprintf("Version: %s", project.Module.Version)) + "\n")
@@ -113,15 +119,15 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 			project.Repository.Owner, project.Repository.Name)) + "\n")
 	}
 
-	// Inline release section (appears when [r] pressed)
-	if releaseModel != nil {
+	// Version selection appears inline when [r] pressed
+	if releaseModel != nil && releaseModel.Phase == models.PhaseVersionSelect {
 		content.WriteString("\n")
 		content.WriteString(renderInlineReleaseSection(releaseModel))
 		content.WriteString("\n")
 	}
 
-	// Recent releases (only if history exists)
-	if config.History != nil && len(config.History.Releases) > 0 {
+	// Recent releases (only if history exists and no release in progress)
+	if releaseModel == nil && config != nil && config.History != nil && len(config.History.Releases) > 0 {
 		content.WriteString("\n" + headerStyle.Render("RECENT RELEASES") + "\n\n")
 		for i, release := range config.History.Releases[:min(3, len(config.History.Releases))] {
 			if i > 2 {
