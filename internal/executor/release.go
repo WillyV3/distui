@@ -43,9 +43,24 @@ func NewReleaseExecutor(projectPath string, config ReleaseConfig) *ReleaseExecut
 }
 
 func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
+	return r.ExecuteReleasePhasesWithOutput(ctx, nil)
+}
+
+func (r *ReleaseExecutor) ExecuteReleasePhasesWithOutput(ctx context.Context, outputChan chan<- string) tea.Cmd {
 	return func() tea.Msg {
 		startTime := time.Now()
 		channels := []string{"GitHub"}
+
+		// Helper to send output if channel is available
+		sendOutput := func(msg string) {
+			if outputChan != nil {
+				select {
+				case outputChan <- msg:
+				default:
+					// Don't block if channel is full
+				}
+			}
+		}
 
 		// We'll track completed phases in a slice to send back
 		type phaseResult struct {
@@ -56,10 +71,13 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 		completedPhases := []phaseResult{}
 
 		// Pre-flight checks
+		sendOutput("Starting pre-flight checks...")
 		phaseStart := time.Now()
 		if err := r.ValidatePreFlight(); err != nil {
+			sendOutput("✗ Pre-flight checks failed: " + err.Error())
 			return r.failureResult(startTime, "preflight", err, channels)
 		}
+		sendOutput("✓ Pre-flight checks passed")
 		completedPhases = append(completedPhases, phaseResult{
 			phase:    models.PhasePreFlight,
 			duration: time.Since(phaseStart),
@@ -68,14 +86,17 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 
 		// Tests
 		if !r.config.SkipTests {
+			sendOutput("Running tests...")
 			phaseStart = time.Now()
 			testCmd := RunTests(ctx, r.projectPath)
 			msg := testCmd()
 			if completeMsg, ok := msg.(models.CommandCompleteMsg); ok {
 				if completeMsg.ExitCode != 0 {
+					sendOutput("✗ Tests failed")
 					return r.failureResult(startTime, "tests", completeMsg.Error, channels)
 				}
 			}
+			sendOutput("✓ All tests passed")
 			completedPhases = append(completedPhases, phaseResult{
 				phase:    models.PhaseTests,
 				duration: time.Since(phaseStart),
@@ -84,10 +105,13 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 		}
 
 		// Create and push tag
+		sendOutput("Creating and pushing tag " + r.config.Version + "...")
 		phaseStart = time.Now()
 		if err := r.createAndPushTag(ctx); err != nil {
+			sendOutput("✗ Tag creation failed: " + err.Error())
 			return r.failureResult(startTime, "tag", err, channels)
 		}
+		sendOutput("✓ Tag created and pushed: " + r.config.Version)
 		completedPhases = append(completedPhases, phaseResult{
 			phase:    models.PhaseTag,
 			duration: time.Since(phaseStart),
@@ -95,12 +119,15 @@ func (r *ReleaseExecutor) ExecuteReleasePhases(ctx context.Context) tea.Cmd {
 		})
 
 		// Run GoReleaser
+		sendOutput("Running GoReleaser...")
 		phaseStart = time.Now()
-		goreleaserCmd := RunGoReleaser(ctx, r.projectPath, r.config.Version)
+		goreleaserCmd := RunGoReleaserWithOutput(ctx, r.projectPath, r.config.Version, outputChan)
 		msg := goreleaserCmd()
 		if err, ok := msg.(error); ok {
+			sendOutput("✗ GoReleaser failed: " + err.Error())
 			return r.failureResult(startTime, "goreleaser", err, channels)
 		}
+		sendOutput("✓ GoReleaser completed successfully")
 		completedPhases = append(completedPhases, phaseResult{
 			phase:    models.PhaseGoReleaser,
 			duration: time.Since(phaseStart),
