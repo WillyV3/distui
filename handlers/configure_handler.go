@@ -877,6 +877,12 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 1) % 4
 
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel != nil {
+				m.CleanupModel.Refresh()
+				m.Lists[0].SetItems(m.loadGitStatus())
+			}
+
 			// Check NPM name when entering Distributions tab
 			if m.ActiveTab == 1 && oldTab != 1 && m.NPMNameStatus == "" {
 				if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
@@ -904,7 +910,15 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 			return m, nil
 		case "shift+tab":
+			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 3) % 4
+
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel != nil {
+				m.CleanupModel.Refresh()
+				m.Lists[0].SetItems(m.loadGitStatus())
+			}
+
 			return m, nil
 		case " ", "space":
 			// Toggle the selected item
