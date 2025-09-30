@@ -167,16 +167,21 @@ func commitAndPushFormula(ctx context.Context, tapPath string, projectName strin
 		return fmt.Errorf("git commit failed: %w", err)
 	}
 
-	// Try to push to current branch first, then try main/master as fallback
-	_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", currentBranch}, tapPath)
+	// Try to push using gh CLI for authentication
+	pushOutput, err := RunCommandCapture(ctx, "gh", []string{"repo", "sync", "--branch", currentBranch}, tapPath)
 	if err != nil {
-		// Try main branch
-		_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "main"}, tapPath)
+		// Fallback to regular git push
+		pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", currentBranch}, tapPath)
 		if err != nil {
-			// Try master branch
-			_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "master"}, tapPath)
+			// Try main branch
+			pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "main"}, tapPath)
 			if err != nil {
-				return fmt.Errorf("git push failed: %w", err)
+				// Try master branch
+				pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "master"}, tapPath)
+				if err != nil {
+					// Provide more context about the error
+					return fmt.Errorf("git push failed: %w\nOutput: %s", err, pushOutput)
+				}
 			}
 		}
 	}
