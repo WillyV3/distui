@@ -72,10 +72,40 @@ build:
   goreleaser_config: string # Path to .goreleaser.yaml
   test_command: string      # go test ./...
 
+smart_commit:
+  enabled: boolean
+  use_custom_rules: boolean
+  categories:
+    config:
+      extensions: []string  # [".yaml", ".yml", ".json", ...]
+      patterns: []string    # ["**/config/**", ...]
+    code:
+      extensions: []string
+      patterns: []string
+    docs:
+      extensions: []string
+      patterns: []string
+    build:
+      extensions: []string
+      patterns: []string
+    test:
+      extensions: []string
+      patterns: []string
+    assets:
+      extensions: []string
+      patterns: []string
+    data:
+      extensions: []string
+      patterns: []string
+
 ci_cd:
   github_actions:
     enabled: boolean
-    workflow_path: string   # .github/workflows/release.yml
+    workflow_path: string        # .github/workflows/release.yml
+    auto_regenerate: boolean     # Regenerate on config changes
+    include_tests: boolean       # Run tests in workflow
+    environments: []string       # ["production", "staging"]
+    secrets_required: []string   # ["NPM_TOKEN", ...]
 ```
 
 ### ReleaseHistory

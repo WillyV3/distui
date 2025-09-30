@@ -3,8 +3,10 @@
 **Feature Branch**: `001-build-a-terminal`
 **Created**: 2025-09-28
 **Updated**: 2025-09-30
-**Status**: ✅ PRODUCTION READY - v0.0.31 - All features complete and tested
+**Status**: ✅ PRODUCTION READY - v0.0.31 - Core features complete, enhancements planned
 **Input**: User description update: "Complete the release workflow implementation including GoReleaser integration, Homebrew tap updates, NPM publishing, and animated progress display. Build release execution flow using package-manager example from charm-examples-inventory for animated progress. Support both interactive TUI releases and GitHub Actions workflow generation for CI/CD. Preserve all completed git management features (smart commit, file categorization, GitHub repo creation, cleanup view) while implementing release execution."
+
+**Planned Enhancements**: "Project-level smart commit preferences customization - users want to customize file categorization rules per project with full freedom over all file types. Settings should be stored in project YAML, keeping code out of configure_handler as much as possible. GitHub Actions workflow generation for CI/CD - optional/opt-in to respect developer autonomy, helping beginners without forcing opinions on experienced developers. All features wired following code conventions and constitution."
 
 ## Execution Flow (main)
 ```
@@ -69,6 +71,12 @@ As a Go developer with multiple projects, I want to manage all my release distri
 15. **Given** I publish to NPM, **When** the release completes, **Then** package.json version bump is automatically committed and pushed ✅
 16. **Given** I own an NPM package, **When** the system checks availability, **Then** it recognizes my ownership and marks the package as available ✅
 
+#### Planned Enhancements 🔄
+17. **Given** I have specific file categorization preferences, **When** I configure smart commit settings for my project, **Then** I can customize which file extensions map to which categories (config, code, docs, etc.) and these preferences are stored in my project configuration
+18. **Given** I want to customize smart commit behavior, **When** I edit smart commit preferences, **Then** I can define custom patterns for all file types without modifying global settings
+19. **Given** I'm a beginner setting up CI/CD, **When** I enable GitHub Actions workflow generation, **Then** the system generates appropriate workflow files for releases and distributions based on my project configuration
+20. **Given** I'm an experienced developer, **When** I view workflow generation options, **Then** I can opt-out of automatic workflow generation and maintain full control over my CI/CD setup
+
 ### Edge Cases (Handled ✅)
 - NPM package names with similar variants (hyphens/underscores) detected and flagged ✅
 - User owns existing NPM package - recognized and marked as available ✅
@@ -77,6 +85,9 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - Working tree checks don't flash during NPM publish (check order optimized) ✅
 - Cleanup tab auto-refreshes when switching tabs after config changes ✅
 - ESC during NPM name editing cancels edit mode, not entire view ✅
+
+### Known Issues 🐛
+- Directories beginning with "." (dot files/folders like .github, .goreleaser) cannot be modified in commit settings interface
 
 ## Requirements
 
@@ -124,6 +135,27 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - **FR-038**: System MUST display current version and distribution info in project view ✅
 - **FR-039**: System MUST allow dismissing release success screen with ESC/Enter/Space ✅
 
+#### Smart Commit Customization (Planned 🔄)
+- **FR-040**: System MUST allow users to configure custom file categorization rules per project
+- **FR-041**: System MUST store smart commit preferences in project configuration file (~/.distui/projects/<id>/config.yaml)
+- **FR-042**: Users MUST be able to define custom file extension to category mappings (e.g., .proto → code, .sql → data)
+- **FR-043**: System MUST support custom glob patterns for file categorization (e.g., **/test/** → test files)
+- **FR-044**: Users MUST be able to override default categorization rules without affecting other projects
+- **FR-045**: System MUST provide a UI for editing smart commit preferences separate from main configure handler
+- **FR-046**: Smart commit preferences MUST be optional - defaults apply if not customized
+- **FR-047**: System MUST validate custom categorization rules before saving to prevent conflicts
+
+#### GitHub Actions Workflow Generation (Planned 🔄)
+- **FR-048**: System MUST provide optional GitHub Actions workflow generation for release automation
+- **FR-049**: Workflow generation MUST be opt-in to respect developer preferences and avoid forcing opinions
+- **FR-050**: System MUST generate workflows that match the project's enabled distribution channels (Homebrew, NPM, GitHub Releases)
+- **FR-051**: Generated workflows MUST follow GitHub Actions best practices and community standards
+- **FR-052**: System MUST allow users to preview generated workflow files before creation
+- **FR-053**: Users MUST be able to disable workflow generation entirely in project settings
+- **FR-054**: Generated workflows MUST be added to .github/workflows/ in user's repository (with explicit consent)
+- **FR-055**: System MUST support regenerating workflows when distribution configuration changes
+- **FR-056**: Workflow generation MUST include proper error handling and notification steps
+
 ### Key Entities
 - **Project**: Represents a Go application with its repository information, module path, and current version
 - **Configuration**: Project-specific settings including distribution channels, build preferences, and release options
@@ -133,6 +165,12 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - **File Change**: Represents uncommitted file with path, status (modified/added/deleted/untracked), and category
 - **Cleanup Item**: UI representation of file with action (commit/skip/ignore)
 - **Commit Model**: State for commit view including selected files and commit message
+- **NPM Name Check**: Result of NPM package name validation including status (available/unavailable/checking/error), ownership info, and suggestions
+- **Release Phase**: State machine for release workflow (version select, validation, building, publishing, complete, failed)
+- **Version Bump**: Type of version increment (patch, minor, major, custom) with validation logic
+- **Smart Commit Preferences**: Project-level customization of file categorization rules including custom extensions and glob patterns per category
+- **File Category Rule**: Extension or pattern mapping that determines how files are categorized (config, code, docs, build, test, assets, data)
+- **GitHub Workflow Config**: Settings for GitHub Actions workflow generation including enabled channels, secrets, and environments
 
 ### Reference Materials
 - **Charm Examples**: `/Users/williamvansickleiii/charmtuitemplate/distui/docs/charm-examples-inventory/` - Source of truth for TUI patterns
@@ -173,29 +211,71 @@ As a Go developer with multiple projects, I want to manage all my release distri
 
 ## Implementation Progress
 
-### Completed (2025-09-28 to 2025-09-29)
-- ✅ Full TUI infrastructure with 6 views
-- ✅ Configuration management with ~/.distui storage
-- ✅ Project detection from git/go.mod
-- ✅ Git cleanup view with file categorization
-- ✅ Smart commit with AI-generated messages
-- ✅ GitHub repository creation from TUI
-- ✅ File-by-file commit workflow
-- ✅ Repository browser for file navigation
-- ✅ Push detection and execution
-- ✅ Repository status display with sync indicator
-- ✅ Async loading with spinner for configure view
+### Completed (2025-09-28 to 2025-09-30)
 
-### Remaining (Release Workflow & UI Polish)
-- 🔄 **Project view redesign** - Two states (unconfigured/configured) showing dashboard with git status, distributions, last release
-- 🔄 Version bumping logic
-- 🔄 GoReleaser integration and execution
-- 🔄 Homebrew tap updates
-- 🔄 NPM publishing
-- 🔄 Animated progress UI (package-manager pattern)
-- 🔄 Release history tracking and display
-- 🔄 GitHub Actions workflow generation
-- 🔄 Interactive error handling during releases
-- 🔄 Rollback on release failure
+#### Core Infrastructure ✅
+- Full TUI infrastructure with 6 views
+- Configuration management with ~/.distui storage
+- Project detection from git/go.mod
+- Async loading with spinner for configure view
+
+#### Git Management ✅
+- Git cleanup view with file categorization
+- Smart commit with AI-generated messages
+- GitHub repository creation from TUI
+- File-by-file commit workflow
+- Repository browser for file navigation
+- Push detection and execution
+- Repository status display with sync indicator
+
+#### Release Workflow ✅
+- Version bumping logic (patch/minor/major/custom)
+- GoReleaser integration and execution
+- Homebrew tap updates via GoReleaser
+- NPM publishing with pre-flight checks
+- Animated progress UI (package-manager pattern)
+- Release history tracking and display
+- Project view redesign with git status and distribution info
+
+#### NPM Publishing Features ✅ (v0.0.28-0.0.31)
+- **Similarity Detection**: Detects conflicts like "distui" vs "dist-ui" using variation generation
+- **Ownership Detection**: Recognizes user's own packages via `npm whoami`
+- **Inline Package Name Editing**: Edit NPM package name directly in distributions tab with 'e' key
+- **Auto-trigger Validation**: Automatically checks NPM name when entering distributions tab
+- **Scoped Package Suggestions**: Provides @username/package and suffixed alternatives
+- **Auto-commit Package.json**: Commits and pushes version bump after successful NPM publish
+- **Release Blocking**: Prevents releases when configuration changes require file regeneration
+- **Status Display**: Shows availability with ownership info below content box
+
+#### UI/UX Improvements ✅
+- ESC handler to dismiss release success screen
+- Working tree check order optimized (no flash during NPM publish)
+- Tab auto-refresh with loading spinner (cleanup tab)
+- ESC cancels NPM edit mode without exiting entire view
+- Distribution info display in project view (NPM package name, Homebrew tap)
+- Regeneration warning in project view when config changes require file updates
+- NeedsRegeneration flag only set on actual config changes, not initial load
+
+### Outstanding Features 🔄
+
+#### Smart Commit Customization (Planned)
+- Project-level file categorization preferences editor
+- Custom extension to category mappings
+- Custom glob pattern support for file categorization
+- Live preview of how files would be categorized
+- Validation of custom patterns before saving
+- Reset to defaults functionality
+- Separate handler to keep logic out of configure_handler.go
+
+#### GitHub Actions Workflow Generation (Planned)
+- Optional workflow generation for automated releases (opt-in)
+- Preview generated workflow before creating files
+- Support for multiple distribution channels in workflow
+- Configuration of workflow triggers and secrets
+- Auto-regeneration when distribution config changes
+- Respect for developer autonomy - easy opt-out, no forced opinions
+
+#### Bug Fixes Needed
+- Fix handling of dot files/directories (e.g., .github, .goreleaser) in commit settings interface
 
 ---

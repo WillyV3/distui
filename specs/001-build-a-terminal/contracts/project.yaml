@@ -178,6 +178,131 @@ properties:
             default: "go test ./..."
             description: "Test command to run before release"
 
+      smart_commit:
+        type: object
+        description: "Customizable smart commit file categorization preferences"
+        properties:
+          enabled:
+            type: boolean
+            default: true
+            description: "Enable smart commit feature for this project"
+
+          use_custom_rules:
+            type: boolean
+            default: false
+            description: "Use custom categorization rules instead of defaults"
+
+          categories:
+            type: object
+            description: "Custom file categorization mappings"
+            properties:
+              config:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".yaml", ".yml", ".json", ".toml", ".xml", ".ini", ".env"]
+                    description: "File extensions for config category"
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/config/**", "**/.config/**"]
+                    description: "Glob patterns for config files"
+
+              code:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".go", ".js", ".ts", ".py", ".rb", ".java", ".c", ".cpp", ".rs"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/src/**", "**/lib/**"]
+
+              docs:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".md", ".txt", ".rst", ".adoc"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/docs/**", "**/documentation/**", "README*"]
+
+              build:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".dockerfile", ".dockerignore"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["Makefile", "Dockerfile*", "**/build/**", ".goreleaser*"]
+
+              test:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: ["_test.go", ".test.js", ".spec.ts"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/test/**", "**/tests/**", "**/__tests__/**"]
+
+              assets:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".png", ".jpg", ".svg", ".ico", ".gif"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/assets/**", "**/static/**"]
+
+              data:
+                type: object
+                properties:
+                  extensions:
+                    type: array
+                    items:
+                      type: string
+                    default: [".sql", ".csv", ".db", ".sqlite"]
+
+                  patterns:
+                    type: array
+                    items:
+                      type: string
+                    default: ["**/data/**", "**/migrations/**"]
+
       ci_cd:
         type: object
         properties:
@@ -187,10 +312,36 @@ properties:
               enabled:
                 type: boolean
                 default: false
+                description: "Enable GitHub Actions workflow generation"
 
               workflow_path:
                 type: string
                 default: ".github/workflows/release.yml"
+                description: "Path to generated workflow file"
+
+              auto_regenerate:
+                type: boolean
+                default: false
+                description: "Automatically regenerate workflow when distribution config changes"
+
+              include_tests:
+                type: boolean
+                default: true
+                description: "Include test execution in workflow"
+
+              environments:
+                type: array
+                items:
+                  type: string
+                  enum: ["production", "staging", "development"]
+                description: "GitHub environments to use for releases"
+
+              secrets_required:
+                type: array
+                items:
+                  type: string
+                description: "List of required GitHub secrets for workflow"
+                example: ["NPM_TOKEN", "HOMEBREW_TAP_TOKEN"]
 
   history:
     type: object

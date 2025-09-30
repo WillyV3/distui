@@ -1,210 +1,248 @@
-# Technical Research: distui Implementation
+# Research: Smart Commit Preferences & GitHub Workflow Generation
 
-## Executive Summary
-distui requires a Go-based TUI that manages release distributions without polluting user repositories. The solution leverages Bubble Tea for the TUI framework, direct command execution via os/exec, and file-based YAML storage in ~/.distui. All operations execute directly from the TUI with real-time feedback.
+**Feature**: distui enhancements v0.0.32
+**Date**: 2025-09-30
+**Status**: Research Complete
 
-## Technology Selection
+## Overview
 
-### TUI Framework: Bubble Tea
-**Rationale**: Industry-standard Go TUI framework with excellent documentation and community support.
-- Elm-inspired architecture fits perfectly with state management needs
-- Built-in support for concurrent operations (release processes)
-- Excellent keyboard handling for navigation requirements
-- Active maintenance by Charm team
+Research for three enhancement areas to distui v0.0.31:
+1. Smart commit file categorization customization
+2. GitHub Actions workflow generation
+3. Bug fix for dot file handling
 
-### Styling: Lipgloss
-**Rationale**: Companion library to Bubble Tea for terminal styling.
-- Declarative styling approach aligns with code clarity principles
-- Supports all required visual elements (progress bars, tables, forms)
-- Minimal overhead, pure Go implementation
+## Research Areas
 
-### Configuration Storage: YAML Files
-**Rationale**: Human-readable, version-control friendly, no database dependencies.
-- Simple to implement and debug
-- Users can manually edit if needed (no vendor lock-in)
-- Atomic file operations prevent corruption
-- Supports complex nested structures for project configs
+### 1. Glob Pattern Matching in Go
 
-### Command Execution: os/exec
-**Rationale**: Direct command execution without intermediate scripts.
-- Real-time output streaming to TUI
-- Full control over process lifecycle
-- No shell injection vulnerabilities
-- Platform-native execution
+**Decision**: Use `bmatcuk/doublestar/v4` library
+**Rationale**:
+- Supports ** (globstar) for recursive matching
+- filepath.Match() only supports single-directory wildcards
+- Actively maintained, 2k+ stars, production-ready
+- Same pattern syntax as .gitignore and industry standard
 
-## Implementation Patterns
+**Alternatives Considered**:
+- `filepath.Match()`: Too limited, no ** support
+- `gobwas/glob`: Less intuitive syntax, less maintained
+- Custom implementation: Unnecessary complexity
 
-### Configuration Management
-```
-~/.distui/
-├── config.yaml         # Global user settings
-├── projects/
-│   ├── github-com-user-project1.yaml
-│   └── github-com-user-project2.yaml
-└── cache/
-    └── detections.json # Cached detection results
+**Implementation**:
+```go
+import "github.com/bmatcuk/doublestar/v4"
+
+matched, err := doublestar.Match(pattern, path)
 ```
 
-### View Navigation Pattern
-- TAB key cycles through views sequentially
-- Direct shortcuts (P, G, S) jump to specific views
-- View state preserved during navigation
-- Breadcrumb trail shows current location
+### 2. File Categorization Architecture
 
-### Release Execution Pattern
-1. Pre-flight checks (tests, git status)
-2. Version determination
-3. Tag creation
-4. GoReleaser execution
-5. Distribution channel updates (parallel where possible)
-6. Post-release verification
+**Decision**: Layered matching with defaults + custom overrides
+**Rationale**:
+- Default rules provide good UX out of box
+- Custom rules override defaults when enabled
+- Check custom patterns first, fall back to defaults
+- Clear precedence: custom > default > "other"
+
+**Pattern Matching Order**:
+1. Check if custom rules enabled for project
+2. If custom: match against custom patterns for each category
+3. If no custom match OR custom disabled: match against defaults
+4. If still no match: category = "other"
+
+**Data Structure**:
+```go
+type CategoryRules struct {
+    Extensions []string  // [".go", ".js", ".proto"]
+    Patterns   []string  // ["**/test/**", "**/src/**"]
+}
+
+type SmartCommitPrefs struct {
+    Enabled        bool
+    UseCustomRules bool
+    Categories     map[string]CategoryRules  // "code", "config", etc.
+}
+```
+
+### 3. GitHub Actions Workflow Templates
+
+**Decision**: Embedded Go template with distribution channel detection
+**Rationale**:
+- `text/template` built into Go standard library
+- Dynamic workflow based on enabled channels
+- Validates before generation
+- Preview before write
+
+**Workflow Structure**:
+```yaml
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+      # Tests (if include_tests = true)
+      # GoReleaser (always)
+      # NPM publish (if NPM enabled)
+      # Secrets validation included
+```
+
+**Template Variables**:
+- `IncludeTests`: bool
+- `NPMEnabled`: bool
+- `HomebrewEnabled`: bool (handled by GoReleaser)
+- `RequiredSecrets`: []string
+
+**Alternatives Considered**:
+- Hard-coded YAML strings: Less flexible, harder to maintain
+- External template files: Adds deployment complexity
+- JSON-based: Less readable than YAML for workflows
+
+### 4. Dot File Handling Bug
+
+**Problem**: Files/directories starting with "." cannot be modified in commit settings
+
+**Root Cause Research**:
+- Likely issue in file listing or path matching logic
+- Could be hidden file filter being too aggressive
+- May be in `gitcleanup` package file categorization
+
+**Decision**: Fix in categorization pass, ensure dot files included
+**Rationale**:
+- Git tracks dot files normally (.github, .goreleaser.yaml common)
+- distui must handle them same as regular files
+- Filter should only skip .git/ directory itself
+
+**Fix Location**: `internal/gitcleanup/categorize.go` or file listing logic
+
+### 5. UI/UX Patterns
+
+**Decision**: Follow existing configure view tab pattern
+**Rationale**:
+- Users already familiar with tab navigation
+- Consistent with cleanup/distributions/build/advanced tabs
+- Smart commit preferences = new tab OR sub-view in advanced
+- Workflow generation = toggle in advanced tab with preview modal
+
+**Navigation Options**:
+1. Add 5th tab to configure view: "Smart Commit"
+2. Add sub-section to Advanced tab
+3. Separate modal/view triggered from Advanced
+
+**Chosen**: Option 2 (sub-section in Advanced tab)
+- Avoids tab proliferation
+- Feature is advanced/power-user oriented
+- Workflow generation also in Advanced
+- Both features fit thematically
+
+**UI Flow**:
+```
+Configure View > Advanced Tab
+├── Smart Commit Preferences
+│   ├── [Toggle] Use Custom Rules
+│   ├── Category List (code, config, docs...)
+│   ├── Edit Category → Show extensions + patterns
+│   └── [Reset to Defaults] button
+└── GitHub Workflow Generation
+    ├── [Toggle] Enable Workflow Generation
+    ├── [Preview] button → Shows YAML modal
+    ├── [Generate] button → Creates .github/workflows/release.yml
+    └── Required Secrets Warning (if any)
+```
+
+### 6. Configuration Persistence
+
+**Decision**: Extend existing project YAML structure (already documented in contracts/project.yaml)
+**Rationale**:
+- Schema already defined in contracts/project.yaml
+- Follows existing pattern (distributions, build, ci_cd sections)
+- Atomic save with temp file + rename
+- YAML human-readable and editable
+
+**No New Research Needed**: Structure already documented in:
+- `/specs/001-build-a-terminal/contracts/project.yaml`
+- Lines 181-344 (smart_commit and ci_cd.github_actions sections)
+
+### 7. Testing Strategy
+
+**Decision**: Table-driven tests for pattern matching, integration tests for UI
+**Rationale**:
+- Pattern matching is pure logic, easy to unit test
+- UI tested via Bubble Tea test messages
+- Workflow generation tested with template validation
+
+**Test Coverage**:
+1. Glob pattern matching (all edge cases)
+2. Category precedence (custom vs default)
+3. Dot file handling (bug fix verification)
+4. Workflow template generation (all distribution combos)
+5. YAML serialization/deserialization
 
 ## Dependencies
 
-### Core Dependencies
-```go
-require (
-    github.com/charmbracelet/bubbletea v0.27.0
-    github.com/charmbracelet/lipgloss v0.13.0
-    gopkg.in/yaml.v3 v3.0.1
-)
-```
+### New Dependencies
+- `github.com/bmatcuk/doublestar/v4`: Glob pattern matching
 
-### Development Dependencies
-```go
-require (
-    github.com/stretchr/testify v1.9.0
-)
-```
-
-### External Tool Dependencies
-- `gh` CLI (GitHub operations)
-- `git` (version control)
-- `goreleaser` (release builds)
-- `brew` (Homebrew operations)
-- `npm` (NPM publishing)
-
-## Risk Analysis
-
-### Technical Risks
-1. **Terminal Compatibility**
-   - Mitigation: Fallback to basic ANSI, detect terminal capabilities
-
-2. **Command Execution Failures**
-   - Mitigation: Comprehensive error handling, rollback capability
-
-3. **File System Permissions**
-   - Mitigation: Check ~/.distui writability on startup
-
-4. **Concurrent Access**
-   - Mitigation: File locking for project configs
-
-### Operational Risks
-1. **Missing External Tools**
-   - Mitigation: Graceful degradation, clear error messages
-
-2. **Network Dependencies**
-   - Mitigation: Timeout controls, retry logic
-
-3. **Large Output Streams**
-   - Mitigation: Buffered streaming, output truncation
+### Existing Dependencies (No Changes)
+- `github.com/charmbracelet/bubbletea`: TUI framework
+- `github.com/charmbracelet/lipgloss`: Styling
+- `gopkg.in/yaml.v3`: Configuration serialization
 
 ## Performance Considerations
 
-### UI Responsiveness
-- All I/O operations in goroutines
-- Command output streamed, not buffered entirely
-- Debounced keyboard input for navigation
-- Lazy loading of project lists
+### Pattern Matching Performance
+- Glob matching is O(n) where n = pattern length
+- Categorize files on-demand, not on every render
+- Cache categorization results during cleanup session
+- Expected: <1ms for typical file list (< 100 files)
 
-### Memory Management
-- Stream command output instead of buffering
-- Limited history retention (last 10 releases)
-- Periodic cache cleanup
-- Config files loaded on-demand
+### Configuration Load Performance
+- YAML parsing adds ~1-2ms per project config
+- No impact on startup (config loaded lazily)
+- Save operations: <10ms (atomic file write)
 
-### Startup Optimization
-- Parallel detection operations
-- Cached detection results (5-minute TTL)
-- Lazy view initialization
-- Minimal initial file I/O
+### Workflow Generation Performance
+- Template execution: <5ms
+- File write: <10ms
+- One-time operation, not performance-critical
 
 ## Security Considerations
 
-### No Shell Injection
-- Direct command execution without shell interpretation
-- All arguments properly escaped
-- No user input in command construction
+### Pattern Injection
+- Glob patterns from user input
+- **Mitigation**: Validate patterns before save, reject suspicious patterns
+- **Safe**: doublestar library sanitizes patterns
 
-### Token Management
-- Rely on gh CLI's token management
-- Never store tokens in distui configs
-- NPM tokens via environment variables only
+### Workflow File Creation
+- Writes to .github/workflows/ in user repository
+- **Mitigation**: Explicit user consent required, preview before creation
+- **Safe**: YAML template controlled, no user string interpolation in workflow
 
-### File Permissions
-- Config files created with 0600 (user-only read/write)
-- Atomic writes prevent partial updates
-- No world-readable sensitive data
+### Secrets Handling
+- Workflow references GitHub secrets by name (NPM_TOKEN, etc.)
+- **Safe**: Never reads/writes actual secret values, only references
 
-## Integration Points
+## Open Questions
 
-### gh CLI Integration
-```go
-cmd := exec.Command("gh", "repo", "view", "--json", "name,owner")
-// Parse JSON output for repository detection
-```
+### None - All Requirements Clear
 
-### GoReleaser Integration
-```go
-cmd := exec.Command("goreleaser", "release", "--clean")
-cmd.Env = append(os.Environ(), "GITHUB_TOKEN=...")
-// Stream output to TUI
-```
+All technical decisions made based on:
+- Existing codebase patterns (handlers, views, models)
+- Constitutional requirements (user agency, clean code)
+- User requirements (separate from configure_handler, opt-in workflows)
+- Established Go best practices
 
-### Homebrew Tap Updates
-```go
-// Download tarball, calculate SHA256
-// Update formula file with sed-like replacement
-// Git commit and push to tap repository
-```
+## Implementation Readiness
 
-## Testing Strategy
-
-### Unit Testing
-- Mock command execution for predictable tests
-- Table-driven tests for configuration logic
-- Property-based testing for state machines
-
-### Integration Testing
-- Real command execution in isolated environment
-- Temporary directory for test configurations
-- Docker containers for external tool simulation
-
-### Manual Testing Checklist
-- [ ] Navigation with TAB and shortcuts
-- [ ] Release execution under 30 seconds
-- [ ] Error handling for failed commands
-- [ ] Configuration persistence
-- [ ] Multi-project management
-
-## Implementation Timeline
-
-### Week 1: Foundation
-- Configuration management
-- Basic TUI structure
-- Navigation implementation
-
-### Week 2: Core Features
-- Project detection
-- Release execution
-- Distribution channels
-
-### Week 3: Polish
-- Error handling
-- Progress indicators
-- Performance optimization
-
-### Week 4: Testing & Documentation
-- Comprehensive test coverage
-- User documentation
-- Example configurations
+✅ All technical unknowns resolved
+✅ Library choices made and validated
+✅ Architecture patterns defined
+✅ UI/UX flow designed
+✅ Performance acceptable
+✅ Security reviewed
+✅ Ready for Phase 1 (Design & Contracts)
