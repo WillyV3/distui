@@ -697,14 +697,14 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			}
 			m.Lists[0].SetItems(m.loadGitStatus())
 			m.CreateStatus = "✓ Repository created successfully!"
-			// Clear status after 3 seconds
-			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			// Clear status after 1 second
+			return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 				return struct{}{}
 			})
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Failed: %v", msg.err)
-			// Clear status after 3 seconds
-			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			// Clear status after 1 second
+			return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 				return struct{}{}
 			})
 		}
@@ -718,8 +718,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Push failed: %v", msg.err)
 		}
-		// Clear status after 3 seconds
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
 	case filesGeneratedMsg:
@@ -731,8 +731,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		} else {
 			m.GenerateStatus = fmt.Sprintf("✗ Generation failed: %v", msg.err)
 		}
-		// Clear status after 3 seconds
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
 	case commitCompleteMsg:
@@ -749,8 +749,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Commit failed: %v", msg.err)
 		}
-		// Clear status after 3 seconds
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
 	case tea.WindowSizeMsg:

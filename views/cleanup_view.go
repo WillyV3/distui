@@ -47,12 +47,14 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		lines = append(lines, "  "+warningStyle.Render(warningText+" - [P] to push!"))
 	}
 
-	// Show status message (commit/push success) inline if provided
+	// Always reserve space for status message to prevent layout shifts
 	if statusMessage != "" {
 		successStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("82")).
 			Bold(true)
 		lines = append(lines, "  "+successStyle.Render(statusMessage))
+	} else {
+		lines = append(lines, "")
 	}
 
 	// Add blank line after header
