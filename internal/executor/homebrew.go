@@ -25,16 +25,10 @@ type HomebrewUpdateResult struct {
 
 func UpdateHomebrewTap(ctx context.Context, projectName string, version string, tapRepo string, repoOwner string, repoName string) tea.Cmd {
 	return func() tea.Msg {
-		// Log for debugging
-		fmt.Printf("UpdateHomebrewTap called: project=%s, version=%s, tapRepo=%s, owner=%s, repo=%s\n",
-			projectName, version, tapRepo, repoOwner, repoName)
-
 		// Wait for GitHub to process the tag
-		fmt.Println("Waiting 10 seconds for GitHub to process the tag...")
 		time.Sleep(10 * time.Second)
 
 		tarballURL := fmt.Sprintf("https://github.com/%s/%s/archive/refs/tags/%s.tar.gz", repoOwner, repoName, version)
-		fmt.Printf("Tarball URL: %s\n", tarballURL)
 
 		sha256sum, err := downloadAndCalculateSHA256(tarballURL)
 		if err != nil {
@@ -43,7 +37,6 @@ func UpdateHomebrewTap(ctx context.Context, projectName string, version string, 
 				Error:   fmt.Errorf("calculating SHA256 for %s: %w", tarballURL, err),
 			}
 		}
-		fmt.Printf("SHA256: %s\n", sha256sum)
 
 		// tapRepo is like "willyv3/homebrew-tap", convert to local path
 		homeDir := os.Getenv("HOME")
@@ -88,15 +81,12 @@ func UpdateHomebrewTap(ctx context.Context, projectName string, version string, 
 func downloadAndCalculateSHA256(url string) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= 5; attempt++ {
-		fmt.Printf("Download attempt %d/5...\n", attempt)
-
 		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Get(url)
 		if err != nil {
 			lastErr = fmt.Errorf("downloading tarball: %w", err)
 			if attempt < 5 {
 				waitTime := time.Duration(attempt*3) * time.Second
-				fmt.Printf("Download failed, waiting %v before retry...\n", waitTime)
 				time.Sleep(waitTime)
 				continue
 			}
@@ -108,7 +98,6 @@ func downloadAndCalculateSHA256(url string) (string, error) {
 			lastErr = fmt.Errorf("download failed with status: %d", resp.StatusCode)
 			if attempt < 5 {
 				waitTime := time.Duration(attempt*3) * time.Second
-				fmt.Printf("Download failed with status %d, waiting %v before retry...\n", resp.StatusCode, waitTime)
 				time.Sleep(waitTime)
 				continue
 			}
@@ -159,13 +148,11 @@ func commitAndPushFormula(ctx context.Context, tapPath string, projectName strin
 	} else {
 		currentBranch = strings.TrimSpace(currentBranch)
 	}
-	fmt.Printf("Current branch: %s\n", currentBranch)
 
 	// Add the formula file
 	formulaFile := fmt.Sprintf("Formula/%s.rb", projectName)
 	_, err = RunCommandCapture(ctx, "git", []string{"add", formulaFile}, tapPath)
 	if err != nil {
-		fmt.Printf("Git add failed: %v\n", err)
 		return fmt.Errorf("git add failed: %w", err)
 	}
 
@@ -175,32 +162,25 @@ func commitAndPushFormula(ctx context.Context, tapPath string, projectName strin
 	if err != nil {
 		// Check if there's nothing to commit
 		if strings.Contains(output, "nothing to commit") || strings.Contains(err.Error(), "nothing to commit") {
-			fmt.Println("No changes to commit - formula may already be up to date")
 			return nil
 		}
-		fmt.Printf("Git commit failed: %v\n", err)
 		return fmt.Errorf("git commit failed: %w", err)
 	}
 
 	// Try to push to current branch first, then try main/master as fallback
-	fmt.Printf("Pushing to origin/%s...\n", currentBranch)
 	_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", currentBranch}, tapPath)
 	if err != nil {
 		// Try main branch
-		fmt.Println("Failed to push to current branch, trying main...")
 		_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "main"}, tapPath)
 		if err != nil {
 			// Try master branch
-			fmt.Println("Failed to push to main, trying master...")
 			_, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "master"}, tapPath)
 			if err != nil {
-				fmt.Printf("Git push failed: %v\n", err)
 				return fmt.Errorf("git push failed: %w", err)
 			}
 		}
 	}
 
-	fmt.Println("Successfully pushed changes to GitHub")
 	return nil
 }
 
