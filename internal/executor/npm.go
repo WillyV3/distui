@@ -119,20 +119,24 @@ func (n *NPMPublisher) CommitAndPush() error {
 
 	addCmd := exec.Command("git", "add", "package.json")
 	addCmd.Dir = n.projectPath
-	if err := addCmd.Run(); err != nil {
-		return fmt.Errorf("git add failed: %w", err)
+	if output, err := addCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git add failed: %s: %w", string(output), err)
 	}
 
 	commitCmd := exec.Command("git", "commit", "-m", commitMsg)
 	commitCmd.Dir = n.projectPath
-	if err := commitCmd.Run(); err != nil {
-		return fmt.Errorf("git commit failed: %w", err)
+	output, err := commitCmd.CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(output), "nothing to commit") {
+			return nil
+		}
+		return fmt.Errorf("git commit failed: %s: %w", string(output), err)
 	}
 
 	pushCmd := exec.Command("git", "push")
 	pushCmd.Dir = n.projectPath
-	if err := pushCmd.Run(); err != nil {
-		return fmt.Errorf("git push failed: %w", err)
+	if output, err := pushCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git push failed: %s: %w", string(output), err)
 	}
 
 	return nil
