@@ -43,6 +43,7 @@ func UpdateHomebrewTap(ctx context.Context, projectName string, version string, 
 		tapPath := filepath.Join(homeDir, "homebrew-tap")
 		formulaPath := filepath.Join(tapPath, "Formula", projectName+".rb")
 
+
 		// Check if formula exists, if not create it first
 		if _, err := os.Stat(formulaPath); os.IsNotExist(err) {
 			// Create initial formula with the actual SHA256
@@ -77,6 +78,7 @@ func UpdateHomebrewTap(ctx context.Context, projectName string, version string, 
 		}
 	}
 }
+
 
 func downloadAndCalculateSHA256(url string) (string, error) {
 	var lastErr error
@@ -167,23 +169,10 @@ func commitAndPushFormula(ctx context.Context, tapPath string, projectName strin
 		return fmt.Errorf("git commit failed: %w", err)
 	}
 
-	// Try to push using gh CLI for authentication
+	// Use gh CLI to push with proper authentication
 	pushOutput, err := RunCommandCapture(ctx, "gh", []string{"repo", "sync", "--branch", currentBranch}, tapPath)
 	if err != nil {
-		// Fallback to regular git push
-		pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", currentBranch}, tapPath)
-		if err != nil {
-			// Try main branch
-			pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "main"}, tapPath)
-			if err != nil {
-				// Try master branch
-				pushOutput, err = RunCommandCapture(ctx, "git", []string{"push", "origin", "master"}, tapPath)
-				if err != nil {
-					// Provide more context about the error
-					return fmt.Errorf("git push failed: %w\nOutput: %s", err, pushOutput)
-				}
-			}
-		}
+		return fmt.Errorf("push failed: %w\nOutput: %s", err, pushOutput)
 	}
 
 	return nil
