@@ -1,28 +1,50 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 → 1.1.0 (Pragmatic file size amendment + clarified structural discipline)
+Version change: 1.1.0 → 1.2.0 (Pragmatic repository files amendment)
 Modified principles:
-  - "Structural Discipline" (Code Quality Standards) - Updated file size guidance from hard 100-line limit to pragmatic approach
+  - "Zero Repository Pollution" → "Pragmatic Repository Files" - Allow essential distribution config files with user consent
+  - "Structural Discipline" (Code Quality Standards) - Maintained pragmatic file size guidance
 Added sections: None
 Removed sections: None
 Templates requiring updates:
-  - ⚠ plan-template.md (review for file size expectations)
-  - ⚠ tasks-template.md (update task splitting guidance if present)
+  - ⚠ plan-template.md (update for allowed repo files: .goreleaser.yaml, package.json, CI workflows)
+  - ⚠ tasks-template.md (add tasks for config file generation)
   - ✅ constitution command (this file)
 Follow-up TODOs:
+  - Implement .goreleaser.yaml generation from distui config
+  - Implement package.json generation when NPM enabled
+  - Add user consent flow before generating repo files
   - Consider refactoring configure_handler.go (989 lines) into smaller composable modules
-  - Review other 300+ line files for natural split points
 -->
 
 # distui Constitution
 
 ## Core Principles
 
-### I. Zero Repository Pollution
-All configuration and state MUST be stored in ~/.distui, never in user repositories.
-No files shall be added to user projects - not .distui.yaml, not generated scripts,
-not package.json unless already present. Projects remain pristine while distui
-maintains its own centralized configuration store.
+### I. Pragmatic Repository Files
+All distui state MUST be stored in ~/.distui, never in user repositories.
+However, distribution tools (GoReleaser, NPM) require configuration files
+in the repository to function. distui MAY generate these essential files
+with explicit user consent:
+
+**ALLOWED (with user consent):**
+- .goreleaser.yaml (required by GoReleaser for releases)
+- package.json (required by NPM for publishing)
+- .github/workflows/*.yml (optional, if CI/CD generation enabled)
+
+**NEVER ALLOWED:**
+- .distui.yaml or similar distui state files
+- Generated shell scripts or temporary files
+- Lock files, caches, or build artifacts
+
+Generated configuration files MUST be:
+- Idempotent (safe to regenerate without side effects)
+- Human-readable and editable
+- Safe to commit to version control
+- Generated only after user confirmation
+
+Projects remain under user control. Once generated, config files belong
+to the user and can be modified without distui's involvement.
 
 ### II. 30-Second Release Execution
 Release execution MUST complete within 30 seconds for typical projects. The TUI
@@ -147,4 +169,4 @@ This constitution evolves with the project but changes are deliberate and
 documented. Each amendment requires clear rationale and migration plan if
 breaking existing patterns.
 
-**Version**: 1.1.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-29
+**Version**: 1.2.0 | **Ratified**: 2025-09-28 | **Last Amended**: 2025-09-29

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"distui/internal/executor"
+	"distui/internal/gitcleanup"
 	"distui/internal/models"
 )
 
@@ -191,6 +192,13 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 }
 
 func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
+	// Check if working tree is clean before starting release
+	if !gitcleanup.IsWorkingTreeClean() {
+		m.Phase = models.PhaseFailed
+		m.Error = fmt.Errorf("working tree is not clean - commit or stash changes first")
+		return m, nil
+	}
+
 	version := m.getSelectedVersion()
 	if version == "" {
 		return m, nil

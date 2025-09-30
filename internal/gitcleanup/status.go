@@ -21,6 +21,15 @@ type FileChange struct {
 	Icon        string // Visual indicator
 }
 
+// IsWorkingTreeClean returns true if there are no uncommitted changes
+func IsWorkingTreeClean() bool {
+	files, err := GetGitStatus()
+	if err != nil {
+		return false
+	}
+	return len(files) == 0
+}
+
 // GetGitStatus returns all modified and untracked files
 func GetGitStatus() ([]GitFile, error) {
 	var files []GitFile

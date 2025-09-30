@@ -21,9 +21,20 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return "Loading configuration..."
 	}
 
-	// Show spinner while loading
+	// Show spinner while loading or generating
 	if configModel.Loading {
 		spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View()) + " Loading repository status..."
+		return lipgloss.Place(
+			configModel.Width,
+			configModel.Height,
+			lipgloss.Center,
+			lipgloss.Center,
+			spinnerView,
+		)
+	}
+
+	if configModel.GeneratingFiles {
+		spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View()) + " " + configModel.GenerateStatus
 		return lipgloss.Place(
 			configModel.Width,
 			configModel.Height,
@@ -41,6 +52,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return RenderSmartCommitConfirm(configModel.CleanupModel)
 	case handlers.CommitView:
 		return RenderCommitView(configModel.CommitModel)
+	case handlers.GenerateConfigConsent:
+		return RenderGenerateConfigConsent(configModel.PendingGenerateFiles, configModel.Width, configModel.Height)
 	}
 
 	headerStyle := lipgloss.NewStyle().
@@ -360,15 +373,21 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	// Show appropriate controls based on active tab
 	controlLine1 := ""
 	controlLine2 := ""
+	controlLine3 := ""
 
 	if configModel.ActiveTab == 0 {
 		// Cleanup tab specific controls
 		controlLine1 = "[Space] Cycle  [s] Execute  [r] Refresh"
 		controlLine2 = "[Tab] Next Tab  [ESC] Cancel  [↑/↓] Navigate"
+	} else if configModel.ActiveTab == 1 {
+		// Distributions tab - show hint about editing tap/package
+		controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
+		controlLine2 = "[R] Confirm & Generate Release Files  [ESC] Back"
+		controlLine3 = "To change tap/package: ESC > s > e"
 	} else {
 		// Other tabs controls
 		controlLine1 = "[Space] Toggle  [a] Check All  [Tab] Next Tab"
-		controlLine2 = "[s] Save  [ESC] Cancel  [↑/↓] Navigate"
+		controlLine2 = "[R] Confirm & Generate Release Files  [ESC] Back"
 	}
 
 	// Truncate control lines if needed
@@ -379,10 +398,17 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		if len(controlLine2) > configModel.Width {
 			controlLine2 = controlLine2[:configModel.Width-3] + "..."
 		}
+		if len(controlLine3) > configModel.Width {
+			controlLine3 = controlLine3[:configModel.Width-3] + "..."
+		}
 	}
 
 	content.WriteString("\n" + controlStyle.Render(controlLine1))
 	content.WriteString("\n" + controlStyle.Render(controlLine2))
+	if controlLine3 != "" {
+		hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+		content.WriteString("\n" + hintStyle.Render(controlLine3))
+	}
 
 	return content.String()
 }

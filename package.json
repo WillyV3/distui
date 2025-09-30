@@ -1,0 +1,17 @@
+{
+  "name": "distui",
+  "version": "0.0.1",
+  "description": "distui - distributed via distui",
+  "bin": {
+    "distui": "./bin/distui"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/willyv3/distui.git"
+  },
+  "keywords": [
+    "cli",
+    "tool"
+  ],
+  "license": "MIT"
+}

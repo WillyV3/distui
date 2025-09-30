@@ -33,6 +33,17 @@ type loadCompleteMsg struct {
 	cleanupModel *CleanupModel
 }
 
+type filesGeneratedMsg struct {
+	err error
+}
+
+func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, files []string) tea.Cmd {
+	return func() tea.Msg {
+		err := GenerateConfigFiles(detectedProject, projectConfig, files)
+		return filesGeneratedMsg{err: err}
+	}
+}
+
 // ViewType for the configure screen
 type ViewType uint
 
@@ -41,6 +52,7 @@ const (
 	GitHubView
 	CommitView
 	SmartCommitConfirm
+	GenerateConfigConsent
 )
 
 // ConfigureModel holds the state for the configure view
@@ -61,6 +73,12 @@ type ConfigureModel struct {
 	CleanupModel    *CleanupModel
 	GitHubModel     *GitHubModel
 	CommitModel     *CommitModel
+
+	// Config generation consent
+	PendingGenerateFiles []string // Files that need to be generated
+	DetectedProject      *models.ProjectInfo
+	GeneratingFiles      bool   // Currently generating files
+	GenerateStatus       string // Status message for generation
 
 	// Legacy fields (to be removed)
 	CreatingRepo       bool
@@ -170,7 +188,6 @@ func (i CleanupItem) Description() string {
 
 func (i CleanupItem) FilterValue() string { return i.Path }
 
-// saveConfig saves the current configuration to disk
 func (m *ConfigureModel) saveConfig() error {
 	if m.ProjectConfig == nil || m.ProjectIdentifier == "" {
 		return fmt.Errorf("no project config to save")
@@ -274,6 +291,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 		Loading:           true,
 		GitHubAccounts:    githubAccounts,
 		ProjectConfig:     projectConfig,
+		DetectedProject:   detectedProject,
 		ProjectIdentifier: "",
 	}
 
@@ -342,7 +360,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	npmEnabled := false
 	goInstallEnabled := true
 	homebrewDesc := "Tap: not configured"
-	npmDesc := "Scope: not configured"
+	npmDesc := "Package: not configured"
 
 	if projectConfig != nil && projectConfig.Config != nil {
 		if projectConfig.Config.Distributions.GitHubRelease != nil {
@@ -352,12 +370,24 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 			homebrewEnabled = projectConfig.Config.Distributions.Homebrew.Enabled
 			if projectConfig.Config.Distributions.Homebrew.TapRepo != "" {
 				homebrewDesc = "Tap: " + projectConfig.Config.Distributions.Homebrew.TapRepo
+			} else if detectedProject != nil && detectedProject.Repository != nil {
+				detectedTap := detectedProject.Repository.Owner + "/homebrew-tap"
+				homebrewDesc = "Tap: " + detectedTap + " (detected)"
+				if projectConfig.Config.Distributions.Homebrew.TapRepo == "" {
+					projectConfig.Config.Distributions.Homebrew.TapRepo = detectedTap
+				}
 			}
 		}
 		if projectConfig.Config.Distributions.NPM != nil {
 			npmEnabled = projectConfig.Config.Distributions.NPM.Enabled
 			if projectConfig.Config.Distributions.NPM.PackageName != "" {
 				npmDesc = "Package: " + projectConfig.Config.Distributions.NPM.PackageName
+			} else if detectedProject != nil && detectedProject.Binary != nil && detectedProject.Binary.Name != "" {
+				detectedPackage := detectedProject.Binary.Name
+				npmDesc = "Package: " + detectedPackage + " (detected)"
+				if projectConfig.Config.Distributions.NPM.PackageName == "" {
+					projectConfig.Config.Distributions.NPM.PackageName = detectedPackage
+				}
 			}
 		}
 		if projectConfig.Config.Distributions.GoModule != nil {
@@ -636,7 +666,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		var cmd tea.Cmd
 		m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
 		// Only continue ticking if we're showing the spinner
-		if m.IsCreating || m.Loading {
+		if m.IsCreating || m.Loading || m.GeneratingFiles {
 			return m, cmd
 		}
 		return m, nil
@@ -687,6 +717,19 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			}
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Push failed: %v", msg.err)
+		}
+		// Clear status after 3 seconds
+		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return struct{}{}
+		})
+	case filesGeneratedMsg:
+		m.GeneratingFiles = false
+		if msg.err == nil {
+			m.GenerateStatus = "✓ Release files generated successfully!"
+			m.CurrentView = TabView
+			m.PendingGenerateFiles = nil
+		} else {
+			m.GenerateStatus = fmt.Sprintf("✗ Generation failed: %v", msg.err)
 		}
 		// Clear status after 3 seconds
 		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
@@ -874,7 +917,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	// Model will be created in app.go with proper dimensions
 
 	switch msg := msg.(type) {
-	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg:
+	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg, filesGeneratedMsg:
 		// Pass these messages directly to the model's Update
 		if configModel != nil {
 			newModel, cmd := configModel.Update(msg)
@@ -943,6 +986,24 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.CurrentView = TabView
 				return currentPage, false, nil, configModel
 			}
+		} else if configModel.CurrentView == GenerateConfigConsent {
+			fmt.Printf("[DEBUG] In GenerateConfigConsent view, key pressed: %s\n", msg.String())
+			switch msg.String() {
+			case "y", "Y":
+				fmt.Printf("[DEBUG] Y pressed - starting generation for files: %v\n", configModel.PendingGenerateFiles)
+				// Start async file generation with spinner
+				configModel.GeneratingFiles = true
+				configModel.GenerateStatus = "Generating release files..."
+				return currentPage, false, tea.Batch(
+					configModel.CreateSpinner.Tick,
+					generateFilesCmd(configModel.DetectedProject, configModel.ProjectConfig, configModel.PendingGenerateFiles),
+				), configModel
+			case "n", "N", "esc":
+				fmt.Printf("[DEBUG] N/ESC pressed - cancelling\n")
+				configModel.CurrentView = TabView
+				configModel.PendingGenerateFiles = nil
+				return currentPage, false, nil, configModel
+			}
 		} else if configModel.CurrentView == GitHubView {
 			switch msg.String() {
 			case "esc":
@@ -967,6 +1028,26 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				}
 				configModel.CurrentView = CommitView
 			}
+			return currentPage, false, nil, configModel
+		}
+
+
+		// Handle 'R' key to confirm and generate/regenerate release files (only in TabView, not on Cleanup tab)
+		if (msg.String() == "r" || msg.String() == "R") && configModel.CurrentView == TabView && configModel.ActiveTab != 0 {
+			fmt.Printf("[DEBUG] R pressed - CurrentView=%v, ActiveTab=%d\n", configModel.CurrentView, configModel.ActiveTab)
+			missing := CheckMissingConfigFiles(configModel.DetectedProject, configModel.ProjectConfig)
+			fmt.Printf("[DEBUG] Missing files: %v\n", missing)
+			if len(missing) > 0 {
+				// Files don't exist - show consent for creation
+				configModel.PendingGenerateFiles = missing
+			} else {
+				// Files exist - regenerate based on current config
+				regen := GetConfigFilesForRegeneration(configModel.DetectedProject, configModel.ProjectConfig)
+				fmt.Printf("[DEBUG] Regen files: %v\n", regen)
+				configModel.PendingGenerateFiles = regen
+			}
+			fmt.Printf("[DEBUG] Setting CurrentView to GenerateConfigConsent, pending files: %v\n", configModel.PendingGenerateFiles)
+			configModel.CurrentView = GenerateConfigConsent
 			return currentPage, false, nil, configModel
 		}
 

@@ -24,15 +24,25 @@ This document contains all implementation tasks for the distui feature. Tasks ar
 - ✅ Release Workflow Core: 10/10 (100%)
 - ✅ Release Configuration: 5/5 (T-CFG-1,2,3,6,7) - COMPLETE
 
-### Remaining Critical Work
-- 🔄 Release Polish: T-CFG-8,9 (status display, validation) - 2 tasks
-- 🔄 Testing: T032-T039 (8 tasks - optional for MVP)
-- 🔄 Integration: T040-T043 (4 tasks - mostly done)
-- 🔄 Polish: T044-T047 (4 tasks - spinners, help screen)
+### What Actually Works Right Now
+- ✅ Full TUI with all views (Project, Global, Settings, Configure)
+- ✅ Project detection from go.mod and git
+- ✅ Configuration persistence to ~/.distui/projects/{identifier}.yaml
+- ✅ All 4 configure tabs (Cleanup, Distributions, Build, Advanced) save/load
+- ✅ Release flow with version selection
+- ✅ Git cleanup UI with status display
+- ✅ GitHub management (create/connect repos)
+- ✅ Commit management with file selection
+
+### What's Left for MVP
+1. **Testing** (T032-T039) - Optional, can ship without
+2. **Polish** (T044-T047) - Nice to have (spinners already work, help screen optional)
+3. **Integration cleanup** (T040-T043) - Mostly done, just cleanup
 
 ### REMOVED Tasks (Not Needed)
 - ~~T028-T029: New Project Wizard~~ - Configure view IS the project setup
 - ~~T-CFG-4,5: Homebrew/NPM detection~~ - Not needed for MVP, users can toggle manually
+- ~~T-CFG-8,9: Status display, validation~~ - Current UI is sufficient
 
 ### Execution Guide
 Tasks marked with [P] can be run in parallel. For example:
@@ -697,42 +707,14 @@ case projectView:
 
 ### ✅ T026: Implement Configure View [COMPLETED]
 **File**: views/configure_view.go
-- ✅ Created tabbed interface (Distributions, Build Settings, Advanced)
-- ✅ Interactive lists with Bubble Tea list.Model
-- ✅ Checkbox toggles with [✓] and [ ] patterns
-- ✅ Dynamic height adjustment for window resizing
-- ✅ Professional list navigation
-**Status**: Complete with list-based UI
-**Estimate**: 5 points
+**Status**: Complete with tabbed interface and interactive lists
 
 ### ✅ T027: Implement Configure Handler [COMPLETED]
 **File**: handlers/configure_handler.go
-- ✅ Handle Tab key for tab switching
-- ✅ Handle Space to toggle checkboxes
-- ✅ Handle 'a' for check all functionality
-- ✅ List navigation with up/down arrows
-- ✅ Proper window size handling
-- ✅ Maintains state across tab switches
-**Status**: Complete with full interactivity
-**Estimate**: 3 points
+**Status**: Complete with full interactivity and config persistence
 
-### T028: Implement New Project View
-**File**: views/newproject_view.go
-- Show detection results
-- Allow editing detected values
-- Display confirmation step
-- Show initial configuration
-- Format as wizard flow
-**Estimate**: 3 points
-
-### T029: Implement New Project Handler
-**File**: handlers/newproject_handler.go
-- Handle project detection flow
-- Process user overrides
-- Save new project configuration
-- Switch to project view on completion
-- Handle cancellation
-**Estimate**: 3 points
+### ~~T028-T029: New Project Wizard [REMOVED]~~
+**Reason**: Configure view IS the project setup. Once user configures distributions/build settings, they just run releases from project page. No separate wizard needed.
 
 ## Message and Command Types
 

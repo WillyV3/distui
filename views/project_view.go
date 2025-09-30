@@ -2,9 +2,12 @@ package views
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"distui/handlers"
+	"distui/internal/gitcleanup"
 	"distui/internal/models"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -37,12 +40,42 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(warningStyle.Render("⚠ GitHub not configured") + "\n\n")
 	}
 
-	// UNCONFIGURED project - minimal view
-	if project != nil && config == nil {
-		content.WriteString(headerStyle.Render("UNCONFIGURED PROJECT") + "\n\n")
+	// Check if .goreleaser.yaml exists
+	hasGoReleaserConfig := false
+	if project != nil {
+		goreleaserPaths := []string{
+			filepath.Join(project.Path, ".goreleaser.yaml"),
+			filepath.Join(project.Path, ".goreleaser.yml"),
+			filepath.Join(project.Path, "goreleaser.yaml"),
+			filepath.Join(project.Path, "goreleaser.yml"),
+		}
+		for _, path := range goreleaserPaths {
+			if _, err := os.Stat(path); err == nil {
+				hasGoReleaserConfig = true
+				break
+			}
+		}
+	}
+
+	// UNCONFIGURED project - minimal view (no config OR no .goreleaser.yaml)
+	if project != nil && (config == nil || !hasGoReleaserConfig) {
+		content.WriteString(headerStyle.Render("PROJECT NOT CONFIGURED") + "\n\n")
 		content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
 		content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
-		content.WriteString(warningStyle.Render("Press [c] to configure this project for releases") + "\n\n")
+
+		if config == nil {
+			content.WriteString(warningStyle.Render("⚠ No distui configuration found") + "\n")
+		}
+		if !hasGoReleaserConfig {
+			content.WriteString(warningStyle.Render("⚠ No .goreleaser.yaml found in project") + "\n")
+		}
+
+		content.WriteString("\n")
+		content.WriteString(infoStyle.Render("This project needs to be configured before releasing:") + "\n\n")
+		content.WriteString(infoStyle.Render("1. Press [c] to configure distributions (Homebrew, NPM, etc.)") + "\n")
+		content.WriteString(infoStyle.Render("2. distui will generate .goreleaser.yaml in your repo") + "\n")
+		content.WriteString(infoStyle.Render("3. Commit the config file to your repository") + "\n")
+		content.WriteString(infoStyle.Render("4. Return here and press [r] to release") + "\n\n")
 		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
 		return content.String()
 	}
@@ -55,7 +88,23 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		return content.String()
 	}
 
-	// CONFIGURED project - full view
+	// CONFIGURED project - check if working tree is clean
+	isClean := gitcleanup.IsWorkingTreeClean()
+
+	if !isClean {
+		content.WriteString(headerStyle.Render("WORKING TREE NOT CLEAN") + "\n\n")
+		content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
+		content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
+		content.WriteString(warningStyle.Render("⚠ You have uncommitted changes") + "\n\n")
+		content.WriteString(infoStyle.Render("Before releasing, you must clean your working tree:") + "\n\n")
+		content.WriteString(infoStyle.Render("1. Press [c] to open the cleanup view") + "\n")
+		content.WriteString(infoStyle.Render("2. Review and commit/stash your changes") + "\n")
+		content.WriteString(infoStyle.Render("3. Return here to release") + "\n\n")
+		content.WriteString(subtleStyle.Render("c: cleanup • g: global • s: settings • q: quit"))
+		return content.String()
+	}
+
+	// CONFIGURED project with clean working tree - full view
 	content.WriteString(headerStyle.Render(project.Module.Name) + "\n\n")
 	content.WriteString(infoStyle.Render(fmt.Sprintf("Version: %s", project.Module.Version)) + "\n")
 
