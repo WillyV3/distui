@@ -6,7 +6,7 @@ import (
 )
 
 // UpdateProjectView handles project view updates and navigation
-func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel *ReleaseModel) (int, bool, tea.Cmd, *ReleaseModel) {
+func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel *ReleaseModel, configureModel *ConfigureModel) (int, bool, tea.Cmd, *ReleaseModel) {
 	if releaseModel != nil && releaseModel.Phase != models.PhaseVersionSelect {
 		updatedModel, cmd := releaseModel.Update(msg)
 		return currentPage, false, cmd, updatedModel
@@ -50,6 +50,11 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 		case "s":
 			return 2, false, tea.ClearScreen, releaseModel // settingsView
 		case "r":
+			// Block release if config needs regeneration
+			if configureModel != nil && configureModel.NeedsRegeneration {
+				// Don't start release - user must regenerate files first
+				return currentPage, false, nil, releaseModel
+			}
 			if releaseModel != nil {
 				releaseModel.Phase = models.PhaseVersionSelect
 				releaseModel.SelectedVersion = 0

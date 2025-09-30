@@ -156,7 +156,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.releaseModel = handlers.NewReleaseModel(width, height, projectPath, projectName, currentVersion, repoOwner, repoName, m.currentProject)
 		}
 
-		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg, m.releaseModel)
+		newPage, quitting, pageCmd, newReleaseModel := handlers.UpdateProjectView(int(m.currentPage), int(projectView), msg, m.releaseModel, m.configureModel)
 		m.releaseModel = newReleaseModel
 
 		// Pre-create configure model if navigating to it
