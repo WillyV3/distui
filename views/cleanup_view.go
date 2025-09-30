@@ -109,6 +109,7 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		lines = append(lines, "")
 		syncedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
 		lines = append(lines, "  "+syncedStyle.Render("Repository is clean and up to date."))
+		lines = append(lines, "  "+syncedStyle.Render("You may now release a new version."))
 	}
 
 	// Divider with padding
