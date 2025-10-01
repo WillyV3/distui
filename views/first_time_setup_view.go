@@ -53,7 +53,11 @@ func RenderFirstTimeSetup(model *handlers.ConfigureModel) string {
 
 		if model.HomebrewCheckEnabled {
 			if model.AutoDetected {
-				content.WriteString(successStyle.Render("✓ Found in Homebrew"))
+				if model.HomebrewDetectedFromFile {
+					content.WriteString(successStyle.Render("✓ Found in .goreleaser.yaml"))
+				} else {
+					content.WriteString(successStyle.Render("✓ Found in Homebrew"))
+				}
 			} else {
 				content.WriteString(successStyle.Render("✓ Homebrew Formula"))
 			}
@@ -66,7 +70,11 @@ func RenderFirstTimeSetup(model *handlers.ConfigureModel) string {
 
 		if model.NPMCheckEnabled {
 			if model.AutoDetected {
-				content.WriteString(successStyle.Render("✓ Found in NPM"))
+				if model.NPMDetectedFromFile {
+					content.WriteString(successStyle.Render("✓ Found in package.json"))
+				} else {
+					content.WriteString(successStyle.Render("✓ Found in NPM"))
+				}
 			} else {
 				content.WriteString(successStyle.Render("✓ NPM Package"))
 			}

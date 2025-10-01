@@ -15,31 +15,55 @@ func StartDistributionDetectionCmd(detectedProject *models.ProjectInfo, globalCo
 
 	homebrewTap := ""
 	homebrewFormula := ""
+	homebrewFromFile := false
 	npmPackage := ""
 	npmScopedPackage := ""
+	npmFromFile := false
 
-	if globalConfig != nil && globalConfig.User.DefaultHomebrewTap != "" {
+	// First check for existing .goreleaser.yaml and package.json
+	if detectedProject.Path != "" {
+		goreleaserConfig, _ := detection.DetectGoReleaserConfig(detectedProject.Path)
+		packageJSON, _ := detection.DetectPackageJSON(detectedProject.Path)
+
+		if goreleaserConfig != nil && goreleaserConfig.HasHomebrew {
+			homebrewTap = goreleaserConfig.HomebrewTap
+			homebrewFormula = goreleaserConfig.FormulaName
+			homebrewFromFile = true
+		}
+
+		if packageJSON != nil && packageJSON.Name != "" {
+			npmPackage = packageJSON.Name
+			npmScopedPackage = packageJSON.Name
+			npmFromFile = true
+		}
+	}
+
+	// Fall back to global config if not found in files
+	if homebrewTap == "" && globalConfig != nil && globalConfig.User.DefaultHomebrewTap != "" {
 		homebrewTap = globalConfig.User.DefaultHomebrewTap
 	}
 
-	if detectedProject.Binary != nil {
+	if homebrewFormula == "" && detectedProject.Binary != nil {
 		homebrewFormula = detectedProject.Binary.Name
 	}
 
-	if detectedProject.Module != nil {
+	if npmPackage == "" && detectedProject.Module != nil {
 		npmPackage = detectedProject.Module.Name
 		if globalConfig != nil && globalConfig.User.NPMScope != "" {
 			npmScopedPackage = "@" + globalConfig.User.NPMScope + "/" + detectedProject.Module.Name
 		}
 	}
 
-	return DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedPackage)
+	return DetectDistributionsCmd(homebrewTap, homebrewFormula, homebrewFromFile, npmPackage, npmScopedPackage, npmFromFile)
 }
 
 // DetectDistributionsCmd auto-detects if project exists in user's tap/npm
-func DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedPackage string) tea.Cmd {
+func DetectDistributionsCmd(homebrewTap, homebrewFormula string, homebrewFromFile bool, npmPackage, npmScopedPackage string, npmFromFile bool) tea.Cmd {
 	return func() tea.Msg {
-		result := distributionDetectedMsg{}
+		result := distributionDetectedMsg{
+			homebrewFromFile: homebrewFromFile,
+			npmFromFile:      npmFromFile,
+		}
 
 		// Try Homebrew tap if configured
 		if homebrewTap != "" && homebrewFormula != "" {
@@ -49,6 +73,11 @@ func DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedP
 				result.homebrewFormula = homebrewFormula
 				result.homebrewVersion = info.Version
 				result.homebrewExists = true
+			} else if homebrewFromFile {
+				// Even if not published yet, if from file, include the config
+				result.homebrewTap = homebrewTap
+				result.homebrewFormula = homebrewFormula
+				result.homebrewExists = false
 			}
 		}
 
@@ -59,6 +88,10 @@ func DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedP
 				result.npmPackage = npmScopedPackage
 				result.npmVersion = info.Version
 				result.npmExists = true
+			} else if npmFromFile {
+				// Even if not published yet, if from file, include the config
+				result.npmPackage = npmScopedPackage
+				result.npmExists = false
 			}
 		}
 
@@ -68,6 +101,10 @@ func DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedP
 				result.npmPackage = npmPackage
 				result.npmVersion = info.Version
 				result.npmExists = true
+			} else if npmFromFile {
+				// Even if not published yet, if from file, include the config
+				result.npmPackage = npmPackage
+				result.npmExists = false
 			}
 		}
 
