@@ -13,18 +13,28 @@ func CommitFiles(files []GitFile, message string) error {
 		return fmt.Errorf("no files to commit")
 	}
 
-	// Stage files
+	// Stage files - use git rm for deletions
 	for _, file := range files {
-		cmd := exec.Command("git", "add", file.Path)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to add %s: %w", file.Path, err)
+		status := strings.TrimSpace(file.Status)
+		var cmd *exec.Cmd
+
+		if strings.Contains(status, "D") {
+			cmd = exec.Command("git", "rm", file.Path)
+		} else {
+			cmd = exec.Command("git", "add", file.Path)
+		}
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to stage %s: %w\nGit output: %s", file.Path, err, string(output))
 		}
 	}
 
 	// Commit with message
 	cmd := exec.Command("git", "commit", "-m", message)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to commit: %w\nGit output: %s", err, string(output))
 	}
 
 	return nil

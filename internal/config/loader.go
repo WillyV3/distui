@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"distui/internal/models"
+	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -79,7 +80,7 @@ func getDefaultSmartCommitPrefs() *models.SmartCommitPrefs {
 	return &models.SmartCommitPrefs{
 		Enabled:        true,
 		UseCustomRules: false,
-		Categories:     make(map[string]models.CategoryRules),
+		Categories:     nil,
 	}
 }
 
@@ -137,4 +138,66 @@ func SaveProject(project *models.ProjectConfig) error {
 	}
 
 	return nil
+}
+
+func LoadSmartCommitPreferences(project *models.ProjectConfig) *models.SmartCommitPrefs {
+	if project.Config == nil || project.Config.SmartCommit == nil {
+		return getDefaultSmartCommitPrefs()
+	}
+	return project.Config.SmartCommit
+}
+
+func SaveSmartCommitPreferences(project *models.ProjectConfig, prefs *models.SmartCommitPrefs) error {
+	for category, rules := range prefs.Categories {
+		for _, pattern := range rules.Patterns {
+			if !doublestar.ValidatePattern(pattern) {
+				return fmt.Errorf("invalid pattern '%s' in category '%s'", pattern, category)
+			}
+		}
+	}
+
+	if project.Config == nil {
+		project.Config = &models.ProjectSettings{}
+	}
+	project.Config.SmartCommit = prefs
+
+	return SaveProject(project)
+}
+
+func DeleteCustomRule(project *models.ProjectConfig, category string, index int) error {
+	if project.Config == nil || project.Config.SmartCommit == nil {
+		return fmt.Errorf("no smart commit preferences")
+	}
+
+	rules, exists := project.Config.SmartCommit.Categories[category]
+	if !exists {
+		return fmt.Errorf("category '%s' not found", category)
+	}
+
+	if index < 0 || index >= len(rules.Patterns) {
+		return fmt.Errorf("index %d out of bounds", index)
+	}
+
+	rules.Patterns = append(rules.Patterns[:index], rules.Patterns[index+1:]...)
+	project.Config.SmartCommit.Categories[category] = rules
+
+	return SaveProject(project)
+}
+
+func ToggleCustomMode(project *models.ProjectConfig, enabled bool) error {
+	if project.Config == nil {
+		project.Config = &models.ProjectSettings{}
+	}
+
+	if project.Config.SmartCommit == nil {
+		project.Config.SmartCommit = getDefaultSmartCommitPrefs()
+	}
+
+	project.Config.SmartCommit.UseCustomRules = enabled
+
+	if !enabled {
+		project.Config.SmartCommit.Categories = nil
+	}
+
+	return SaveProject(project)
 }

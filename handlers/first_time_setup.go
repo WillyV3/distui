@@ -174,6 +174,11 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		// Skip setup and go to normal view
 		m.FirstTimeSetup = false
 		m.CurrentView = TabView
+		// Mark first-time setup as completed (user skipped it)
+		if m.ProjectConfig != nil {
+			m.ProjectConfig.FirstTimeSetupCompleted = true
+			m.saveConfig()
+		}
 		return m, nil
 
 	case "up", "k":

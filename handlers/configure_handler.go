@@ -85,6 +85,7 @@ const (
 	SmartCommitConfirm
 	GenerateConfigConsent
 	SmartCommitPrefsView
+	RepoCleanupView
 	FirstTimeSetupView
 )
 
@@ -104,10 +105,14 @@ type ConfigureModel struct {
 	GlobalConfig      *models.GlobalConfig
 
 	// Sub-models for composable views
-	CleanupModel         *CleanupModel
-	GitHubModel          *GitHubModel
-	CommitModel          *CommitModel
+	CleanupModel          *CleanupModel
+	GitHubModel           *GitHubModel
+	CommitModel           *CommitModel
 	SmartCommitPrefsModel *SmartCommitPrefsModel
+	RepoCleanupModel      *RepoCleanupModel
+	BranchModal           *BranchSelectionModel
+	ScanningRepo          bool
+	ShowingBranchModal    bool
 
 	// Config generation consent
 	PendingGenerateFiles []string // Files that need to be generated
@@ -526,10 +531,14 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 
 	isBulkImported := hadSavedConfig && hasDistributionsEnabled && hasEmptyHistory
 
-	isFirstTime := (!hadSavedConfig && detectedProject != nil &&
-		detectedProject.Module != nil && detectedProject.Module.Version != "" &&
-		detectedProject.Module.Version != "v0.0.1") ||
-		isBulkImported
+	// Check if user has already completed or skipped first-time setup
+	alreadyCompletedSetup := projectConfig != nil && projectConfig.FirstTimeSetupCompleted
+
+	isFirstTime := !alreadyCompletedSetup &&
+		((!hadSavedConfig && detectedProject != nil &&
+			detectedProject.Module != nil && detectedProject.Module.Version != "" &&
+			detectedProject.Module.Version != "v0.0.1") ||
+			isBulkImported)
 
 	if isFirstTime {
 		m.FirstTimeSetup = true
@@ -915,6 +924,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		// Save config and return to normal view
 		m.FirstTimeSetup = false
 		m.CurrentView = TabView
+		// Mark first-time setup as completed
+		m.ProjectConfig.FirstTimeSetupCompleted = true
 		config.SaveProject(m.ProjectConfig)
 
 		// Rebuild distributions list with updated config
@@ -1284,6 +1295,24 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, cmd, newModel
 		}
 	case tea.KeyMsg:
+		// Handle branch modal first (highest priority when showing)
+		if configModel.ShowingBranchModal && configModel.BranchModal != nil {
+			if msg.String() == "esc" {
+				configModel.ShowingBranchModal = false
+				return currentPage, false, nil, configModel
+			}
+			newModal, cmd := configModel.BranchModal.Update(msg)
+			*configModel.BranchModal = newModal
+
+			// Check if push completed successfully - close modal
+			if !configModel.BranchModal.Loading && configModel.BranchModal.Error == "" {
+				// Push succeeded, close modal and refresh
+				configModel.ShowingBranchModal = false
+				configModel.CleanupModel.Refresh()
+			}
+			return currentPage, false, cmd, configModel
+		}
+
 		// Handle view switching
 		if configModel.CurrentView == CommitView {
 			switch msg.String() {
@@ -1319,23 +1348,26 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		} else if configModel.CurrentView == SmartCommitConfirm {
 			switch msg.String() {
 			case "y", "Y":
-				// User confirmed, execute smart commit
+				// User confirmed, categorize and commit auto files only
 				changes, _ := gitcleanup.GetFileChanges()
 				items := []gitcleanup.CleanupItem{}
 
 				for _, change := range changes {
-					items = append(items, gitcleanup.CleanupItem{
-						Path:     change.Path,
-						Status:   change.Status,
-						Category: "auto",
-						Action:   "commit",
-					})
+					category := gitcleanup.CategorizeFile(change.Path)
+					if category == gitcleanup.CategoryAuto {
+						items = append(items, gitcleanup.CleanupItem{
+							Path:     change.Path,
+							Status:   change.Status,
+							Category: string(category),
+							Action:   "commit",
+						})
+					}
 				}
 
 				if len(items) > 0 {
 					configModel.CurrentView = TabView
 					configModel.IsCreating = true
-					configModel.CreateStatus = "Committing changes..."
+					configModel.CreateStatus = "Committing auto-commit files..."
 					return currentPage, false, tea.Batch(
 						configModel.CreateSpinner.Tick,
 						smartCommitCmd(items),
@@ -1393,6 +1425,19 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				}
 				return currentPage, false, cmd, configModel
 			}
+		} else if configModel.CurrentView == RepoCleanupView {
+			if configModel.RepoCleanupModel != nil {
+				if msg.String() == "esc" {
+					configModel.CurrentView = TabView
+					configModel.ScanningRepo = false
+					configModel.CleanupModel.Refresh()
+					return currentPage, false, nil, configModel
+				}
+
+				newModel, cmd := configModel.RepoCleanupModel.Update(msg)
+				*configModel.RepoCleanupModel = newModel
+				return currentPage, false, cmd, configModel
+			}
 		}
 
 		// G key handler removed - repo browser is now embedded in cleanup view
@@ -1417,6 +1462,17 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 			configModel.CurrentView = SmartCommitPrefsView
 			return currentPage, false, nil, configModel
+		}
+
+		// Handle 'f' key to trigger repository file scan (only in TabView, Cleanup tab)
+		if msg.String() == "f" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
+			if configModel.RepoCleanupModel == nil {
+				model := NewRepoCleanupModel(configModel.Width-2, configModel.Height-13)
+				configModel.RepoCleanupModel = &model
+			}
+			configModel.ScanningRepo = true
+			configModel.CurrentView = RepoCleanupView
+			return currentPage, false, configModel.RepoCleanupModel.Init(), configModel
 		}
 
 		// Handle 'R' key to confirm and generate/regenerate release files (only in TabView, not on Cleanup tab)
@@ -1450,6 +1506,21 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 					configModel.CreateSpinner.Tick,
 					pushCmd(),
 				), configModel
+			}
+			return currentPage, false, nil, configModel
+		}
+
+		// Handle 'B' key for branch selection modal (only in TabView, Cleanup tab, with unpushed commits)
+		if msg.String() == "B" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
+			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
+				configModel.CleanupModel.RepoInfo.RemoteExists &&
+				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 {
+				if configModel.BranchModal == nil {
+					model := NewBranchSelectionModel(configModel.Width, configModel.Height)
+					configModel.BranchModal = &model
+				}
+				configModel.ShowingBranchModal = true
+				return currentPage, false, configModel.BranchModal.Init(), configModel
 			}
 			return currentPage, false, nil, configModel
 		}

@@ -78,8 +78,8 @@ func (m *RepoBrowserModel) LoadDirectory() {
 
 	m.Entries = []FileEntry{}
 	for _, entry := range entries {
-		// Skip hidden files unless ShowHidden is true
-		if !m.ShowHidden && strings.HasPrefix(entry.Name(), ".") {
+		// Only skip .git directory, not other dot files (.github, .goreleaser.yaml, etc.)
+		if entry.Name() == ".git" {
 			continue
 		}
 

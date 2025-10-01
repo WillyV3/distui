@@ -42,9 +42,10 @@ type PathsConfig struct {
 }
 
 type ProjectConfig struct {
-	Project *ProjectInfo     `yaml:"project"`
-	Config  *ProjectSettings `yaml:"config"`
-	History *ReleaseHistory  `yaml:"history,omitempty"`
+	Project                 *ProjectInfo     `yaml:"project"`
+	Config                  *ProjectSettings `yaml:"config"`
+	History                 *ReleaseHistory  `yaml:"history,omitempty"`
+	FirstTimeSetupCompleted bool             `yaml:"first_time_setup_completed,omitempty"`
 }
 
 type ProjectInfo struct {
@@ -163,4 +164,54 @@ type ReleaseRecord struct {
 	Status   string                 `yaml:"status"`
 	Channels map[string]bool        `yaml:"channels,omitempty"`
 	Error    string                 `yaml:"error,omitempty"`
+}
+
+type FileCategoryRule struct {
+	Pattern  string `yaml:"pattern"`
+	Category string `yaml:"category"`
+	Priority int    `yaml:"priority"`
+}
+
+type SmartCommitPreferences struct {
+	Enabled     bool               `yaml:"enabled"`
+	CustomRules []FileCategoryRule `yaml:"custom_rules,omitempty"`
+}
+
+type FlaggedFile struct {
+	Path            string    `yaml:"path"`
+	IssueType       string    `yaml:"issue_type"`
+	SizeBytes       int64     `yaml:"size_bytes"`
+	SuggestedAction string    `yaml:"suggested_action"`
+	FlaggedAt       time.Time `yaml:"flagged_at"`
+}
+
+type CleanupScanResult struct {
+	MediaFiles     []FlaggedFile `yaml:"media_files"`
+	ExcessDocs     []FlaggedFile `yaml:"excess_docs"`
+	DevArtifacts   []FlaggedFile `yaml:"dev_artifacts"`
+	TotalSizeBytes int64         `yaml:"total_size_bytes"`
+	ScanDuration   time.Duration `yaml:"scan_duration"`
+	ScannedAt      time.Time     `yaml:"scanned_at"`
+}
+
+type BranchInfo struct {
+	Name           string `yaml:"name"`
+	IsCurrent      bool   `yaml:"is_current"`
+	TrackingBranch string `yaml:"tracking_branch"`
+	AheadCount     int    `yaml:"ahead_count"`
+	BehindCount    int    `yaml:"behind_count"`
+}
+
+type BranchSelectionModal struct {
+	Branches      []BranchInfo `yaml:"branches"`
+	SelectedIndex int          `yaml:"selected_index"`
+	FilterQuery   string       `yaml:"filter_query"`
+	Width         int          `yaml:"width"`
+	Height        int          `yaml:"height"`
+}
+
+type UINotification struct {
+	Message   string    `yaml:"message"`
+	ShowUntil time.Time `yaml:"show_until"`
+	Style     string    `yaml:"style"`
 }

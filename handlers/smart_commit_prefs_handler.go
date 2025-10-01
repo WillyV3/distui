@@ -36,7 +36,7 @@ func NewSmartCommitPrefsModel(projectConfig *models.ProjectConfig, width, height
 		projectConfig.Config.SmartCommit = &models.SmartCommitPrefs{
 			Enabled:        true,
 			UseCustomRules: false,
-			Categories:     make(map[string]models.CategoryRules),
+			Categories:     nil,
 		}
 	}
 
@@ -179,10 +179,13 @@ func (m *SmartCommitPrefsModel) toggleCustomRules() {
 	if m.ProjectConfig.Config.SmartCommit == nil {
 		return
 	}
-	m.ProjectConfig.Config.SmartCommit.UseCustomRules = !m.ProjectConfig.Config.SmartCommit.UseCustomRules
 
-	if m.ProjectConfig.Config.SmartCommit.UseCustomRules && len(m.ProjectConfig.Config.SmartCommit.Categories) == 0 {
+	newState := !m.ProjectConfig.Config.SmartCommit.UseCustomRules
+	config.ToggleCustomMode(m.ProjectConfig, newState)
+
+	if newState && len(m.ProjectConfig.Config.SmartCommit.Categories) == 0 {
 		m.initializeDefaultCategories()
+		m.saveConfig()
 	}
 }
 
@@ -236,9 +239,7 @@ func (m *SmartCommitPrefsModel) resetToDefaults() {
 	if m.ProjectConfig.Config.SmartCommit == nil {
 		return
 	}
-	m.ProjectConfig.Config.SmartCommit.UseCustomRules = false
-	m.ProjectConfig.Config.SmartCommit.Categories = make(map[string]models.CategoryRules)
-	m.saveConfig()
+	config.ToggleCustomMode(m.ProjectConfig, false)
 }
 
 func (m *SmartCommitPrefsModel) saveConfig() {

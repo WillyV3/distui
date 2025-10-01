@@ -58,7 +58,8 @@ type model struct {
 	settingsModel       *handlers.SettingsModel
 	globalModel         *handlers.GlobalModel
 	releaseModel        *handlers.ReleaseModel
-	switchedToPath      string
+	notification        *models.UINotification
+	notificationModel   handlers.NotificationModel
 }
 
 func initialModel() model {
@@ -118,10 +119,13 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Update notification model
+	newNotifModel, notifCmd := m.notificationModel.Update(msg)
+	m.notificationModel = newNotifModel
+	m.notification = m.notificationModel.Notification
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		m.switchedToPath = ""
-
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			m.quitting = true
 			return m, tea.Quit
@@ -151,10 +155,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.ProjectConfig != nil && msg.ProjectConfig.Project != nil && msg.ProjectConfig.Project.Path != "" {
-			m.switchedToPath = msg.ProjectConfig.Project.Path
+			notif, cmd := handlers.ShowNotification("Switched to: "+msg.ProjectConfig.Project.Path, "success")
+			m.notification = notif
+			m.notificationModel.Notification = notif
+			m.notificationModel.Ticking = true
+			return m, tea.Batch(notifCmd, cmd)
 		}
 
-		return m, nil
+		return m, notifCmd
 	}
 
 	// Update spinner
@@ -229,6 +237,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
 		m.settingsModel = newSettingsModel
+
+		// If settings were saved, reload global config and show notification
+		if newSettingsModel != nil && newSettingsModel.Saved {
+			m.globalConfig, _ = config.LoadGlobalConfig()
+			notif, notifCmd := handlers.ShowNotification("Settings saved", "success")
+			m.notification = notif
+			m.notificationModel.Notification = notif
+			m.notificationModel.Ticking = true
+			newSettingsModel.Saved = false // Reset flag
+			return m, tea.Batch(cmd, pageCmd, notifCmd)
+		}
+
 		return m, tea.Batch(cmd, pageCmd)
 	case configureView:
 		// Update dimensions on every frame if model exists
@@ -304,7 +324,11 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, m.switchedToPath)
+	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "")
+	if m.notification != nil {
+		return views.RenderNotification(m.notification) + "\n" + content
+	}
+	return content
 }
 
 func (m model) renderGlobalView() string {

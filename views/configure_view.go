@@ -44,6 +44,11 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		)
 	}
 
+	// Check for modal overlay first (highest priority)
+	if configModel.ShowingBranchModal && configModel.BranchModal != nil {
+		return RenderBranchSelection(*configModel.BranchModal)
+	}
+
 	// Check if we're in a sub-view
 	switch configModel.CurrentView {
 	case handlers.FirstTimeSetupView:
@@ -58,6 +63,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return RenderGenerateConfigConsent(configModel.PendingGenerateFiles, configModel.PendingDeleteFiles, configModel.Width, configModel.Height)
 	case handlers.SmartCommitPrefsView:
 		return RenderSmartCommitPrefs(configModel.SmartCommitPrefsModel)
+	case handlers.RepoCleanupView:
+		return RenderRepoCleanup(*configModel.RepoCleanupModel)
 	}
 
 	headerStyle := lipgloss.NewStyle().

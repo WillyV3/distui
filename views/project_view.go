@@ -69,32 +69,62 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 
 	// UNCONFIGURED project - minimal view (no config OR no .goreleaser.yaml)
 	if project != nil && (config == nil || !hasGoReleaserConfig) {
-		content.WriteString(headerStyle.Render("PROJECT NOT CONFIGURED") + "\n\n")
-		content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
-		content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
+		// Detect first-time user (no global config set up)
+		isFirstTimeUser := globalConfig == nil || globalConfig.User.GitHubUsername == ""
 
-		if config == nil {
-			content.WriteString(warningStyle.Render("⚠ No distui configuration found") + "\n")
-		}
-		if !hasGoReleaserConfig {
-			content.WriteString(warningStyle.Render("⚠ No .goreleaser.yaml found in project") + "\n")
-		}
+		if isFirstTimeUser {
+			// First-time user flow - guide to settings first
+			content.WriteString(headerStyle.Render("WELCOME TO DISTUI") + "\n\n")
+			content.WriteString(infoStyle.Render("Get started in 3 steps:") + "\n\n")
+			content.WriteString(infoStyle.Render("1. Press [s] to configure global settings") + "\n")
+			content.WriteString(infoStyle.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
+			content.WriteString(infoStyle.Render("2. Press [g] to discover and manage projects") + "\n")
+			content.WriteString(infoStyle.Render("   → distui will scan for your Go projects") + "\n\n")
+			content.WriteString(infoStyle.Render("3. Return here and press [c] to configure this project") + "\n")
+			content.WriteString(infoStyle.Render("   → Set up distributions and release settings") + "\n\n")
+			content.WriteString(subtleStyle.Render("s: settings • g: global • q: quit"))
+		} else {
+			// Existing user with unconfigured project
+			content.WriteString(headerStyle.Render("PROJECT NOT CONFIGURED") + "\n\n")
+			content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
+			content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
 
-		content.WriteString("\n")
-		content.WriteString(infoStyle.Render("This project needs to be configured before releasing:") + "\n\n")
-		content.WriteString(infoStyle.Render("1. Press [c] to configure distributions (Homebrew, NPM, etc.)") + "\n")
-		content.WriteString(infoStyle.Render("2. distui will generate .goreleaser.yaml in your repo") + "\n")
-		content.WriteString(infoStyle.Render("3. Commit the config file to your repository") + "\n")
-		content.WriteString(infoStyle.Render("4. Return here and press [r] to release") + "\n\n")
-		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
+			if config == nil {
+				content.WriteString(warningStyle.Render("⚠ No distui configuration found") + "\n")
+			}
+			if !hasGoReleaserConfig {
+				content.WriteString(warningStyle.Render("⚠ No .goreleaser.yaml found in project") + "\n")
+			}
+
+			content.WriteString("\n")
+			content.WriteString(infoStyle.Render("Configure this project:") + "\n\n")
+			content.WriteString(infoStyle.Render("1. Press [c] to configure distributions (Homebrew, NPM, etc.)") + "\n")
+			content.WriteString(infoStyle.Render("2. distui will generate .goreleaser.yaml in your repo") + "\n")
+			content.WriteString(infoStyle.Render("3. Commit the config file to your repository") + "\n")
+			content.WriteString(infoStyle.Render("4. Return here and press [r] to release") + "\n\n")
+			content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
+		}
 		return content.String()
 	}
 
 	// NO project detected
 	if project == nil {
-		content.WriteString(headerStyle.Render("NO PROJECT") + "\n\n")
-		content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")
-		content.WriteString(subtleStyle.Render("g: global • s: settings • q: quit"))
+		isFirstTimeUser := globalConfig == nil || globalConfig.User.GitHubUsername == ""
+
+		if isFirstTimeUser {
+			content.WriteString(headerStyle.Render("WELCOME TO DISTUI") + "\n\n")
+			content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")
+			content.WriteString(infoStyle.Render("Get started:") + "\n\n")
+			content.WriteString(infoStyle.Render("1. Press [s] to configure global settings") + "\n")
+			content.WriteString(infoStyle.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
+			content.WriteString(infoStyle.Render("2. Press [g] to discover and manage your Go projects") + "\n\n")
+			content.WriteString(subtleStyle.Render("s: settings • g: global • q: quit"))
+		} else {
+			content.WriteString(headerStyle.Render("NO PROJECT") + "\n\n")
+			content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")
+			content.WriteString(infoStyle.Render("Press [g] to view and select from your configured projects") + "\n\n")
+			content.WriteString(subtleStyle.Render("g: global • s: settings • q: quit"))
+		}
 		return content.String()
 	}
 
