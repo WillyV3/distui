@@ -13,6 +13,23 @@ func CommitFiles(files []GitFile, message string) error {
 		return fmt.Errorf("no files to commit")
 	}
 
+	// Run go mod tidy first to ensure go.mod/go.sum are clean
+	tidyCmd := exec.Command("go", "mod", "tidy")
+	if err := tidyCmd.Run(); err != nil {
+		// Non-fatal - log but continue (might not be a Go project)
+		fmt.Fprintf(os.Stderr, "Warning: go mod tidy failed: %v\n", err)
+	}
+
+	// Add go.mod and go.sum if they were modified by tidy
+	modFiles := []string{"go.mod", "go.sum"}
+	for _, modFile := range modFiles {
+		if _, err := os.Stat(modFile); err == nil {
+			// File exists, stage it
+			addCmd := exec.Command("git", "add", modFile)
+			addCmd.Run() // Ignore errors - file might not be tracked or unchanged
+		}
+	}
+
 	// Stage files - use git rm for deletions
 	for _, file := range files {
 		status := strings.TrimSpace(file.Status)
