@@ -49,6 +49,11 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return RenderBranchSelection(*configModel.BranchModal)
 	}
 
+	// Check for overwrite warning modal
+	if configModel.ShowOverwriteWarning {
+		return RenderOverwriteWarning(configModel.FilesToOverwrite)
+	}
+
 	// Check if we're in a sub-view
 	switch configModel.CurrentView {
 	case handlers.FirstTimeSetupView:
@@ -498,5 +503,32 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 
 	return content.String()
+}
+
+func RenderOverwriteWarning(filesToOverwrite []string) string {
+	var b strings.Builder
+
+	warningStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("214")).
+		Bold(true)
+
+	b.WriteString("\n")
+	b.WriteString(warningStyle.Render("⚠ WARNING: Custom Files Will Be Overwritten"))
+	b.WriteString("\n\n")
+
+	b.WriteString("The following custom files will be OVERWRITTEN:\n")
+	for _, file := range filesToOverwrite {
+		b.WriteString(fmt.Sprintf("  - %s\n", file))
+	}
+
+	b.WriteString("\n")
+	b.WriteString("distui will regenerate these files based on your configuration.\n")
+	b.WriteString("Your custom changes will be LOST.\n")
+	b.WriteString("\n\n")
+
+	b.WriteString("[Y] Continue (overwrite files)\n")
+	b.WriteString("[N/Esc] Cancel (keep custom files)\n")
+
+	return b.String()
 }
 

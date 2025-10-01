@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"distui/internal/config"
+	"distui/internal/detection"
 	"distui/internal/gitcleanup"
 	"distui/internal/models"
 )
@@ -173,6 +174,11 @@ type ConfigureModel struct {
 	FirstTimeSetupFocus        int    // 0=homebrew checkbox, 1=tap, 2=formula, 3=npm checkbox, 4=package
 	VerifyingDistributions     bool
 	DistributionVerifyError    string
+
+	// Custom config overwrite warning
+	ShowOverwriteWarning bool
+	FilesToOverwrite     []string
+	PendingSaveConfig    *models.ProjectConfig
 }
 
 // Distribution item for the list
@@ -263,6 +269,35 @@ func (i CleanupItem) Description() string {
 }
 
 func (i CleanupItem) FilterValue() string { return i.Path }
+
+func (m *ConfigureModel) detectFilesToOverwrite() []string {
+	var files []string
+	if m.DetectedProject == nil {
+		return files
+	}
+
+	projectPath := m.DetectedProject.Path
+
+	// Check .goreleaser.yaml
+	goreleaserPaths := []string{
+		projectPath + "/.goreleaser.yaml",
+		projectPath + "/.goreleaser.yml",
+	}
+	for _, p := range goreleaserPaths {
+		if detection.IsCustomConfig(p) {
+			files = append(files, ".goreleaser.yaml")
+			break
+		}
+	}
+
+	// Check package.json
+	packagePath := projectPath + "/package.json"
+	if detection.IsCustomConfig(packagePath) {
+		files = append(files, "package.json")
+	}
+
+	return files
+}
 
 func (m *ConfigureModel) saveConfig() error {
 	return m.saveConfigWithRegenFlag(true)
@@ -1078,6 +1113,45 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// Handle overwrite warning modal first (highest priority)
+		if m.ShowOverwriteWarning {
+			switch msg.String() {
+			case "y", "Y":
+				// User confirms overwrite
+				m.ShowOverwriteWarning = false
+				// Apply pending config changes if any
+				if m.PendingSaveConfig != nil {
+					m.ProjectConfig = m.PendingSaveConfig
+					m.PendingSaveConfig = nil
+				}
+				// Proceed with save and regeneration
+				m.saveConfigWithRegenFlag(true)
+				m.FilesToOverwrite = nil
+				return m, nil
+
+			case "n", "N", "esc":
+				// User cancels
+				m.ShowOverwriteWarning = false
+				m.PendingSaveConfig = nil
+				m.FilesToOverwrite = nil
+				// Revert the list item toggle
+				if m.ActiveTab == 1 {
+					// Re-toggle the distribution item back
+					currentList := &m.Lists[m.ActiveTab]
+					if selectedItem := currentList.SelectedItem(); selectedItem != nil {
+						if i, ok := selectedItem.(DistributionItem); ok {
+							i.Enabled = !i.Enabled // Toggle back
+							items := currentList.Items()
+							items[currentList.Index()] = i
+							currentList.SetItems(items)
+						}
+					}
+				}
+				return m, nil
+			}
+			return m, nil // Consume all other inputs during warning
+		}
+
 		// Handle first-time setup view
 		if m.CurrentView == FirstTimeSetupView {
 			return m.handleFirstTimeSetupKeys(msg)
@@ -1163,9 +1237,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 					packageName := m.ProjectConfig.Config.Distributions.NPM.PackageName
 					if packageName == "" && m.DetectedProject != nil {
-						if m.DetectedProject.Binary.Name != "" {
+						if m.DetectedProject.Binary != nil && m.DetectedProject.Binary.Name != "" {
 							packageName = m.DetectedProject.Binary.Name
-						} else {
+						} else if m.DetectedProject.Module != nil {
 							packageName = m.DetectedProject.Module.Name
 						}
 					}
@@ -1211,7 +1285,20 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				items := currentList.Items()
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
-				// Save config after toggle
+
+				// Check if custom files would be overwritten before saving
+				filesToOverwrite := m.detectFilesToOverwrite()
+				if len(filesToOverwrite) > 0 && !m.ShowOverwriteWarning {
+					// Show warning, don't save yet
+					m.ShowOverwriteWarning = true
+					m.FilesToOverwrite = filesToOverwrite
+					// Create a copy of the current config state
+					configCopy := *m.ProjectConfig
+					m.PendingSaveConfig = &configCopy
+					return m, nil
+				}
+
+				// Save config after toggle (no custom files to overwrite)
 				m.saveConfig()
 
 				// If NPM was just enabled, trigger name check immediately
