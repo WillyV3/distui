@@ -196,9 +196,9 @@ func RenderFirstTimeSetup(model *handlers.ConfigureModel) string {
 	content.WriteString("\n\n")
 
 	if model.HomebrewCheckEnabled || model.NPMCheckEnabled {
-		content.WriteString(successStyle.Render("[s] Save & Continue"))
+		content.WriteString(successStyle.Render("[S] Save & Continue"))
 	} else {
-		content.WriteString(dimStyle.Render("[s] Save & Continue (select at least one)"))
+		content.WriteString(dimStyle.Render("[S] Save & Continue (select at least one)"))
 	}
 
 	content.WriteString("\n")

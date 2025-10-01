@@ -2,11 +2,11 @@
 
 **Feature Branch**: `001-build-a-terminal`
 **Created**: 2025-09-28
-**Updated**: 2025-09-30
+**Updated**: 2025-09-30 (Clarifications added)
 **Status**: ✅ PRODUCTION READY - v0.0.31 - Core features complete, enhancements planned
 **Input**: User description update: "Complete the release workflow implementation including GoReleaser integration, Homebrew tap updates, NPM publishing, and animated progress display. Build release execution flow using package-manager example from charm-examples-inventory for animated progress. Support both interactive TUI releases and GitHub Actions workflow generation for CI/CD. Preserve all completed git management features (smart commit, file categorization, GitHub repo creation, cleanup view) while implementing release execution."
 
-**Planned Enhancements**: "Project-level smart commit preferences customization - users want to customize file categorization rules per project with full freedom over all file types. Settings should be stored in project YAML, keeping code out of configure_handler as much as possible. GitHub Actions workflow generation for CI/CD - optional/opt-in to respect developer autonomy, helping beginners without forcing opinions on experienced developers. All features wired following code conventions and constitution."
+**Planned Enhancements**: "Project-level smart commit preferences customization with deletion support - users want full control over file categorization with immediate reversion to defaults on deletion. Repository cleanup mode scanning for media files, excess documentation, and development artifacts with delete/ignore/archive actions. Branch selection modal for Shift+P push operations showing all available branches. Auto-dismissing project switch notifications (1.5 seconds). GitHub Actions workflow generation for CI/CD - optional/opt-in. Bug fixes for dot file handling, notification persistence, and YAML config cleanup. All features following nested view architecture and constitution principles."
 
 ## Execution Flow (main)
 ```
@@ -44,6 +44,17 @@
 
 ---
 
+## Clarifications
+
+### Session 2025-09-30
+- Q: Repo Cleanup Mode - File Types to Flag → A: All file types (media files, excess documentation, development artifacts)
+- Q: Branch Selection Menu for Push - Display Mode → A: Full-screen modal overlay replacing current view
+- Q: "Switched to [path]" Message - Dismissal Behavior → A: Auto-dismiss after 1.5 seconds
+- Q: Smart Commit Preferences - Deletion Behavior → A: Revert to default system categorization rules immediately
+- Q: Repo Cleanup Mode - Flagged File Actions → A: Delete, ignore, or move to archive directory
+
+---
+
 ## User Scenarios & Testing
 
 ### Primary User Story
@@ -74,8 +85,14 @@ As a Go developer with multiple projects, I want to manage all my release distri
 #### Planned Enhancements 🔄
 17. **Given** I have specific file categorization preferences, **When** I configure smart commit settings for my project, **Then** I can customize which file extensions map to which categories (config, code, docs, etc.) and these preferences are stored in my project configuration
 18. **Given** I want to customize smart commit behavior, **When** I edit smart commit preferences, **Then** I can define custom patterns for all file types without modifying global settings
-19. **Given** I'm a beginner setting up CI/CD, **When** I enable GitHub Actions workflow generation, **Then** the system generates appropriate workflow files for releases and distributions based on my project configuration
-20. **Given** I'm an experienced developer, **When** I view workflow generation options, **Then** I can opt-out of automatic workflow generation and maintain full control over my CI/CD setup
+19. **Given** I delete a custom smart commit preference, **When** the system processes the deletion, **Then** files previously using that rule immediately revert to default categorization rules
+20. **Given** I switch to a different project, **When** the system displays the directory change, **Then** I see a "Switched to: [path]" message that auto-dismisses after 1.5 seconds
+21. **Given** I have unpushed commits, **When** I press Shift+P to push, **Then** I see a full-screen modal showing all available branches I can push to with current branch highlighted
+22. **Given** I'm viewing the branch selection modal, **When** I select a branch, **Then** the system pushes my commits to that branch and dismisses the modal
+23. **Given** I want to clean up my repository, **When** I enable repo cleanup mode in the cleanup tab, **Then** the system scans and flags problematic files (media files, excess documentation beyond README, development artifacts)
+24. **Given** the system has flagged problematic files, **When** I review flagged items, **Then** I can choose to delete the file, add it to .gitignore, or move it to an archive directory
+25. **Given** I'm a beginner setting up CI/CD, **When** I enable GitHub Actions workflow generation, **Then** the system generates appropriate workflow files for releases and distributions based on my project configuration
+26. **Given** I'm an experienced developer, **When** I view workflow generation options, **Then** I can opt-out of automatic workflow generation and maintain full control over my CI/CD setup
 
 ### Edge Cases (Handled ✅)
 - NPM package names with similar variants (hyphens/underscores) detected and flagged ✅
@@ -144,17 +161,42 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - **FR-045**: System MUST provide a UI for editing smart commit preferences separate from main configure handler
 - **FR-046**: Smart commit preferences MUST be optional - defaults apply if not customized
 - **FR-047**: System MUST validate custom categorization rules before saving to prevent conflicts
+- **FR-048**: When custom preferences are deleted, system MUST immediately revert affected files to default categorization rules
+- **FR-049**: System MUST remove custom preference configuration from project YAML file when toggling off custom mode
+
+#### Repository Cleanup Mode (Planned 🔄)
+- **FR-050**: System MUST provide repository cleanup mode accessible from cleanup tab
+- **FR-051**: System MUST scan repository for media files (video, audio, images except icons/logos)
+- **FR-052**: System MUST scan repository for excess documentation (markdown files except README, PDF, Word docs, presentation files)
+- **FR-053**: System MUST scan repository for development artifacts (log files, .DS_Store, temp directories, build artifacts not in .gitignore)
+- **FR-054**: System MUST display flagged files in cleanup tab with clear categorization of issue type
+- **FR-055**: Users MUST be able to delete flagged files with confirmation
+- **FR-056**: Users MUST be able to add flagged files to .gitignore if they are untracked
+- **FR-057**: Users MUST be able to move flagged files to archive directory instead of deleting
+- **FR-058**: System MUST respect nested view architecture with proper height management when displaying cleanup results
+
+#### Branch Selection for Push (Planned 🔄)
+- **FR-059**: System MUST display full-screen modal overlay when user presses Shift+P to push commits
+- **FR-060**: Branch selection modal MUST show all available local and remote branches
+- **FR-061**: System MUST highlight current branch in branch selection modal
+- **FR-062**: Users MUST be able to select target branch using keyboard navigation
+- **FR-063**: System MUST push commits to selected branch and dismiss modal upon confirmation
+- **FR-064**: System MUST allow canceling branch selection with ESC key
+
+#### UI Notifications (Planned 🔄)
+- **FR-065**: "Switched to [path]" notification MUST auto-dismiss after 1.5 seconds without user interaction
+- **FR-066**: System MUST display notification immediately when changing project directories
 
 #### GitHub Actions Workflow Generation (Planned 🔄)
-- **FR-048**: System MUST provide optional GitHub Actions workflow generation for release automation
-- **FR-049**: Workflow generation MUST be opt-in to respect developer preferences and avoid forcing opinions
-- **FR-050**: System MUST generate workflows that match the project's enabled distribution channels (Homebrew, NPM, GitHub Releases)
-- **FR-051**: Generated workflows MUST follow GitHub Actions best practices and community standards
-- **FR-052**: System MUST allow users to preview generated workflow files before creation
-- **FR-053**: Users MUST be able to disable workflow generation entirely in project settings
-- **FR-054**: Generated workflows MUST be added to .github/workflows/ in user's repository (with explicit consent)
-- **FR-055**: System MUST support regenerating workflows when distribution configuration changes
-- **FR-056**: Workflow generation MUST include proper error handling and notification steps
+- **FR-067**: System MUST provide optional GitHub Actions workflow generation for release automation
+- **FR-068**: Workflow generation MUST be opt-in to respect developer preferences and avoid forcing opinions
+- **FR-069**: System MUST generate workflows that match the project's enabled distribution channels (Homebrew, NPM, GitHub Releases)
+- **FR-070**: Generated workflows MUST follow GitHub Actions best practices and community standards
+- **FR-071**: System MUST allow users to preview generated workflow files before creation
+- **FR-072**: Users MUST be able to disable workflow generation entirely in project settings
+- **FR-073**: Generated workflows MUST be added to .github/workflows/ in user's repository (with explicit consent)
+- **FR-074**: System MUST support regenerating workflows when distribution configuration changes
+- **FR-075**: Workflow generation MUST include proper error handling and notification steps
 
 ### Key Entities
 - **Project**: Represents a Go application with its repository information, module path, and current version
@@ -170,6 +212,11 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - **Version Bump**: Type of version increment (patch, minor, major, custom) with validation logic
 - **Smart Commit Preferences**: Project-level customization of file categorization rules including custom extensions and glob patterns per category
 - **File Category Rule**: Extension or pattern mapping that determines how files are categorized (config, code, docs, build, test, assets, data)
+- **Flagged File**: Repository file identified as problematic with type (media/excess-docs/dev-artifact), path, size, and suggested action
+- **Cleanup Scan Result**: Collection of flagged files organized by type with summary statistics
+- **Branch Info**: Git branch representation with name, tracking status, and commit divergence from origin
+- **Branch Selection Modal**: Full-screen overlay state showing available branches with current selection and navigation
+- **UI Notification**: Temporary message with content, display duration, and auto-dismiss timer
 - **GitHub Workflow Config**: Settings for GitHub Actions workflow generation including enabled channels, secrets, and environments
 
 ### Reference Materials
@@ -264,8 +311,31 @@ As a Go developer with multiple projects, I want to manage all my release distri
 - Custom glob pattern support for file categorization
 - Live preview of how files would be categorized
 - Validation of custom patterns before saving
-- Reset to defaults functionality
+- Delete custom preferences with automatic reversion to defaults
+- Remove custom config from project YAML when toggling off
 - Separate handler to keep logic out of configure_handler.go
+
+#### Repository Cleanup Mode (Planned)
+- Scan repository for problematic files (media, excess docs, dev artifacts)
+- Flag media files: videos, audio, images except icons/logos
+- Flag excess documentation: markdown except README, PDF, Word, presentations
+- Flag development artifacts: logs, .DS_Store, temp dirs, uncommitted build artifacts
+- Display flagged files with issue type categorization
+- Actions: delete (with confirmation), add to .gitignore, move to archive directory
+- Nested view integration with proper height management in cleanup tab
+
+#### Branch Selection for Push (Planned)
+- Full-screen modal overlay triggered by Shift+P
+- Display all local and remote branches
+- Highlight current branch
+- Keyboard navigation for branch selection
+- Push to selected branch with confirmation
+- ESC to cancel and return to previous view
+
+#### UI Notifications (Planned)
+- "Switched to [path]" message with 1.5-second auto-dismiss timer
+- Immediate display on project directory change
+- No user interaction required for dismissal
 
 #### GitHub Actions Workflow Generation (Planned)
 - Optional workflow generation for automated releases (opt-in)
@@ -277,5 +347,7 @@ As a Go developer with multiple projects, I want to manage all my release distri
 
 #### Bug Fixes Needed
 - Fix handling of dot files/directories (e.g., .github, .goreleaser) in commit settings interface
+- Fix "Switched to [path]" message persistence (should auto-dismiss after 1.5 seconds)
+- Fix space toggle in smart commit preferences not removing config from project YAML
 
 ---

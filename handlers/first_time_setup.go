@@ -238,7 +238,7 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		}
 		return m, nil
 
-	case "s", "S":
+	case  "S":
 		// Show confirmation screen if at least one is checked
 		if !m.HomebrewCheckEnabled && !m.NPMCheckEnabled {
 			return m, nil

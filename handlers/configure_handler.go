@@ -1082,6 +1082,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			// Refresh cleanup tab when entering it
 			if m.ActiveTab == 0 && oldTab != 0 {
 				m.Loading = true
+				m.refreshGitHubStatus()
 				listWidth := m.Width - 2
 				listHeight := m.Height - 13
 				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
@@ -1120,6 +1121,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			// Refresh cleanup tab when entering it
 			if m.ActiveTab == 0 && oldTab != 0 {
 				m.Loading = true
+				m.refreshGitHubStatus()
 				listWidth := m.Width - 2
 				listHeight := m.Height - 13
 				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
@@ -1598,6 +1600,9 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			if configModel != nil && configModel.ActiveTab == 0 {
 				configModel.refreshGitHubStatus()
 				configModel.Lists[0].SetItems(configModel.loadGitStatus())
+				if configModel.CleanupModel != nil {
+					configModel.CleanupModel.Refresh()
+				}
 			}
 			return currentPage, false, nil, configModel
 		case "s":
