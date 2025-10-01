@@ -1,1740 +1,1570 @@
-# Implementation Tasks: distui - Go Release Distribution Manager
+# Implementation Tasks: distui Enhancements
 
-**Feature**: Build a Terminal UI Application for Go Release Management
-**Branch**: 001-build-a-terminal
-**Created**: 2025-09-28
+**Feature**: Smart Commit Preferences, Repo Cleanup, Branch Selection, UI Notifications
+**Branch**: `001-build-a-terminal`
+**Plan**: [plan.md](./plan.md)
+**Status**: Ready for Implementation
 
-## Overview
+## Task Execution Guide
 
-This document contains all implementation tasks for the distui feature. Tasks are ordered by dependencies and marked with [P] when they can be executed in parallel.
+### Parallel Execution
+Tasks marked with [P] can be executed in parallel. Run them concurrently for faster implementation:
 
-### Quick Stats
-- Total Tasks: ~35
-- Completed: 100% FEATURE COMPLETE
-- Status: **PRODUCTION READY** (v0.0.31)
-- Latest Release: v0.0.31 (NPM published and working)
-
-### ✅ FULLY WORKING FEATURES (2025-09-30 Update 3)
-
-**Core Functionality:**
-- ✅ Full TUI with 4 views (Project, Global, Settings, Configure)
-- ✅ Project detection from go.mod and git
-- ✅ Configuration persistence to ~/.distui/projects/{identifier}.yaml
-- ✅ Terminal layout integrity (no overflow, dynamic height management)
-
-**Release Workflow:**
-- ✅ Version bumping (patch/minor/major/custom)
-- ✅ Pre-release tests (go test ./...)
-- ✅ Git tag creation and push
-- ✅ GoReleaser integration with streaming output
-- ✅ GitHub Releases (binary uploads, release notes)
-- ✅ Homebrew formula updates (via GoReleaser brews config)
-- ✅ NPM publishing (with golang-npm, post-GoReleaser)
-- ✅ Multi-channel releases (GitHub + Homebrew + NPM simultaneously)
-
-**Configuration Management:**
-- ✅ All 4 configure tabs (Cleanup, Distributions, Build, Advanced)
-- ✅ Smart file generation (.goreleaser.yaml, package.json)
-- ✅ File deletion when distributions disabled
-- ✅ Consent screen showing generate/delete changes
-- ✅ Auto-regeneration indicator when config changes
-- ✅ Stable JSON field order (no git diffs on regeneration)
-- ✅ Regex-based version updates (preserves formatting)
-- ✅ NPM package name validation with availability checking
-  - ✅ Ownership detection (distinguishes user's packages from others)
-  - ✅ Similarity detection (checks variations with hyphens/underscores)
-  - ✅ Alternative name suggestions (scoped packages, suffixes)
-  - ✅ Inline package name editing in Distributions tab
-  - ✅ Auto-trigger checking when tab opens or NPM enabled
-- ✅ Release blocking when regeneration needed
-- ✅ Tab refresh with loading spinner (Cleanup tab auto-refreshes)
-
-**Git Management:**
-- ✅ Git cleanup UI with intelligent categorization
-- ✅ GitHub repository creation/connection
-- ✅ Smart commit with auto-categorized files
-- ✅ Push detection and remote sync
-- ✅ Binary and build artifact exclusion
-
-**Distribution Channels:**
-- ✅ GitHub Releases - GoReleaser handles binary builds and uploads
-- ✅ Homebrew - GoReleaser pushes to tap with correct formula
-- ✅ NPM - Separate publish using golang-npm for binary distribution
-  - ✅ Real-time package name availability checking
-  - ✅ Ownership detection (recognizes user's existing packages)
-  - ✅ Conflict detection (e.g., "distui" vs "dist-ui", "distui-cli" vs "distui_cli")
-  - ✅ Scoped package suggestions (@username/package)
-  - ✅ Alternative name generation (package-cli, package-tool, etc.)
-  - ✅ Automatic package.json version bump on publish
-  - ✅ Auto-commit and push package.json changes post-publish
-  - ✅ Verified working: `npm install -g distui-cli-go` installs and runs successfully
-- ✅ Go Module - Via git tags (no special handling needed)
-
-**UI/UX Improvements:**
-- ✅ Release success screen with ESC to dismiss
-- ✅ Project view shows NPM and Homebrew distribution info
-- ✅ Distribution info hidden during active release
-- ✅ Working tree check moved after release check (prevents flash during NPM publish)
-- ✅ Clean project view after successful release (no dirty tree warnings)
-- ✅ All warnings preserved (regeneration, working tree, GitHub auth, config missing)
-
-**Recent Bug Fixes (v0.0.28-0.0.31):**
-- ✅ Fixed NPM checker incorrectly flagging user's own packages as unavailable
-- ✅ Fixed ESC not canceling NPM package name edit mode
-- ✅ Fixed cleanup tab not refreshing after config changes in other tabs
-- ✅ Fixed "WORKING TREE NOT CLEAN" flashing during NPM publish
-- ✅ Fixed release blocking not working when regeneration needed
-- ✅ Fixed NPM variation checker to detect underscore/hyphen swaps
-- ✅ Added loading spinner when switching to cleanup tab
-- ✅ Removed all debug statements from NPM publisher
-
-### What's Left for MVP
-1. **Testing** (T032-T039) - Optional, can ship without
-2. **Polish** (T044-T047) - Nice to have (spinners already work, help screen optional)
-3. **Integration cleanup** (T040-T043) - Mostly done, just cleanup
-
-### REMOVED Tasks (Not Needed)
-- ~~T028-T029: New Project Wizard~~ - Configure view IS the project setup
-- ~~T-CFG-4,5: Homebrew/NPM detection~~ - Not needed for MVP, users can toggle manually
-- ~~T-CFG-8,9: Status display, validation~~ - Current UI is sufficient
-
-### Execution Guide
-Tasks marked with [P] can be run in parallel. For example:
 ```bash
-# Run parallel tasks together
-Task general-purpose "Complete T003, T004, and T005 in parallel"
+# Example: Run 4 parallel tasks
+# Terminal 1
+claude-code "Execute T001"
+
+# Terminal 2
+claude-code "Execute T002"
+
+# Terminal 3
+claude-code "Execute T003"
+
+# Terminal 4
+claude-code "Execute T004"
 ```
 
-## Setup Tasks (Dependencies First)
+### Dependencies
+Tasks must be completed in order within each phase, but [P] tasks within the same phase can run concurrently.
 
-### ✅ T001: Adapt Template Structure for Distui [COMPLETED]
-**File**: app.go
-- Replace pageState enum with distui views (projectView, globalView, settingsView, releaseView, configureView, newProjectView)
-- Update main menu items to show Project/Global/Settings options
-- Modify router in Update() to handle new page states
-- Update View() switch to render distui views
-**Status**: Complete - app.go updated with all distui views and navigation
-**Estimate**: 2 points
+---
 
-### ✅ T002: Initialize Go Module and Dependencies [COMPLETED]
-**File**: go.mod
-- Create go.mod with module name "distui"
-- Add Bubble Tea v0.27.0 dependency
-- Add Lipgloss v0.13.0 dependency
-- Add yaml.v3 dependency
-- Run go mod tidy
-**Status**: Complete - go.mod created with all dependencies
-**Estimate**: 1 point
+## Phase 0: Infrastructure Setup (4 tasks)
 
-### ✅ T003: [P] Create Internal Package Structure [COMPLETED]
-**Files**: internal/*/
-- Create internal/config directory with loader.go (99 lines)
-- Create internal/detection directory with project.go (97 lines)
-- Create internal/executor directory with release.go (87 lines)
-- Create internal/models directory with types.go (81 lines)
-- Add package declarations to each file
-**Status**: Complete - all packages created with proper structure
-**Estimate**: 1 point
+### T001: Add new entity types to internal/models/types.go [P]
+**File**: `internal/models/types.go`
+**Description**: Add Go struct definitions for new data model entities
+**Dependencies**: None
+**Parallel**: Yes
 
-### ✅ T004: [P] Create Handler Stubs [COMPLETED]
-**Files**: handlers/*.go
-- Created handlers/project_handler.go with UpdateProjectView function
-- Created handlers/global_handler.go with UpdateGlobalView function
-- Created handlers/settings_handler.go with UpdateSettingsView function
-- Created handlers/release_handler.go with UpdateReleaseView function
-- Created handlers/configure_handler.go with UpdateConfigureView function
-- Created handlers/newproject_handler.go with UpdateNewProjectView function
-- All handlers follow pattern: func UpdateXxx(currentPage, previousPage int, msg tea.Msg) (int, bool, tea.Cmd)
-**Status**: Complete - all handlers created (replaced page*handler.go files)
-**Estimate**: 2 points
+Add these struct types to types.go:
 
-### ✅ T005: [P] Create View Stubs [COMPLETED]
-**Files**: views/*.go
-- Created views/project_view.go with RenderProjectContent function (61 lines)
-- Created views/global_view.go with RenderGlobalContent function (80 lines)
-- Created views/settings_view.go with RenderSettingsContent function (66 lines)
-- Created views/release_view.go with RenderReleaseContent function (70 lines)
-- Created views/configure_view.go with RenderConfigureContent function (73 lines)
-- All views return string content with proper formatting
-**Status**: Complete - all views created with placeholder content
-**Estimate**: 2 points
+```go
+// Smart Commit Preferences
+type SmartCommitPreferences struct {
+    Enabled     bool               `yaml:"enabled"`
+    CustomRules []FileCategoryRule `yaml:"custom_rules,omitempty"`
+}
 
-## Configuration Management Tasks
+type FileCategoryRule struct {
+    Pattern  string `yaml:"pattern"`   // "*.proto" or "**/test/**"
+    Category string `yaml:"category"`  // "config", "code", "docs", etc.
+    Priority int    `yaml:"priority"`  // Higher = applied first
+}
 
-### ✅ T006: Implement Config Loader [COMPLETED]
-**File**: internal/config/loader.go
-- Implemented LoadGlobalConfig() function to read ~/.distui/config.yaml
-- Implemented LoadProject(identifier string) to read project YAML
-- NO fallbacks - errors bubble up as per constitution
-- Parse YAML into GlobalConfig struct using proper types
-- 119 lines (slightly over due to essential code)
-**Status**: Complete - tested with real config files
-**Estimate**: 3 points
+// Repository Cleanup
+type FlaggedFile struct {
+    Path            string        `yaml:"path"`
+    IssueType       string        `yaml:"issue_type"`        // "media", "excess-docs", "dev-artifact"
+    SizeBytes       int64         `yaml:"size_bytes"`
+    SuggestedAction string        `yaml:"suggested_action"`  // "delete", "ignore", "archive"
+    FlaggedAt       time.Time     `yaml:"flagged_at"`
+}
 
-### ✅ T007: Implement Config Writer [COMPLETED]
-**File**: internal/config/loader.go (combined with loader)
-- Implemented SaveGlobalConfig(config *GlobalConfig) with atomic writes
-- Implemented SaveProject(project *Project) with atomic writes
-- Use temp file + rename pattern for safety
-- Create directories if needed
-- Handle write permissions properly
-**Status**: Complete - save functions in loader.go (constitution: avoid unnecessary abstraction)
-**Estimate**: 3 points
+type CleanupScanResult struct {
+    MediaFiles     []FlaggedFile     `yaml:"media_files"`
+    ExcessDocs     []FlaggedFile     `yaml:"excess_docs"`
+    DevArtifacts   []FlaggedFile     `yaml:"dev_artifacts"`
+    TotalSizeBytes int64             `yaml:"total_size_bytes"`
+    ScanDuration   time.Duration     `yaml:"scan_duration"`
+    ScannedAt      time.Time         `yaml:"scanned_at"`
+}
 
-### ✅ T008: [P] Define Configuration Types [COMPLETED]
-**File**: internal/models/types.go
-- Defined GlobalConfig struct matching contracts/config.yaml
-- Defined ProjectConfig struct matching contracts/project.yaml
-- Defined ProjectSettings struct with distributions
-- Defined ReleaseHistory struct
-- Added YAML tags to all fields
-**Status**: Complete - all types defined (134 lines, acceptable for completeness)
-**Estimate**: 2 points
+// Branch Selection
+type BranchInfo struct {
+    Name           string `yaml:"name"`             // "main", "origin/develop"
+    IsCurrent      bool   `yaml:"is_current"`
+    TrackingBranch string `yaml:"tracking_branch"`  // "" if no tracking
+    AheadCount     int    `yaml:"ahead_count"`
+    BehindCount    int    `yaml:"behind_count"`
+}
 
-### ✅ T009: [P] Implement Path Management [COMPLETED]
-**File**: internal/config/loader.go (integrated)
-- expandHome() function handles ~ expansion
-- Path management integrated into load/save functions
-- Directories created as needed in Save functions
-- Home directory expansion working
-**Status**: Complete - path management in loader.go (constitution: avoid unnecessary abstraction)
-**Estimate**: 1 point
+type BranchSelectionModal struct {
+    Branches      []BranchInfo `yaml:"branches"`
+    SelectedIndex int          `yaml:"selected_index"`
+    FilterQuery   string       `yaml:"filter_query"`
+    Width         int          `yaml:"width"`
+    Height        int          `yaml:"height"`
+}
 
-## Detection Tasks
+// UI Notifications
+type UINotification struct {
+    Message   string    `yaml:"message"`
+    ShowUntil time.Time `yaml:"show_until"`
+    Style     string    `yaml:"style"`  // "info", "success", "warning", "error"
+}
+```
 
-### ✅ T010: Implement Project Detection [COMPLETED]
-**File**: internal/detection/project.go
-- Implemented DetectProject(path string) function
-- Parses go.mod with fallback for new Go versions (1.24.0+)
-- Optional Git/GitHub detection (won't fail without .git)
-- Extracts binary name from module path
-- Added sanitizeIdentifier() for safe file names
-- Returns ProjectInfo struct with all detected values
-**Status**: Complete - works with Go 1.25.1 and projects without Git
-**Estimate**: 3 points
+Update ProjectConfig to include SmartCommitPreferences:
+```go
+type ProjectConfig struct {
+    Project     *ProjectInfo            `yaml:"project"`
+    Config      *Config                 `yaml:"config"`
+    History     *History                `yaml:"history"`
+    SmartCommit *SmartCommitPreferences `yaml:"smart_commit,omitempty"`  // NEW
+}
+```
 
-### ✅ T011: Implement GitHub Detection [COMPLETED]
-**File**: internal/detection/project.go (integrated)
-- Implemented DetectGitHubUsingGH() function
-- Uses gh CLI to get repo info
-- Gracefully handles gh CLI not installed
-- Returns RepositoryInfo with owner/name/branch
-**Status**: Complete - integrated into project.go
-**Estimate**: 2 points
+**Acceptance**: All new types compile without errors, follow existing YAML tag patterns
 
-### T012: [P] Implement Homebrew Detection
-**File**: internal/detection/homebrew.go (TO CREATE)
-- Implement DetectHomebrewTap(username string)
-- Check common tap locations
-- Look for existing formula files
-- Return tap repository path
-- Handle taps not found gracefully
-**Estimate**: 2 points
+---
 
-## Core View Implementation
+### T002: Extend ProjectConfig YAML schema [P]
+**File**: `internal/config/loader.go`
+**Description**: Update LoadProject and SaveProject to handle SmartCommitPreferences field
+**Dependencies**: None
+**Parallel**: Yes
 
-### ✅ T013: Implement Project View [COMPLETED]
-**File**: views/project_view.go
-- ✅ RenderProjectContent accepts real ProjectInfo and ProjectConfig
-- ✅ Displays actual module name, version, path from detection
-- ✅ Shows repository info if available
-- ✅ Displays release history from config
-- ✅ Has keyboard hints and action buttons
-- ✅ Shows GitHub user status indicator (green when configured, warning when not)
-**Status**: Complete with GitHub status indicator
-**Estimate**: 3 points
+Ensure LoadProject unmarshals smart_commit section:
+- Test with missing smart_commit (should be nil, not error)
+- Test with empty smart_commit (should create empty struct)
+- Test with populated custom_rules
 
-### ✅ T014: Implement Project Handler [COMPLETED]
-**File**: handlers/project_handler.go
-- ✅ Handle 'r' key to start release (return releaseView)
-- ✅ Handle 'c' key for configuration (return configureView)
-- ✅ Handle 'tab' to cycle to global view
-- ✅ Handle 'g' shortcut to global view
-- ✅ Handle 's' shortcut to settings view (fixed page index mapping)
-**Integration**: app.go calls UpdateProjectView() correctly
-**Status**: Complete - all navigation working
-**Estimate**: 2 points
+Ensure SaveProject marshals smart_commit section:
+- Omit if nil (omitempty tag)
+- Preserve existing format
+- Atomic file write (temp + rename)
 
-### ✅ T015: Implement Global View [COMPLETE]
-**File**: views/global_view.go
-- ✅ RenderGlobalContent accepts projects list and selectedIndex
-- ✅ Displays project table with name/version/status
-- ✅ Shows selected project with arrow indicator
-- ✅ Has action buttons for add/scan/delete
-- ✅ Shows navigation hints
-- ✅ Supports delete mode and scan mode indicators
-**Handler**: handlers/global_handler.go
-- ✅ GlobalModel manages project list and selection
-- ✅ Arrow key navigation through projects
-- ✅ Delete mode with confirmation
-- ✅ Scan mode placeholder
-- ✅ Action handling (add, delete, select)
-**Status**: COMPLETE
-**Estimate**: 3 points
+**Acceptance**: Can load/save projects with smart_commit section without data loss
 
-### ✅ T016: Implement Global Handler [COMPLETE]
-**File**: handlers/global_handler.go
-- ✅ Handle up/down arrow navigation
-- ✅ Handle Enter to switch to selected project
-- ✅ Handle 'n' to add new project
-- ✅ Handle 'd' to delete project
-- ✅ Handle tab cycling and shortcuts
-**Status**: Fully implemented with GlobalModel
-**Estimate**: 2 points
+---
 
-### ✅ T017: Implement Settings View [COMPLETED]
-**File**: views/settings_view.go
-- ✅ RenderSettingsContent with interactive SettingsModel
-- ✅ Shows current configuration values
-- ✅ Interactive edit mode with textinput components
-- ✅ Visual feedback for focused fields
-- ✅ Save confirmation message
-**Status**: Complete with Bubble Tea interactive components
-**Estimate**: 3 points
-
-### ✅ T018: Implement Settings Handler [COMPLETED]
-**File**: handlers/settings_handler.go
-- ✅ Handle 'e' key to enter edit mode
-- ✅ Interactive textinput fields for all settings
-- ✅ Auto-detection of GitHub username from gh CLI
-- ✅ Tab/Shift+Tab navigation between fields
-- ✅ Enter to save, Escape to cancel
-- ✅ Persists to ~/.distui/config.yaml
-- ✅ Smart pre-population with detected values
-**Status**: Complete with auto-detection
-**Estimate**: 3 points
-
-## Release Execution Tasks
-
-### ✅ T012: Implement Homebrew Detection [COMPLETED]
-**File**: internal/detection/homebrew.go (CREATED)
-**Status**: COMPLETE
-- Implement DetectHomebrewTap(username string)
-- Check common tap locations (~/homebrew-tap, ~/repos/homebrew-tap)
-- Use gh CLI to find repos matching "homebrew-*" pattern
-- Return tap repository path and existing formulas
-- Handle taps not found gracefully
-**Estimate**: 2 points
-**Architecture**: Business logic in internal/detection (NOT in handlers)
-
-### ✅ T022: Implement Command Runner [COMPLETED]
-**File**: internal/executor/command.go (CREATED)
-**Status**: COMPLETE
-- Implement RunCommandStreaming(name, args, dir) function
-- Create CommandOutput message type for line-by-line streaming
-- Create CommandComplete message type for completion status
-- Handle stdout and stderr separately with goroutines
-- Send tea.Msg for each output line
-- Return exit code and error
-**Estimate**: 3 points
-**Pattern**: Use goroutines + channels to stream, send tea.Msg to TUI
-**Architecture**: Business logic in internal/executor, messages to handlers
-
-### ✅ T021: Expand Release Executor [COMPLETED]
-**File**: internal/executor/release.go (EXPANDED)
-**Status**: COMPLETE
-**Current State**: Has basic runTests/buildRelease/createTag/pushTag stubs
-**Needs**:
-- Keep existing ReleaseExecutor/ReleaseConfig structure
-- Add ExecuteReleasePhases(ctx, phases) function
-- Add RunGoReleaser(ctx, version) function
-- Add UpdateHomebrewTap(ctx, tapPath, version) function
-- Add PublishNPM(ctx, packageName) function
-- Integrate with RunCommandStreaming for output
-- Send phase completion messages to TUI
-- Handle rollback on failure
-**Estimate**: 5 points
-**Architecture**: ALL execution logic stays here, handlers only manage state
-
-### ✅ T023: [P] Implement Test Executor [COMPLETED]
-**File**: internal/executor/test.go (CREATED)
-**Status**: COMPLETE
-- Implement RunTests(project) function
-- Execute "go test ./..." command
-- Use RunCommandStreaming for output
-- Return success/failure status
-- Keep under 100 lines
-**Estimate**: 2 points
-
-### ✅ T024: [P] Implement GoReleaser Executor [COMPLETED]
-**File**: internal/executor/goreleaser.go (CREATED)
-**Status**: COMPLETE
-- Implement RunGoReleaser(project, version) function
-- Get GITHUB_TOKEN from gh auth token
-- Execute "goreleaser release --clean" command
-- Use RunCommandStreaming for output
-- Check if goreleaser is installed first
-- Handle goreleaser not installed gracefully
-**Estimate**: 3 points
-
-### ✅ T025: [P] Implement Homebrew Updater [COMPLETED]
-**File**: internal/executor/homebrew.go (CREATED)
-**Status**: COMPLETE
-- Implement UpdateHomebrewTap(project, version, tapPath) function
-- Download release tarball from GitHub
-- Calculate SHA256 checksum
-- Update formula file with new version + SHA256
-- Commit changes to tap repository
-- Push to remote
-- Use RunCommandStreaming for git commands
-**Estimate**: 5 points
-
-### ✅ T030: [P] Define Message Types [COMPLETED]
-**File**: internal/models/messages.go (CREATED)
-**Status**: COMPLETE
-- Define releasePhaseMsg (phase started)
-- Define releasePhaseCompleteMsg (phase done)
-- Define commandOutputMsg (streaming output line)
-- Define commandCompleteMsg (command finished)
-- Define releaseCompleteMsg (all phases done)
-- Define releaseErrorMsg (failure with recovery options)
-**Estimate**: 1 point
-
-### ✅ T020: Implement Release Handler [COMPLETED]
-**File**: handlers/release_handler.go (EXPANDED)
-**Status**: COMPLETE
-**Current State**: Just navigation, no state management
-**Needs**:
-- Create ReleaseModel struct with:
-  - Phase (ReleasePhase enum)
-  - Packages ([]Package for package-manager pattern)
-  - Installing (int, current step index)
-  - Installed ([]int, completed steps)
-  - Progress (progress.Model from bubbles)
-  - Spinner (spinner.Model from bubbles)
-  - Output ([]string buffer)
-  - Version (string)
-  - StartTime (time.Time)
-  - Error (error)
-- Implement version selection state (patch/minor/major/custom)
-- Handle Enter to launch executeReleaseCmd
-- Handle phase completion messages
-- Update progress and spinner
-- Handle command output messages (append to buffer)
-- Return to project view on completion
-**Pattern**: Use package-manager example (each phase = "package")
-**Architecture**: State management ONLY, no execution logic
-**Estimate**: 5 points
-
-### ✅ T019: Implement Release View [COMPLETED]
-**File**: views/release_view.go (EXPANDED)
-**Status**: COMPLETE
-**Current State**: Hardcoded mock data, no dynamic rendering
-**Needs**:
-- Accept ReleaseModel as parameter (not empty function)
-- Render version selection UI when Phase == PhaseVersionSelect
-  - Show current version
-  - Show patch/minor/major options
-  - Show custom input option
-  - Highlight selected option
-- Render progress display when Phase >= PhaseTests
-  - Spinner for current phase
-  - Progress bar (bubbles/progress)
-  - List of packages (phases) with status
-  - Checkmarks for completed phases
-  - Elapsed time counter
-- Render output streaming area (scrollable)
-  - Last 20 lines of command output
-  - Auto-scroll to bottom
-  - Dim color for older lines
-- Render success/failure summary when Phase == PhaseComplete
-  - Duration, channels published, next steps
-- Render error display with recovery options on failure
-**Pattern**: Use package-manager example for progress rendering
-**Architecture**: Pure rendering, no business logic
-**Estimate**: 5 points
-
-### ✅ T031: Wire Release to App [COMPLETED]
-**File**: app.go (EXISTS - needs update)
-**Status**: COMPLETE
-- Add releaseModel *handlers.ReleaseModel to model struct
-- Initialize releaseModel when navigating to releaseView (like configureModel)
-- Pass project info and version to NewReleaseModel
-- Route releaseView case to handlers.UpdateReleaseView
-- Handle window sizing for releaseModel
-- Pass releaseModel to views.RenderReleaseContent
-**Estimate**: 2 points
-
-## View Architecture Refactor [CRITICAL]
-
-### ✅ T-CFG-10: Merge Release View into Project View [COMPLETED] [3 points]
+### T003: Create filescanner package skeleton [P]
+**Directory**: `internal/filescanner/`
 **Files**:
-- views/project_view.go (modify) ✅
-- views/release_view.go (refactor) ✅
-- handlers/project_handler.go (modify) ✅
-- app.go (modify) ✅
+- `scanner.go` (file scanning logic)
+- `categorizer.go` (issue type detection)
+- `actions.go` (delete/ignore/archive operations)
 
-**Current State**:
-- Project view shows static project info + "Press [r] to release"
-- Separate releaseView page (pageState = 3) for version selection
-- Extra navigation step: project → [r] → release → select version → enter
-- release_view.go renders 4 phases: PhaseVersionSelect, PhaseComplete, PhaseFailed, progress
+**Description**: Create package structure with exported function signatures
+**Dependencies**: None
+**Parallel**: Yes
 
-**Target State**:
-- Project view includes inline release version selector
-- No separate release page needed
-- Direct interaction: arrow keys select version → enter starts release
-- Release progress shown in same view (replaces project info during execution)
-
-**Implementation**:
-
-1. **views/project_view.go** - Add release section:
+**scanner.go**:
 ```go
-func RenderProjectContent(p *ProjectState, releaseModel *handlers.ReleaseModel) string {
-    sections := []string{
-        renderProjectHeader(p),
-        renderInlineReleaseSection(releaseModel), // NEW
-        renderQuickActions(p),
-    }
-    return lipgloss.JoinVertical(lipgloss.Left, sections...)
-}
+package filescanner
 
-func renderInlineReleaseSection(m *handlers.ReleaseModel) string {
-    if m == nil {
-        return ""
-    }
-
-    switch m.Phase {
-    case models.PhaseVersionSelect:
-        return renderCompactVersionSelect(m) // Inline version, not full screen
-    case models.PhaseComplete:
-        return views.RenderSuccess(m)
-    case models.PhaseFailed:
-        return views.RenderFailure(m)
-    default:
-        return views.RenderProgress(m)
-    }
-}
-
-func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
-    // Simplified version of renderVersionSelection from release_view.go
-    // Shows "SELECT RELEASE VERSION" + 4 options + keyboard hints
-    // Fits in ~10 lines instead of full screen
-}
-```
-
-2. **views/release_view.go** - Refactor to export helpers:
-```go
-// Keep these as exported functions for reuse:
-// - RenderProgress()
-// - RenderSuccess()
-// - RenderFailure()
-
-// Remove or make internal:
-// - RenderReleaseContent() (replaced by inline in project view)
-// - renderVersionSelection() (replaced by compact version)
-```
-
-3. **handlers/project_handler.go** - Handle version selection:
-```go
-func UpdateProjectView(currentPage, previousPage int, msg tea.Msg,
-                       projectState *ProjectState,
-                       releaseModel *handlers.ReleaseModel) (int, bool, tea.Cmd, *handlers.ReleaseModel) {
-
-    switch msg := msg.(type) {
-    case tea.KeyMsg:
-        // If release phase is version select, handle arrow keys + enter
-        if releaseModel != nil && releaseModel.Phase == models.PhaseVersionSelect {
-            switch msg.String() {
-            case "up", "k":
-                releaseModel.SelectedVersion--
-                // clamp to bounds
-            case "down", "j":
-                releaseModel.SelectedVersion++
-                // clamp to bounds
-            case "enter":
-                return currentPage, false, releaseModel.StartRelease(), releaseModel
-            case "esc":
-                releaseModel.Phase = models.PhaseVersionSelect // reset
-                releaseModel.SelectedVersion = 0
-            }
-        }
-
-        // Normal project view navigation
-        switch msg.String() {
-        case "g":
-            return int(globalView), false, nil, releaseModel
-        case "s":
-            return int(settingsView), false, nil, releaseModel
-        case "c":
-            return int(configureView), false, nil, releaseModel
-        case "r":
-            // Don't navigate away - just activate version selector
-            releaseModel.Phase = models.PhaseVersionSelect
-            return currentPage, false, nil, releaseModel
-        }
-
-    case models.ReleasePhaseMsg, models.ReleaseCompleteMsg:
-        // Forward to releaseModel.Update()
-        updatedModel, cmd := releaseModel.Update(msg)
-        return currentPage, false, cmd, updatedModel
-    }
-
-    return currentPage, false, nil, releaseModel
-}
-```
-
-4. **app.go** - Remove releaseView page state:
-```go
-type pageState int
-
-const (
-    projectView pageState = iota
-    globalView
-    settingsView
-    configureView
-    newProjectView
-    // REMOVE: releaseView
+import (
+    "io/fs"
+    "path/filepath"
+    "time"
+    "distui/internal/models"
 )
 
-// Initialize releaseModel when project is detected, not on navigation
-if m.detectedProject != nil && m.releaseModel == nil && m.width > 0 && m.height > 0 {
-    m.releaseModel = handlers.NewReleaseModel(...)
+// ScanRepository walks directory and flags problematic files
+func ScanRepository(root string) (*models.CleanupScanResult, error) {
+    // TODO: Implement in T009
+    return nil, nil
 }
-
-// In Update(), remove releaseView case entirely
-// Project view now handles everything
-
-// In View(), update project rendering:
-case projectView:
-    return m.renderProjectView(m.projectState, m.releaseModel)
 ```
 
-**Architecture Notes**:
-- Eliminates redundant page state (5 total instead of 6)
-- Follows "30-second release" goal (fewer keypresses)
-- Maintains handler/view separation
-- ReleaseModel still manages state, just rendered inline
-- Progressive disclosure: version selector only shows when [r] pressed
-- During release execution, progress takes over the whole view
-
-**Dependencies**: None (standalone refactor)
-
-**Validation**:
-- User opens app → sees project info with "Press [r]" hint
-- Press [r] → version selector appears inline (4 options)
-- Arrow keys move selection
-- Enter starts release → progress view takes over screen
-- On completion → shows success, ESC returns to project view with version selector hidden
-- No [r] navigation needed, no separate page
-
-**Estimate**: 3 points (moderate complexity, multiple file changes, careful state management)
-
----
-
-## Release Configuration Tasks [COMPLETE]
-
-### ✅ T-CFG-1: Add ReleaseSettings to ProjectConfig [COMPLETED]
-**Status**: COMPLETE - Added ReleaseSettings struct to internal/models/types.go
-
-### ✅ T-CFG-2: Implement Config Save on Toggle [COMPLETED]
-**Status**: COMPLETE - Auto-save on every toggle via saveConfig() in configure_handler.go
-
-### ✅ T-CFG-3: Implement Config Load on Init [COMPLETED]
-**Status**: COMPLETE - Loads all 4 tabs from config in NewConfigureModel
-
-### ✅ T-CFG-6: Fix SkipTests Logic [COMPLETED]
-**Status**: COMPLETE - Boolean inversion verified correct (checkbox enabled → SkipTests=false)
-
-### ✅ T-CFG-7: Wire Config to ReleaseModel [COMPLETED]
-**Status**: COMPLETE - ReleaseModel loads EnableHomebrew, EnableNPM, HomebrewTap from config
-
-### T-CFG-8: Add Configuration Status Display [OPTIONAL]
-**Status**: DEFERRED - Not needed for MVP, current checkboxes are sufficient
-
-### T-CFG-9: Add Config Validation [OPTIONAL]
-**Status**: DEFERRED - Save works without validation, can be added later if needed
-
-## User Environment & Onboarding Tasks [NEW]
-
-### ✅ T-EXTRA-1: Implement User Environment Detection [COMPLETED]
-**File**: internal/detection/project.go
-- ✅ DetectUserEnvironment() function
-- ✅ Parse git config for name/email
-- ✅ Parse gh CLI status for GitHub username
-- ✅ Fixed parsing to handle "✓ Logged in to github.com account USERNAME" format
-- ✅ Returns UserEnvironment struct
-**Status**: Complete with proper gh CLI parsing
-**Estimate**: 3 points
-
-### ✅ T-EXTRA-2: Implement Smart Onboarding [COMPLETED]
-**Files**: handlers/onboarding_handler.go, views/onboarding_view.go
-- ✅ Created onboarding handler and view
-- ✅ Auto-detect user configuration
-- ✅ Minimal user input required
-- ✅ Replaced with simple status indicator in main view
-**Status**: Complete - simplified to status indicator
-**Estimate**: 2 points
-
-### ✅ T-EXTRA-3: GitHub Status Indicator [COMPLETED]
-**File**: views/project_view.go
-- ✅ Show GitHub username in green when configured
-- ✅ Show warning with instructions when not configured
-- ✅ Non-intrusive - part of main view
-- ✅ Direct user to Settings > Edit to fix
-**Status**: Complete
-**Estimate**: 1 point
-
-## GitHub Management Refactor Tasks [HIGH PRIORITY]
-
-### ✅ T-GH-1: Create Cleanup Status Model [COMPLETED]
-**File**: handlers/cleanup_handler.go (NEW)
-- Create CleanupModel struct for status overview
-- Implement loadRepoStatus() to check git/GitHub state
-- Define RepoStatus enum (NoRepo, NoRemote, Unpushed, Clean)
-- Add file counting logic (modified, new, deleted)
-- Keep under 100 lines
-**Estimate**: 2 points
-
-### ✅ T-GH-2: Create Cleanup Status View [COMPLETED]
-**File**: views/cleanup_view.go (NEW)
-- Implement RenderCleanupStatus() function
-- Display repository status with clear icons
-- Show file change summary
-- Add action hints ([G] GitHub, [C] Commit)
-- Format with lipgloss styles
-**Estimate**: 2 points
-
-### ✅ T-GH-3: Create GitHub Management Model [COMPLETED]
-**File**: handlers/github_handler.go (NEW)
-- Create GitHubModel with state management
-- Implement githubState enum (overview, create, connect, push)
-- Add textinput fields for repo creation
-- Handle GitHub CLI interactions
-- Implement state transitions
-**Estimate**: 3 points
-
-### ✅ T-GH-4: Create GitHub Management View [COMPLETED]
-**File**: views/github_view.go (NEW)
-- Implement RenderGitHubManagement() function
-- Show different UI based on githubState
-- Create repo form with name/desc/visibility
-- Connect existing repo form
-- Style with focused/unfocused states
-**Estimate**: 3 points
-
-### ✅ T-GH-5: Create Commit Management Model [COMPLETED]
-**File**: handlers/commit_handler.go (NEW)
-**Status**: COMPLETE - CommitModel manages file selection and commit execution
-
-### ✅ T-GH-6: Create Commit Management View [COMPLETED]
-**File**: views/commit_view.go (NEW)
-**Status**: COMPLETE - Renders commit interface with file checkboxes and message input
-
-### ✅ T-GH-7: Update Configure Handler for Composition [COMPLETED]
-**File**: handlers/configure_handler.go
-- Add ViewType enum (TabView, GitHubView, CommitView)
-- Integrate CleanupModel, GitHubModel, CommitModel
-- Handle 'G' key to switch to GitHub view
-- Handle 'C' key to switch to Commit view
-- Route Update() calls to active sub-model
-**Estimate**: 3 points
-
-### ✅ T-GH-8: Update Configure View for Sub-Views [COMPLETED]
-**File**: views/configure_view.go
-- Check currentView type in RenderConfigureContent
-- Delegate to appropriate sub-view renderer
-- Maintain tab display for TabView
-- Full-screen for GitHub/Commit views
-- Handle view transitions smoothly
-**Estimate**: 2 points
-
-### ✅ T-GH-9: Simplify Git Status Logic [COMPLETED]
-**File**: internal/gitcleanup/status.go
-- Remove complex categorization
-- Add GetRepoStatus() for simple state check
-- Implement GetFileChanges() for clean file list
-- Return user-friendly status strings
-- Keep functions focused and simple
-**Estimate**: 2 points
-
-### ✅ T-GH-10: Add Repository State Detection [COMPLETED]
-**File**: internal/gitcleanup/repo.go (NEW)
-- Create CheckRepoState() function
-- Detect git initialization
-- Check for remote configuration
-- Verify GitHub repo exists
-- Return structured RepoInfo
-**Estimate**: 2 points
-
-## Project Management Tasks
-
-### ✅ T026: Implement Configure View [COMPLETED]
-**File**: views/configure_view.go
-**Status**: Complete with tabbed interface and interactive lists
-
-### ✅ T027: Implement Configure Handler [COMPLETED]
-**File**: handlers/configure_handler.go
-**Status**: Complete with full interactivity and config persistence
-
-### ~~T028-T029: New Project Wizard [REMOVED]~~
-**Reason**: Configure view IS the project setup. Once user configures distributions/build settings, they just run releases from project page. No separate wizard needed.
-
-
-
-## Testing Tasks
-
-### T032: [P] Test Config Management
-**File**: internal/config/loader_test.go
-- Test LoadGlobalConfig with valid YAML
-- Test LoadGlobalConfig with missing file
-- Test LoadProject with valid data
-- Test SaveGlobalConfig creates file
-- Use testify assertions
-**Estimate**: 2 points
-
-### T033: [P] Test Project Detection
-**File**: internal/detection/project_test.go
-- Test DetectProject with valid Go module
-- Test DetectProject without go.mod
-- Test GitHub detection parsing
-- Mock gh CLI output
-- Table-driven tests
-**Estimate**: 2 points
-
-### T034: [P] Test Command Executor
-**File**: internal/executor/command_test.go
-- Test RunCommand with echo
-- Test command timeout handling
-- Test output streaming
-- Test error propagation
-- Mock command execution
-**Estimate**: 2 points
-
-### T035: [P] Test View Rendering
-**File**: views/project_view_test.go
-- Test RenderProjectContent output
-- Test with nil project
-- Test with valid project data
-- Verify keyboard hints present
-- Check formatting consistency
-**Estimate**: 1 point
-
-### T036: [P] Test Handler Logic
-**File**: handlers/project_handler_test.go
-- Test navigation key handling
-- Test action key triggering
-- Test state transitions
-- Verify returned page values
-- Test quit behavior
-**Estimate**: 2 points
-
-### T037: Integration Test - Project Detection Flow
-**File**: tests/integration/detection_test.go
-- Create temp directory with go.mod
-- Initialize git repository
-- Run full detection
-- Verify all fields populated
-- Clean up test files
-**Estimate**: 3 points
-
-### T038: Integration Test - Release Flow
-**File**: tests/integration/release_test.go
-- Mock goreleaser command
-- Execute full release flow
-- Verify command sequence
-- Check output messages
-- Validate final state
-**Estimate**: 3 points
-
-### T039: Integration Test - Config Persistence
-**File**: tests/integration/config_test.go
-- Create and save config
-- Reload and verify
-- Modify and save again
-- Test concurrent access
-- Verify atomic writes
-**Estimate**: 2 points
-
-
-
-### T047: [P] Add Help Screen
-**File**: views/help.go (create)
-- Create help modal view
-- List all keyboard shortcuts
-- Explain navigation
-- Show command descriptions
-- Toggle with '?' key
-**Estimate**: 1 point
-
-## Execution Examples
-
-### Parallel Execution Groups
-
-**Group 1: Initial Setup (T003-T005)**
-```bash
-Task general-purpose "Complete T003, T004, and T005 in parallel - create all package structures, handlers, and view stubs"
-```
-
-**Group 2: Type Definitions (T008-T009, T030-T031)**
-```bash
-Task general-purpose "Complete T008, T009, T030, and T031 in parallel - define all types, messages, and commands"
-```
-
-**Group 3: Testing Suite (T032-T036)**
-```bash
-Task general-purpose "Complete T032 through T036 in parallel - implement all unit tests"
-```
-
-**Group 4: Polish Features (T044-T047)**
-```bash
-Task general-purpose "Complete T044 through T047 in parallel - add all UI polish features"
-```
-
-### Sequential Critical Path
-
-1. T001-T002 (Setup template and module)
-2. T003-T005 (Create structure) [P]
-3. T006-T009 (Config management)
-4. T010-T012 (Detection)
-5. T013-T018 (Core views)
-6. T019-T025 (Release execution)
-7. T040-T041 (Wire up application)
-8. T032-T039 (Testing)
-9. T044-T047 (Polish) [P]
-
-## Recent Additions (v0.0.21)
-
-### NPM Package Name Validation Feature
-
-**Files Created:**
-- `internal/executor/npm_check.go` (76 lines) - NPM registry checking and name suggestions
-- `handlers/npm_check_handler.go` (14 lines) - Bubble Tea async command handler
-
-**Files Modified:**
-- `handlers/configure_handler.go` - Added NPM validation state and message handling
-- `views/configure_view.go` - Added NPM status display with suggestions
-- Chrome calculations updated in 4 places to account for NPM status UI (3-7 lines)
-
-**Functionality:**
-1. **Automatic Validation**: When user enables NPM in Distributions tab, package name is checked against npm registry
-2. **Visual Feedback**:
-   - ⏳ Checking status (blue)
-   - ✓ Available (green)
-   - ✗ Unavailable (yellow) with suggestions
-   - ✗ Error (red) with error details
-3. **Smart Suggestions**:
-   - Scoped package using GitHub username: `@username/package`
-   - Common suffixes: `-cli`, `-tool`, `-release`, `-dist`
-   - Shows up to 3 suggestions
-4. **Terminal Layout Integrity**:
-   - Handler calculates chrome including NPM status (3 lines for simple, 7 for with suggestions)
-   - View uses same calculation to prevent overflow
-   - Follows constitution principle for fixed terminal height
-
-**UX Pattern**: Similar to regeneration warning - appears/disappears based on state, proper chrome accounting prevents layout issues.
-
-## Notes
-
-- All tasks must maintain < 100 lines per file (pragmatic: essential files may exceed if non-redundant)
-- Use early returns to avoid nested conditionals
-- No comments except API documentation
-- Follow template's handler pattern exactly
-- Test each component in isolation
-- Terminal layout integrity: chrome calculations MUST be updated when adding UI lines
-- Ensure atomic operations for all file I/O
----
-
-# v0.0.32 Enhancement Tasks
-
-**Target Version**: v0.0.32
-**Date Added**: 2025-09-30
-**Status**: Ready for Implementation
-**Features**: Smart Commit Preferences, GitHub Workflow Generation, Dot File Bug Fix
-
-## Overview
-
-This section adds tasks for three enhancements to the production-ready v0.0.31 release:
-1. Project-level smart commit file categorization customization
-2. Optional GitHub Actions workflow generation (opt-in)
-3. Bug fix for dot file handling in commit settings
-
-### Task Count
-- Setup: 3 tasks
-- Bug Fix: 2 tasks  
-- Smart Commit Preferences: 10 tasks
-- Workflow Generation: 10 tasks
-- Integration: 5 tasks
-- Polish: 4 tasks
-**Total**: 34 new tasks
-
----
-
-## Phase 1: Setup Tasks (v0.0.32)
-
-### ☑ T-V32-001: Add doublestar Dependency to go.mod [COMPLETED]
-**File**: go.mod
-**Description**: Add github.com/bmatcuk/doublestar/v4 for glob pattern matching
-**Actions**:
-- Run `go get github.com/bmatcuk/doublestar/v4`
-- Run `go mod tidy`
-- Verify import works with `go build`
-**Estimate**: 1 point
-**Dependencies**: None
-
-### ☑ T-V32-002: Create internal/workflow Package Structure [COMPLETED]
-**Files**: internal/workflow/
-**Description**: Create new package directory for workflow generation logic
-**Actions**:
-- Create `internal/workflow/` directory
-- Add package declaration placeholder
-- No implementation yet, just structure
-**Estimate**: 1 point
-**Dependencies**: None
-
-### ☑ T-V32-003: Update internal/models/types.go with New Structs [COMPLETED]
-**File**: internal/models/types.go
-**Description**: Add CategoryRules, SmartCommitPrefs, WorkflowConfig struct definitions
-**Actions**:
+**categorizer.go**:
 ```go
-type CategoryRules struct {
-    Extensions []string `yaml:"extensions"`
-    Patterns   []string `yaml:"patterns"`
-}
+package filescanner
 
-type SmartCommitPrefs struct {
-    Enabled        bool                        `yaml:"enabled"`
-    UseCustomRules bool                        `yaml:"use_custom_rules"`
-    Categories     map[string]CategoryRules    `yaml:"categories"`
-}
+import "io/fs"
 
-type WorkflowConfig struct {
-    Enabled          bool     `yaml:"enabled"`
-    WorkflowPath     string   `yaml:"workflow_path"`
-    AutoRegenerate   bool     `yaml:"auto_regenerate"`
-    IncludeTests     bool     `yaml:"include_tests"`
-    Environments     []string `yaml:"environments"`
-    SecretsRequired  []string `yaml:"secrets_required"`
+// CategorizeFile determines issue type for a file
+func CategorizeFile(path string, entry fs.DirEntry) (issueType string, shouldFlag bool) {
+    // TODO: Implement in T009
+    return "", false
 }
 ```
-- Add to existing ProjectConfig struct fields
-- Follow existing YAML tag patterns
-**Estimate**: 2 points
-**Dependencies**: None
+
+**actions.go**:
+```go
+package filescanner
+
+// DeleteFile removes file with confirmation
+func DeleteFile(path string) error {
+    // TODO: Implement in T010
+    return nil
+}
+
+// AddToGitignore appends path to .gitignore
+func AddToGitignore(path string) error {
+    // TODO: Implement in T010
+    return nil
+}
+
+// ArchiveFile moves file to .distui-archive/
+func ArchiveFile(path string) error {
+    // TODO: Implement in T010
+    return nil
+}
+```
+
+**Acceptance**: Package compiles, functions return placeholder values
 
 ---
 
-## Phase 2: Bug Fix Tasks (High Priority)
-
-### ☑ T-V32-004: Fix Dot File Handling in Git Cleanup [COMPLETED]
-**File**: internal/gitcleanup/categorize.go
-**Description**: Fix bug where files/directories starting with "." cannot be modified in commit settings
-**Root Cause**: Likely over-aggressive hidden file filtering
-**Actions**:
-- Review file listing logic
-- Ensure dot files included (except .git/ itself)
-- Test with .github/, .goreleaser.yaml, .env files
-- Verify categorization works for dot files
-**Acceptance**:
-- .github/workflows/test.yml can be committed
-- .goreleaser.yaml shows in cleanup tab
-- .git/ directory still excluded
-**Estimate**: 2 points
+### T004: Create gitops package skeleton [P]
+**Directory**: `internal/gitops/`
+**File**: `branches.go`
+**Description**: Create package for git branch operations
 **Dependencies**: None
+**Parallel**: Yes
 
-### ☐ T-V32-005: [P] Add Test for Dot File Categorization
-**File**: internal/gitcleanup/categorize_test.go
-**Description**: Add table-driven test covering dot file scenarios
-**Test Cases**:
-- `.github/workflows/release.yml` → build category
-- `.goreleaser.yaml` → build category
-- `.env` → config category
-- `.gitignore` → config category
-- `.git/config` → should be excluded
-**Estimate**: 2 points
-**Dependencies**: T-V32-004
+```go
+package gitops
+
+import (
+    "distui/internal/models"
+)
+
+// ListBranches returns all local branches with tracking info
+func ListBranches() ([]models.BranchInfo, error) {
+    // TODO: Implement in T011
+    return nil, nil
+}
+
+// GetCurrentBranch returns name of current branch
+func GetCurrentBranch() (string, error) {
+    // TODO: Implement in T011
+    return "", nil
+}
+
+// PushToBranch pushes HEAD to specified branch
+func PushToBranch(branch string) error {
+    // TODO: Implement in T012
+    return nil
+}
+```
+
+**Acceptance**: Package compiles, functions return placeholder values
 
 ---
 
-## Phase 3: Smart Commit Preferences Tasks
+## Phase 1: Contract Tests (4 tasks - ALL PARALLEL)
 
-### ☑ T-V32-006: [P] Add smart_commit Section Parsing to Config Loader [COMPLETED]
-**File**: internal/config/loader.go
-**Description**: Update LoadProject() to parse smart_commit YAML section
-**Actions**:
-- Add parsing for smart_commit section
-- Set defaults if section missing:
-  ```go
-  if config.Config.SmartCommit == nil {
-      config.Config.SmartCommit = getDefaultSmartCommitPrefs()
-  }
-  ```
-- Implement getDefaultSmartCommitPrefs() with hardcoded rules
-- Update SaveProject() to serialize smart_commit
-**Estimate**: 3 points
-**Dependencies**: T-V32-003
+### T005: Write smart_commit_preferences_contract_test.go [P]
+**File**: `tests/contract/smart_commit_preferences_test.go`
+**Description**: Contract tests for preferences loading, saving, validation
+**Dependencies**: T001, T002
+**Parallel**: Yes
 
-### ☑ T-V32-007: [P] Create Pattern Matching Logic with doublestar [COMPLETED]
-**File**: internal/gitcleanup/matcher.go (NEW)
-**Description**: Implement pattern matching functions using doublestar library
-**Functions Needed**:
+Test cases (all should FAIL initially):
 ```go
-// MatchesPattern checks if path matches any pattern in list
-func MatchesPattern(path string, patterns []string) (bool, error)
+func TestLoadSmartCommitPreferences_DefaultsWhenNone(t *testing.T) {
+    // GIVEN: Project with no smart_commit section in YAML
+    // WHEN: LoadProject is called
+    // THEN: ProjectConfig.SmartCommit should be nil (not error)
+}
 
-// MatchesExtension checks if file has extension in list
-func MatchesExtension(path string, extensions []string) bool
+func TestSaveCustomRule_ValidatesPattern(t *testing.T) {
+    // GIVEN: FileCategoryRule with invalid glob pattern
+    // WHEN: Validating pattern
+    // THEN: Should return validation error
+}
 
-// CategorizeWithRules applies custom or default rules
-func CategorizeWithRules(path string, rules map[string]CategoryRules) string
+func TestDeleteCustomRule_RevertsToDefaults(t *testing.T) {
+    // GIVEN: Files categorized using custom rule
+    // WHEN: Custom rule is deleted
+    // THEN: Files should immediately use default categorization
+}
+
+func TestToggleCustomMode_CleansYAML(t *testing.T) {
+    // GIVEN: Project with custom_rules enabled
+    // WHEN: Toggling use_custom_rules to false
+    // THEN: custom_rules should be removed from YAML file
+}
+
+func TestApplyRules_PriorityOrder(t *testing.T) {
+    // GIVEN: Multiple rules matching same file
+    // WHEN: Applying categorization
+    // THEN: Rule with highest priority should win
+}
 ```
-**Actions**:
-- Import doublestar: `github.com/bmatcuk/doublestar/v4`
-- Handle errors from glob matching
-- Use case-insensitive extension matching
-- Return "other" if no category matches
-**Estimate**: 3 points
-**Dependencies**: T-V32-001, T-V32-003
 
-### ☑ T-V32-008: Update Categorize.go to Use Custom Rules [COMPLETED]
-**File**: internal/gitcleanup/categorize.go
-**Description**: Modify CategorizeFile() to check for custom rules and use them
-**Logic**:
+**Acceptance**: All tests compile, all FAIL with clear error messages
+
+---
+
+### T006: Write repo_cleanup_contract_test.go [P]
+**File**: `tests/contract/repo_cleanup_test.go`
+**Description**: Contract tests for file scanning and cleanup actions
+**Dependencies**: T003
+**Parallel**: Yes
+
+Test cases (all should FAIL initially):
 ```go
-func CategorizeFile(path string, projectConfig *models.ProjectConfig) string {
-    if projectConfig.Config.SmartCommit != nil && 
-       projectConfig.Config.SmartCommit.UseCustomRules {
-        return CategorizeWithRules(path, projectConfig.Config.SmartCommit.Categories)
+func TestScanRepository_FlagsMediaFiles(t *testing.T) {
+    // GIVEN: Directory with .mp4, .mov, .wav files
+    // WHEN: ScanRepository is called
+    // THEN: Files flagged as "media" issue type
+}
+
+func TestScanRepository_FlagsExcessDocs(t *testing.T) {
+    // GIVEN: Directory with multiple .md files (not README)
+    // WHEN: ScanRepository is called
+    // THEN: Files flagged as "excess-docs" issue type
+}
+
+func TestScanRepository_FlagsDevArtifacts(t *testing.T) {
+    // GIVEN: Directory with .DS_Store, .log files
+    // WHEN: ScanRepository is called
+    // THEN: Files flagged as "dev-artifact" issue type
+}
+
+func TestScanRepository_SkipsGitDirectory(t *testing.T) {
+    // GIVEN: Repository with .git/ directory
+    // WHEN: ScanRepository is called
+    // THEN: .git/ contents should NOT be flagged
+}
+
+func TestArchiveFile_PreservesStructure(t *testing.T) {
+    // GIVEN: File at path/to/file.txt
+    // WHEN: ArchiveFile is called
+    // THEN: File moved to .distui-archive/TIMESTAMP/path/to/file.txt
+}
+
+func TestAddToGitignore_AppendsLine(t *testing.T) {
+    // GIVEN: Existing .gitignore file
+    // WHEN: AddToGitignore("*.log") is called
+    // THEN: "*.log" appended to .gitignore
+}
+```
+
+**Acceptance**: All tests compile, all FAIL with clear error messages
+
+---
+
+### T007: Write branch_selection_contract_test.go [P]
+**File**: `tests/contract/branch_selection_test.go`
+**Description**: Contract tests for git branch operations
+**Dependencies**: T004
+**Parallel**: Yes
+
+Test cases (all should FAIL initially):
+```go
+func TestListBranches_ParsesTrackingInfo(t *testing.T) {
+    // GIVEN: Repository with branches having tracking info
+    // WHEN: ListBranches is called
+    // THEN: BranchInfo includes tracking_branch, ahead/behind counts
+}
+
+func TestListBranches_IdentifiesCurrent(t *testing.T) {
+    // GIVEN: Repository on 'main' branch
+    // WHEN: ListBranches is called
+    // THEN: BranchInfo for 'main' has is_current = true
+}
+
+func TestGetCurrentBranch_ReturnsActiveBranch(t *testing.T) {
+    // GIVEN: Repository on any branch
+    // WHEN: GetCurrentBranch is called
+    // THEN: Returns current branch name
+}
+
+func TestPushToBranch_SucceedsForValid(t *testing.T) {
+    // GIVEN: Repository with unpushed commits
+    // WHEN: PushToBranch("main") is called
+    // THEN: Commits pushed to origin/main successfully
+}
+
+func TestPushToBranch_FailsForInvalid(t *testing.T) {
+    // GIVEN: Repository with invalid remote
+    // WHEN: PushToBranch("nonexistent") is called
+    // THEN: Returns error with clear message
+}
+```
+
+**Acceptance**: All tests compile, all FAIL with clear error messages
+
+---
+
+### T008: Write ui_notifications_contract_test.go [P]
+**File**: `tests/contract/ui_notifications_test.go`
+**Description**: Contract tests for notification timer behavior
+**Dependencies**: T001
+**Parallel**: Yes
+
+Test cases (all should FAIL initially):
+```go
+func TestNotification_AutoDismissesAfter1500ms(t *testing.T) {
+    // GIVEN: UINotification with ShowUntil = now + 1.5s
+    // WHEN: 1.5 seconds elapse
+    // THEN: Notification should be cleared automatically
+}
+
+func TestNotification_PersistsBeforeTimeout(t *testing.T) {
+    // GIVEN: UINotification with ShowUntil = now + 1.5s
+    // WHEN: 1.0 seconds elapse
+    // THEN: Notification should still be visible
+}
+
+func TestNotification_ManualDismiss(t *testing.T) {
+    // GIVEN: Active UINotification
+    // WHEN: User dismisses manually
+    // THEN: Notification cleared immediately, timer stopped
+}
+
+func TestNotification_StyleRendering(t *testing.T) {
+    // GIVEN: UINotification with style "success"
+    // WHEN: Rendering notification
+    // THEN: Uses success color scheme (green)
+}
+```
+
+**Acceptance**: All tests compile, all FAIL with clear error messages
+
+---
+
+## Phase 2: Core Logic Implementation (5 tasks)
+
+### T009: Implement filescanner.Scanner and Categorizer
+**Files**:
+- `internal/filescanner/scanner.go`
+- `internal/filescanner/categorizer.go`
+
+**Description**: Implement repository file scanning and categorization using hybrid approach
+**Dependencies**: T003, T006
+**Parallel**: No (sequential after tests)
+**New Dependency**: `github.com/muesli/gitcha` for git-aware file scanning
+
+**Implementation Strategy**:
+Use **gitcha** for tracked problematic files (respects .gitignore) + **filepath.WalkDir** for untracked files that should be ignored.
+
+**Implementation Requirements**:
+
+1. **Add gitcha dependency**:
+```bash
+go get github.com/muesli/gitcha
+```
+
+2. **ScanRepository function - Hybrid Approach**:
+
+```go
+package filescanner
+
+import (
+    "fmt"
+    "io/fs"
+    "os"
+    "path/filepath"
+    "strings"
+    "time"
+
+    "distui/internal/models"
+    "github.com/muesli/gitcha"
+)
+
+func ScanRepository(root string) (*models.CleanupScanResult, error) {
+    startTime := time.Now()
+    result := &models.CleanupScanResult{
+        MediaFiles:   []models.FlaggedFile{},
+        ExcessDocs:   []models.FlaggedFile{},
+        DevArtifacts: []models.FlaggedFile{},
+        ScannedAt:    startTime,
     }
-    return categorizeWithDefaults(path) // existing logic
+
+    // PHASE 1: Use gitcha to find TRACKED problematic files
+    // These files are in git but shouldn't be (suggest delete/archive)
+    repo, err := gitcha.GitRepoForPath(root)
+    if err == nil {
+        // Find tracked media files (videos, audio, large images)
+        if err := scanTrackedMedia(root, result); err != nil {
+            return nil, fmt.Errorf("scanning tracked media: %w", err)
+        }
+
+        // Find tracked excess documentation
+        if err := scanTrackedDocs(root, result); err != nil {
+            return nil, fmt.Errorf("scanning tracked docs: %w", err)
+        }
+    }
+
+    // PHASE 2: Use filepath.WalkDir to find UNTRACKED problematic files
+    // These files should be in .gitignore but aren't (suggest ignore)
+    if err := scanUntrackedArtifacts(root, result); err != nil {
+        return nil, fmt.Errorf("scanning untracked artifacts: %w", err)
+    }
+
+    // Calculate totals
+    result.ScanDuration = time.Since(startTime)
+    result.TotalSizeBytes = calculateTotalSize(result)
+
+    return result, nil
+}
+
+// scanTrackedMedia finds media files that are tracked in git
+func scanTrackedMedia(root string, result *models.CleanupScanResult) error {
+    mediaPatterns := []string{
+        "*.mp4", "*.mov", "*.avi", "*.mkv", "*.flv", "*.wmv", // video
+        "*.wav", "*.mp3", "*.flac", "*.aac", "*.ogg",         // audio
+        "*.jpg", "*.jpeg", "*.png", "*.gif", "*.bmp", "*.svg", // images
+    }
+
+    ch, err := gitcha.FindFiles(root, mediaPatterns)
+    if err != nil {
+        return err
+    }
+
+    for file := range ch {
+        // Skip common icon/logo files
+        basename := filepath.Base(file.Path)
+        if isIconOrLogo(basename) {
+            continue
+        }
+
+        info, _ := os.Stat(file.Path)
+        result.MediaFiles = append(result.MediaFiles, models.FlaggedFile{
+            Path:            file.Path,
+            IssueType:       "media",
+            SizeBytes:       info.Size(),
+            SuggestedAction: "delete",
+            FlaggedAt:       time.Now(),
+        })
+    }
+
+    return nil
+}
+
+// scanTrackedDocs finds excess documentation files tracked in git
+func scanTrackedDocs(root string, result *models.CleanupScanResult) error {
+    // Find all markdown files, excluding README
+    ch, err := gitcha.FindFilesExcept(root,
+        []string{"*.md", "*.markdown"},
+        []string{"README.md", "README.markdown", "readme.md"},
+    )
+    if err != nil {
+        return err
+    }
+
+    for file := range ch {
+        info, _ := os.Stat(file.Path)
+        result.ExcessDocs = append(result.ExcessDocs, models.FlaggedFile{
+            Path:            file.Path,
+            IssueType:       "excess-docs",
+            SizeBytes:       info.Size(),
+            SuggestedAction: "archive",
+            FlaggedAt:       time.Now(),
+        })
+    }
+
+    // Find other document types
+    docPatterns := []string{"*.pdf", "*.doc", "*.docx", "*.ppt", "*.pptx"}
+    ch, err = gitcha.FindFiles(root, docPatterns)
+    if err != nil {
+        return err
+    }
+
+    for file := range ch {
+        info, _ := os.Stat(file.Path)
+        result.ExcessDocs = append(result.ExcessDocs, models.FlaggedFile{
+            Path:            file.Path,
+            IssueType:       "excess-docs",
+            SizeBytes:       info.Size(),
+            SuggestedAction: "archive",
+            FlaggedAt:       time.Now(),
+        })
+    }
+
+    return nil
+}
+
+// scanUntrackedArtifacts finds untracked files that should be ignored
+func scanUntrackedArtifacts(root string, result *models.CleanupScanResult) error {
+    return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return err
+        }
+
+        // Skip .git and .distui-archive
+        if d.IsDir() {
+            name := d.Name()
+            if name == ".git" || name == ".distui-archive" {
+                return filepath.SkipDir
+            }
+            return nil
+        }
+
+        // Check if file is a dev artifact
+        basename := d.Name()
+        ext := filepath.Ext(basename)
+
+        // System files
+        if basename == ".DS_Store" || basename == "Thumbs.db" || basename == "desktop.ini" {
+            info, _ := d.Info()
+            result.DevArtifacts = append(result.DevArtifacts, models.FlaggedFile{
+                Path:            path,
+                IssueType:       "dev-artifact",
+                SizeBytes:       info.Size(),
+                SuggestedAction: "ignore",
+                FlaggedAt:       time.Now(),
+            })
+            return nil
+        }
+
+        // Temp/log files
+        if ext == ".log" || ext == ".tmp" || ext == ".temp" ||
+           ext == ".swp" || ext == ".swo" {
+            info, _ := d.Info()
+            result.DevArtifacts = append(result.DevArtifacts, models.FlaggedFile{
+                Path:            path,
+                IssueType:       "dev-artifact",
+                SizeBytes:       info.Size(),
+                SuggestedAction: "ignore",
+                FlaggedAt:       time.Now(),
+            })
+        }
+
+        return nil
+    })
+}
+
+func isIconOrLogo(filename string) bool {
+    lower := strings.ToLower(filename)
+    return strings.Contains(lower, "icon") ||
+           strings.Contains(lower, "logo") ||
+           lower == "favicon.ico"
+}
+
+func calculateTotalSize(result *models.CleanupScanResult) int64 {
+    var total int64
+    for _, f := range result.MediaFiles {
+        total += f.SizeBytes
+    }
+    for _, f := range result.ExcessDocs {
+        total += f.SizeBytes
+    }
+    for _, f := range result.DevArtifacts {
+        total += f.SizeBytes
+    }
+    return total
 }
 ```
-**Actions**:
-- Add projectConfig parameter to CategorizeFile
-- Check UseCustomRules flag
-- Fall back to defaults if custom disabled
-- Maintain backward compatibility
-**Estimate**: 2 points
-**Dependencies**: T-V32-004, T-V32-006, T-V32-007
 
-### ☑ T-V32-009: Create handlers/smart_commit_prefs_handler.go [COMPLETED]
-**File**: handlers/smart_commit_prefs_handler.go (NEW)
-**Description**: Create Bubble Tea handler for smart commit preferences editing
-**Model Struct**:
-```go
-type SmartCommitPrefsModel struct {
-    ProjectConfig     *models.ProjectConfig
-    SelectedCategory  int          // Index in category list
-    EditMode          bool         // Editing extensions/patterns
-    ExtensionInput    textinput.Model
-    PatternInput      textinput.Model
-    Width             int
-    Height            int
-}
-```
-**Key Functions**:
-- `NewSmartCommitPrefsModel()` - Initialize with project config
-- `Update()` - Handle key presses (↑/↓ navigate, e edit, a add, d delete, r reset, s save)
-- `ToggleCustomRules()` - Enable/disable custom rules
-- `AddExtension()`, `RemoveExtension()` - Modify extension list
-- `AddPattern()`, `RemovePattern()` - Modify pattern list
-- `ResetToDefaults()` - Clear custom rules, use defaults
-**Actions**:
-- Keep file under 300 lines (constitution guideline)
-- Use early returns, no nested conditionals
-- Self-documenting names
-**Estimate**: 5 points
-**Dependencies**: T-V32-006, T-V32-007
+3. **Key Benefits of Hybrid Approach**:
+   - ✅ **gitcha respects .gitignore**: Won't flag files already properly ignored
+   - ✅ **Distinguishes tracked vs untracked**: Different suggested actions
+   - ✅ **Tracked problematic files** → suggest delete/archive (remove from git)
+   - ✅ **Untracked problematic files** → suggest ignore (add to .gitignore)
+   - ✅ **Simpler logic**: No need to manually parse .gitignore patterns
 
-### ☑ T-V32-010: Create views/smart_commit_prefs_view.go [COMPLETED]
-**File**: views/smart_commit_prefs_view.go (NEW)
-**Description**: Render UI for smart commit preferences
-**Layout**:
-```
-┌─ Smart Commit Preferences ─────────┐
-│ [✓] Use Custom Rules               │
-│                                     │
-│ Categories:                         │
-│ > code                              │
-│   config                            │
-│   docs                              │
-│   ...                               │
-│                                     │
-│ code Category:                      │
-│ Extensions: .go, .js, .ts          │
-│ Patterns: **/src/**, **/lib/**     │
-│                                     │
-│ [r] Reset  [s] Save  [ESC] Cancel  │
-└─────────────────────────────────────┘
-```
-**Actions**:
-- Use lipgloss for styling
-- Show selected category highlighted
-- Display extensions and patterns for selected category
-- Show keyboard hints at bottom
-- Keep under 200 lines
-**Estimate**: 4 points
-**Dependencies**: T-V32-009
+4. **Performance targets**:
+   - < 2 seconds for repos with <10k files
+   - gitcha uses efficient git commands internally
+   - Early return on errors
+   - No nested conditionals (switch on extension where needed)
 
-### ☑ T-V32-011: Integrate Smart Commit Prefs into Configure View Cleanup Tab [COMPLETED]
-**Files**: handlers/configure_handler.go, views/configure_view.go, views/cleanup_view.go, handlers/smart_commit_prefs_handler.go
-**Description**: Added smart commit preferences as nested view in Cleanup tab (project-level settings)
+**Reference**:
+- gitcha library: https://github.com/muesli/gitcha
+- Research findings in research.md (filepath.WalkDir pattern)
+- Plan.md Phase 0 section 2 (file scanning best practices)
+
+**Acceptance**:
+- T006 contract tests pass
+- Scan completes in <2s for typical repo
+- Correctly distinguishes tracked vs untracked files
+- Respects .gitignore automatically via gitcha
+
+---
+
+### T010: Implement filescanner.Actions
+**File**: `internal/filescanner/actions.go`
+**Description**: Implement delete/ignore/archive file operations
+**Dependencies**: T003, T006
+**Parallel**: No (after T009)
+
+**Implementation Requirements**:
+
+1. **DeleteFile function**:
+   - Use os.Remove
+   - Return error if file doesn't exist
+   - Atomic operation (no confirmation needed - confirmation in UI layer)
+
+2. **AddToGitignore function**:
+   - Check if line already exists (avoid duplicates)
+   - Append to .gitignore with newline
+   - Create .gitignore if doesn't exist
+   - Use atomic write pattern (temp file + rename)
+
+3. **ArchiveFile function**:
+   - Archive directory: .distui-archive/YYYY-MM-DD-HHMMSS/
+   - Preserve directory structure (e.g., docs/file.pdf → .distui-archive/2025-09-30-143021/docs/file.pdf)
+   - Create archive directory if not exists (os.MkdirAll)
+   - Use os.Rename for move (atomic on same filesystem)
+   - Fallback to copy+delete if cross-filesystem
+
+**Reference**:
+- Research findings in research.md section 4 (archive directory convention)
+- Plan.md Phase 1 contract definitions
+
+**Acceptance**: T006 contract tests pass, archived files preserve structure
+
+---
+
+### T011: Implement gitops.ListBranches and GetCurrentBranch
+**File**: `internal/gitops/branches.go`
+**Description**: Parse git branch output into structured data
+**Dependencies**: T004, T007
+**Parallel**: No
+
+**Implementation Requirements**:
+
+1. **ListBranches function**:
+   - Execute: `git for-each-ref --format='%(refname:short)|%(upstream:short)|%(HEAD)' refs/heads refs/remotes`
+   - Parse output into BranchInfo structs
+   - Split by "|" delimiter
+   - Filter out remote refs (only show local branches)
+   - Set IsCurrent based on %(HEAD) = "*"
+   - Set TrackingBranch from %(upstream:short)
+   - AheadCount/BehindCount = 0 (leave for future enhancement)
+
+2. **GetCurrentBranch function**:
+   - Execute: `git branch --show-current`
+   - Return trimmed output
+   - Return error if not in git repo
+
+**Reference**:
+- Research findings in research.md section 5 (git branch commands)
+- Plan.md Phase 0 outlines git for-each-ref pattern
+
+**Acceptance**: T007 contract tests pass, branches parsed correctly
+
+---
+
+### T012: Implement gitops.PushToBranch
+**File**: `internal/gitops/branches.go`
+**Description**: Execute git push to specified branch
+**Dependencies**: T004, T007
+**Parallel**: No (after T011)
+
+**Implementation Requirements**:
+
+1. **PushToBranch function**:
+   - Execute: `git push origin HEAD:refs/heads/{branch}`
+   - Stream output to capture progress
+   - Return error with output if push fails
+   - Handle "no upstream" gracefully
+   - Handle authentication failures with clear message
+
+2. **Error handling**:
+   - Wrap errors with context (fmt.Errorf)
+   - Preserve git error messages
+   - Detect common failures (auth, network, force push required)
+
+**Reference**:
+- Constitution principle VI (direct command execution)
+- Existing push logic in handlers/cleanup_handler.go
+
+**Acceptance**: T007 contract tests pass, successful push verified
+
+---
+
+### T013: Implement preferences loader/saver in config package
+**File**: `internal/config/loader.go`
+**Description**: Add functions for smart commit preferences CRUD
+**Dependencies**: T001, T002, T005
+**Parallel**: No
+
+**Implementation Requirements**:
+
+1. **LoadSmartCommitPreferences function**:
+   - Load from ProjectConfig.SmartCommit
+   - Return defaults if nil (empty CustomRules, Enabled=false)
+   - Never error on missing section
+
+2. **SaveSmartCommitPreferences function**:
+   - Update ProjectConfig.SmartCommit
+   - Call SaveProject with atomic write
+   - Validate rules before saving (use doublestar.ValidatePattern)
+
+3. **DeleteCustomRule function**:
+   - Remove rule from CustomRules by index
+   - Save updated ProjectConfig
+   - Return error if index out of bounds
+
+4. **ToggleCustomMode function**:
+   - Set Enabled boolean
+   - If disabling: clear CustomRules array (clean YAML)
+   - Save updated ProjectConfig
+
+**Reference**:
+- Research findings in research.md section 3 (glob validation)
+- Data model in data-model.md (smart_commit schema)
+
+**Acceptance**: T005 contract tests pass, preferences persist correctly
+
+---
+
+## Phase 3: Handlers (4 tasks - SOME PARALLEL)
+
+### T014: ✅ Implement smart_commit_prefs_handler.go [P] - COMPLETED
+**File**: `handlers/smart_commit_prefs_handler.go`
+**Description**: Handler for smart commit preferences editor UI
+**Dependencies**: T013
+**Parallel**: Yes (separate file)
+**Status**: ✅ Already implemented - Feature complete, minor bug fix needed in T033
+
+**Implementation Requirements**:
+
+1. **SmartCommitPrefsModel struct**:
+   - Categories list (config, code, docs, build, test, assets, data)
+   - SelectedCategory int
+   - EditingExtension bool
+   - ExtensionInput textinput.Model
+   - Rules []FileCategoryRule
+   - Width, Height int
+   - ProjectConfig *models.ProjectConfig
+
+2. **NewSmartCommitPrefsModel function**:
+   - Initialize with project config
+   - Load existing preferences or defaults
+   - Create text input for editing
+
+3. **Update function**:
+   - Handle category navigation (up/down arrows)
+   - Handle extension editing (enter, esc)
+   - Handle add/delete operations
+   - Handle save (validate, call SaveSmartCommitPreferences)
+   - Handle reset to defaults
+
+4. **Key bindings**:
+   - [↑/↓] Navigate categories
+   - [→] Edit selected category
+   - [a] Add extension/pattern
+   - [d] Delete extension/pattern
+   - [r] Reset to defaults
+   - [s] Save preferences
+   - [Esc] Cancel
+
+**File size target**: <100 lines (justified if 100-120 for essential CRUD logic)
+
+**Reference**:
+- Existing handler patterns in handlers/cleanup_handler.go
+- Bubble Tea input handling examples
+
+**Acceptance**: Compiles, key bindings work, saves to YAML
+
+---
+
+### T015: Implement repo_cleanup_handler.go [P]
+**File**: `handlers/repo_cleanup_handler.go`
+**Description**: Handler for repository cleanup mode UI state
+**Dependencies**: T009, T010
+**Parallel**: Yes (separate file)
+
+**Implementation Requirements**:
+
+1. **RepoCleanupModel struct**:
+   - ScanResult *models.CleanupScanResult
+   - FlaggedFiles []models.FlaggedFile (flattened view)
+   - SelectedIndex int
+   - Scanning bool
+   - ScanSpinner spinner.Model
+   - Width, Height int
+
+2. **NewRepoCleanupModel function**:
+   - Initialize spinner
+   - Start scan asynchronously (return tea.Cmd)
+
+3. **Update function**:
+   - Handle scan complete message
+   - Handle file navigation (up/down)
+   - Handle action keys (delete, ignore, archive)
+   - Handle confirmation modals
+   - Update spinner while scanning
+
+4. **Commands**:
+   - ScanRepositoryCmd: Async scan, returns scanCompleteMsg
+   - DeleteFileCmd: Execute delete, return resultMsg
+   - ArchiveFileCmd: Execute archive, return resultMsg
+   - AddToGitignoreCmd: Execute ignore, return resultMsg
+
+5. **Key bindings**:
+   - [↑/↓] Navigate files
+   - [d] Delete file (show confirmation)
+   - [i] Add to .gitignore
+   - [a] Archive file
+   - [r] Re-scan
+   - [Esc] Cancel/back
+
+**File size target**: <100 lines
+
+**Reference**:
+- Async patterns in handlers/configure_handler.go (LoadCleanupCmd)
+- Spinner usage in handlers/global_handler.go
+
+**Acceptance**: Compiles, scan works, actions execute correctly
+
+---
+
+### T016: Implement branch_selection_handler.go [P]
+**File**: `handlers/branch_selection_handler.go`
+**Description**: Handler for branch selection modal state
+**Dependencies**: T011, T012
+**Parallel**: Yes (separate file)
+
+**Implementation Requirements**:
+
+1. **BranchSelectionModel struct**:
+   - Branches []models.BranchInfo
+   - SelectedIndex int
+   - Loading bool
+   - LoadSpinner spinner.Model
+   - Error string
+   - Width, Height int
+
+2. **NewBranchSelectionModel function**:
+   - Start loading branches (return tea.Cmd)
+   - Initialize spinner
+   - Calculate content dimensions (handle chrome)
+
+3. **Update function**:
+   - Handle branches loaded message
+   - Handle navigation (up/down arrows)
+   - Handle selection (enter key)
+   - Handle cancel (esc key)
+   - Update spinner while loading
+
+4. **Commands**:
+   - LoadBranchesCmd: Async load, returns branchesLoadedMsg
+   - PushToBranchCmd: Execute push, returns pushResultMsg
+
+5. **Key bindings**:
+   - [↑/↓] Navigate branches
+   - [Enter] Push to selected branch
+   - [Esc] Cancel
+
+**Height management**:
+- Chrome: header(1) + blank(1) + instructions(1) + controls(1) = 4 lines
+- ListHeight = Height - 4
+- Pass ListHeight to view, NOT Height
+
+**File size target**: <100 lines
+
+**Reference**:
+- Modal patterns in contracts/ui-states.md (BranchSelectionModal section)
+- TUI Layout Integrity principle in constitution
+
+**Acceptance**: Compiles, branch list loads, push executes
+
+---
+
+### T017: Implement notification_handler.go [P]
+**File**: `handlers/notification_handler.go`
+**Description**: Handler for auto-dismissing notification overlay
+**Dependencies**: T001
+**Parallel**: Yes (separate file)
+
+**Implementation Requirements**:
+
+1. **NotificationModel struct**:
+   - Notification *models.UINotification
+   - Ticking bool
+
+2. **ShowNotification function**:
+   - Create UINotification with ShowUntil = now + 1.5s
+   - Return notification and tickCmd
+
+3. **Update function**:
+   - Handle tickMsg
+   - Check if time.Now() > ShowUntil
+   - If expired: clear notification, return nil cmd
+   - If active: return tickCmd to continue
+
+4. **tickCmd function**:
+   - Return tea.Tick(100ms, ...) wrapped in tickMsg
+
+5. **Helper functions**:
+   - CreateNotification(message string, style string) (*models.UINotification, tea.Cmd)
+   - DismissNotification(model *NotificationModel)
+
+**File size target**: <80 lines (very simple)
+
+**Reference**:
+- Research findings in research.md section 6 (timer patterns)
+- Plan.md Phase 1 contract definitions
+
+**Acceptance**: Compiles, notification dismisses after 1.5s
+
+---
+
+## Phase 4: Views (4 tasks - ALL PARALLEL)
+
+### T018: ✅ Implement smart_commit_prefs_view.go [P] - COMPLETED
+**File**: `views/smart_commit_prefs_view.go`
+**Description**: Render smart commit preferences editor UI
+**Dependencies**: T014
+**Parallel**: Yes
+**Status**: ✅ Already implemented - Feature complete
+
+**Implementation Requirements**:
+
+1. **RenderSmartCommitPrefs function**:
+   - Takes SmartCommitPrefsModel as input
+   - Returns formatted string
+   - Header: "SMART COMMIT PREFERENCES"
+   - Left panel: Category list with selection indicator
+   - Right panel: Extensions and patterns for selected category
+   - Bottom: Control hints ([s] Save, [r] Reset, [Esc] Cancel)
+
+2. **Visual layout**:
+   ```
+   ┌─ SMART COMMIT PREFERENCES ─────────────────┐
+   │                                             │
+   │  Categories        Selected: code          │
+   │  > config          Extensions:             │
+   │    code              *.go                   │
+   │    docs              *.proto                │
+   │    build           Patterns:               │
+   │    test              **/cmd/**              │
+   │    assets                                   │
+   │    data            [a] Add  [d] Delete     │
+   │                                             │
+   │  [s] Save  [r] Reset  [Esc] Cancel         │
+   └─────────────────────────────────────────────┘
+   ```
+
+3. **Styling**:
+   - Use lipgloss for colors
+   - Selected category: bold + color
+   - Editing mode: highlight input field
+
+4. **Height management**:
+   - Use model.Height directly (handler already subtracted chrome)
+   - Do NOT subtract additional chrome in view
+
+**File size target**: <80 lines
+
+**Reference**:
+- Existing view patterns in views/cleanup_view.go
+- TUI Layout Integrity in constitution
+
+**Acceptance**: Renders correctly, styles apply, no overflow
+
+---
+
+### T019: Implement repo_cleanup_view.go [P]
+**File**: `views/repo_cleanup_view.go`
+**Description**: Render repository cleanup scan results
+**Dependencies**: T015
+**Parallel**: Yes
+
+**Implementation Requirements**:
+
+1. **RenderRepoCleanup function**:
+   - Takes RepoCleanupModel as input
+   - Returns formatted string
+   - Show spinner if scanning
+   - Show flagged files grouped by issue type
+   - Highlight selected file
+   - Show file details (size, suggested action)
+
+2. **Visual layout**:
+   ```
+   ┌─ REPOSITORY CLEANUP ────────────────────────┐
+   │                                             │
+   │  Media Files (3 files, 45.2 MB)            │
+   │  > video/demo.mp4 (25.1 MB) - Delete       │
+   │    images/large.png (15.0 MB) - Delete     │
+   │    audio/song.mp3 (5.1 MB) - Delete        │
+   │                                             │
+   │  Excess Docs (2 files, 1.2 MB)             │
+   │    docs/old-spec.md (800 KB) - Archive     │
+   │    guide.pdf (400 KB) - Archive            │
+   │                                             │
+   │  Dev Artifacts (5 files, 2.3 MB)           │
+   │    .DS_Store (6 KB) - Delete               │
+   │    debug.log (1.5 MB) - Ignore             │
+   │    ...                                      │
+   │                                             │
+   │  [d] Delete  [i] Ignore  [a] Archive       │
+   │  [r] Re-scan  [Esc] Cancel                 │
+   └─────────────────────────────────────────────┘
+   ```
+
+3. **Styling**:
+   - Issue types color-coded (media=red, docs=yellow, artifacts=gray)
+   - Selected file: bold + background highlight
+   - Size formatting: humanize (KB, MB, GB)
+
+4. **Height management**:
+   - Use model.Height directly
+   - Scrollable list if more files than fit
+
+**File size target**: <80 lines
+
+**Reference**:
+- List rendering in views/cleanup_view.go
+- Grouped display patterns
+
+**Acceptance**: Renders correctly, groups visible, no overflow, safely confirms with user before deteling files
+
+---
+
+### T020: Implement branch_selection_view.go [P]
+**File**: `views/branch_selection_view.go`
+**Description**: Render full-screen branch selection modal
+**Dependencies**: T016
+**Parallel**: Yes
+
+**Implementation Requirements**:
+
+1. **RenderBranchSelection function**:
+   - Takes BranchSelectionModel as input
+   - Returns formatted string
+   - Full-screen overlay (uses entire terminal)
+   - Header: "SELECT BRANCH TO PUSH"
+   - Branch list with tracking info
+   - Highlight current branch
+   - Show selection indicator
+   - Bottom: Control hints
+
+2. **Visual layout**:
+   ```
+   ┌─ SELECT BRANCH TO PUSH ─────────────────────┐
+   │                                              │
+   │  > main (current) ← origin/main             │
+   │    develop → origin/develop (ahead 2)       │
+   │    feature/new-api (no tracking)            │
+   │    feature/bugfix → origin/feature/bugfix   │
+   │                                              │
+   │  ↑/↓: navigate • enter: push • esc: cancel  │
+   └──────────────────────────────────────────────┘
+   ```
+
+3. **Branch display format**:
+   - Current branch: "(current)" label
+   - Tracking: "→ remote/branch" or "← remote/branch" with ahead/behind
+   - No tracking: "(no tracking)" label
+   - Selected: "> " prefix + bold
+
+4. **Height management**:
+   - Use model.ListHeight (already calculated in handler)
+   - Scrollable if more branches than fit
+
+**File size target**: <80 lines
+
+**Reference**:
+- Modal overlay in contracts/ui-states.md
+- Research findings in research.md section 7
+
+**Acceptance**: Renders correctly, full-screen modal, no overflow
+
+---
+
+### T021: Implement notification_view.go [P]
+**File**: `views/notification_view.go`
+**Description**: Render auto-dismissing notification overlay
+**Dependencies**: T017
+**Parallel**: Yes
+
+**Implementation Requirements**:
+
+1. **RenderNotification function**:
+   - Takes UINotification as input
+   - Returns formatted string (single line)
+   - Style based on notification.Style
+   - Positioned at top of screen (overlay)
+
+2. **Visual layout**:
+   ```
+   ┌─────────────────────────────────────────┐
+   │ ✓ Switched to: /Users/me/project       │  <- Success notification
+   └─────────────────────────────────────────┘
+   ```
+
+3. **Styling**:
+   - info: blue background, white text
+   - success: green background, white text, checkmark icon
+   - warning: yellow background, black text, warning icon
+   - error: red background, white text, X icon
+
+4. **Positioning**:
+   - Top-center of screen
+   - Auto-width based on message length
+   - Max width: 60 characters (truncate longer messages)
+
+**File size target**: <60 lines (very simple)
+
+**Reference**:
+- Notification overlay concept in plan.md
+- Lipgloss positioning (Place function)
+
+**Acceptance**: Renders correctly, styled properly, positioned correctly
+
+---
+
+## Phase 5: Integration (5 tasks)
+
+### T022: ✅ Wire smart commit prefs into configure view - COMPLETED
+**Files**:
+- `handlers/configure_handler.go` (update)
+- `app.go` (update)
+
+**Description**: Add smart commit preferences as sub-view accessible from configure view
+**Dependencies**: T014, T018
+**Parallel**: No
+**Status**: ✅ Already integrated - Feature accessible from configure view
+
+**Implementation Requirements**:
+
+1. **Update ConfigureModel**:
+   - Add PrefsModel *SmartCommitPrefsModel field
+   - Add EditingPrefs bool field
+
+2. **Update ConfigureHandler**:
+   - Add key binding: [P] Edit preferences (from Advanced tab)
+   - When pressed: create PrefsModel, set EditingPrefs = true
+   - Route messages to PrefsModel when EditingPrefs = true
+   - On save: update ProjectConfig, set EditingPrefs = false
+
+3. **Update ConfigureView**:
+   - If EditingPrefs: render PrefsModel.View()
+   - Else: render normal tab view
+
+4. **Chrome calculation**:
+   - PrefsModel chrome same as other tabs (13 lines)
+   - Pass m.Height - 13 to NewSmartCommitPrefsModel
+
+**Reference**:
+- Existing tab structure in handlers/configure_handler.go
+- Sub-view patterns in contracts/ui-states.md
+
+**Acceptance**: [P] key opens preferences, saves work, ESC returns to configure
+
+---
+
+### T023: Wire repo cleanup into cleanup tab
+**Files**:
+- `handlers/configure_handler.go` (update)
+- `views/cleanup_view.go` (update)
+
+**Description**: Add repo cleanup mode toggle and UI to cleanup tab
+**Dependencies**: T015, T019
+**Parallel**: No
+
+**Implementation Requirements**:
+
+1. **Update CleanupModel**:
+   - Add CleanupMode *RepoCleanupModel field
+   - Add ScanningRepo bool field
+
+2. **Update CleanupTab handling**:
+   - Add key binding: [C] Scan repository (shift+c to distinguish from commit)
+   - When pressed: create CleanupMode, set ScanningRepo = true
+   - Route messages to CleanupMode when ScanningRepo = true
+   - On action complete: refresh file list, set ScanningRepo = false
+
+3. **Update CleanupView**:
+   - If ScanningRepo: render CleanupMode.View()
+   - Else: render normal git status view
+
+4. **Chrome calculation**:
+   - CleanupMode uses same listHeight as file list
+   - Already calculated in handler
+
+**Reference**:
+- Nested view approach in constitution (TUI Layout Integrity)
+- Cleanup tab structure in handlers/configure_handler.go
+
+**Acceptance**: [C] key starts scan, actions work, returns to cleanup tab
+
+---
+
+### T024: Wire Shift+B handler into cleanup tab
+**Files**:
+- `handlers/cleanup_handler.go` (update)
+- `app.go` (update)
+
+**Description**: Add branch selection modal triggered by Shift+B
+**Dependencies**: T016, T020
+**Parallel**: No
+
+**Implementation Requirements**:
+
+1. **Update app.go Model**:
+   - Add BranchModal *BranchSelectionModal field
+   - Add ShowingBranchModal bool field
+
+2. **Update cleanup key handling**:
+   - Add case for "B" (shift+B)
+   - Check if unpushed commits exist
+   - If yes: create BranchModal, set ShowingBranchModal = true
+   - Return to normal view after push complete or cancel
+
+3. **Update app View**:
+   - If ShowingBranchModal: render BranchModal.View() (full screen)
+   - Else: render normal view
+
+4. **Message routing**:
+   - Route messages to BranchModal when ShowingBranchModal = true
+   - On push complete: set ShowingBranchModal = false, refresh status
+
+**Reference**:
+- Modal overlay patterns in research.md section 7
+- Full-screen replacement approach from plan
+
+**Acceptance**: Shift+B shows modal, branch selection works, push executes
+
+---
+
+### T025: Wire notification overlay into app.go
+**Files**:
+- `app.go` (update)
+- `handlers/notification_handler.go` (update)
+
+**Description**: Add notification system for switchedToPath and other messages
+**Dependencies**: T017, T021
+**Parallel**: No
+
+**Implementation Requirements**:
+
+1. **Update app Model**:
+   - Replace switchedToPath string with Notification *UINotification
+   - Add NotificationModel *NotificationModel field
+
+2. **Replace switchedToPath logic**:
+   - When project switches: call ShowNotification("Switched to: " + path, "success")
+   - Store notification + start timer cmd
+   - Remove switchedToPath clearing on keypress (auto-dismiss handles it)
+
+3. **Update app Update**:
+   - Route tickMsg to NotificationModel
+   - Clear notification when auto-dismissed
+
+4. **Update app View**:
+   - If notification active: render at top of screen (overlay)
+   - Use lipgloss.Place to position at top-center
+
+**Reference**:
+- Notification timer pattern in plan.md
+- Auto-dismiss implementation in handler
+
+**Acceptance**: Project switch shows notification, auto-dismisses after 1.5s
+
+---
+
+### T026: Update chrome calculations for new views (TUI Layout Integrity)
+**Files**:
+- `handlers/smart_commit_prefs_handler.go` (verify)
+- `handlers/repo_cleanup_handler.go` (verify)
+- `handlers/branch_selection_handler.go` (verify)
+- `handlers/notification_handler.go` (N/A - overlay)
+
+**Description**: Verify all new handlers calculate chrome correctly, no overflow
+**Dependencies**: T022, T023, T024, T025
+**Parallel**: No
+
+**Verification Checklist**:
+
+1. **For each handler**:
+   - Count chrome lines (headers, blanks, controls, dividers)
+   - Verify listHeight = Height - chromeLines
+   - Pass listHeight to view, not Height
+   - View NEVER subtracts additional chrome
+
+2. **Test scenarios**:
+   - Small terminal (80x24): No overflow
+   - Normal terminal (120x40): Content fits
+   - Large terminal (200x60): Content scales
+
+3. **Chrome calculations**:
+   - SmartCommitPrefsModel: 13 lines (same as configure tabs)
+   - RepoCleanupModel: 13 lines (same as cleanup tab)
+   - BranchSelectionModal: 4 lines (header + blank + instructions + controls)
+   - NotificationModel: 0 lines (overlay, doesn't affect layout)
+
+**Reference**:
+- Constitution TUI Layout Integrity principle
+- Research findings in research.md section 8
+- Existing chrome calculations in configure_handler.go
+
+**Acceptance**: No terminal overflow in any view at any terminal size
+
+---
+
+## Phase 6: Integration Tests (4 tasks)
+
+### T027: Test full preferences workflow
+**File**: `tests/integration/preferences_workflow_test.go`
+**Description**: End-to-end test of smart commit preferences feature
+**Dependencies**: T022
+**Parallel**: No
+
+Test workflow:
+1. Open configure view
+2. Navigate to preferences
+3. Add custom rule (*.proto → code)
+4. Save preferences
+5. Verify YAML file updated
+6. Apply rule to test files
+7. Verify categorization correct
+8. Delete custom rule
+9. Verify files revert to defaults
+
+**Acceptance**: Full workflow executes without errors
+
+---
+
+### T028: Test full cleanup scan workflow
+**File**: `tests/integration/cleanup_scan_workflow_test.go`
+**Description**: End-to-end test of repository cleanup feature
+**Dependencies**: T023
+**Parallel**: No
+
+Test workflow:
+1. Create test repo with problematic files
+2. Open cleanup tab
+3. Trigger scan
+4. Verify files flagged correctly
+5. Delete a media file
+6. Archive an excess doc
+7. Add artifact to .gitignore
+8. Verify actions completed
+9. Re-scan and verify changes
+
+**Acceptance**: Full workflow executes, actions work correctly
+
+---
+
+### T029: Test full branch push workflow
+**File**: `tests/integration/branch_push_workflow_test.go`
+**Description**: End-to-end test of branch selection and push
+**Dependencies**: T024
+**Parallel**: No
+
+Test workflow:
+1. Create test repo with unpushed commits
+2. Open cleanup tab
+3. Press Shift+B
+4. Verify branch modal appears
+5. Navigate branch list
+6. Select non-current branch
+7. Confirm push
+8. Verify commits pushed
+9. Verify modal dismissed
+
+**Acceptance**: Full workflow executes, push succeeds
+
+---
+
+### T030: Test notification auto-dismiss
+**File**: `tests/integration/notification_autodismiss_test.go`
+**Description**: Test notification timer behavior
+**Dependencies**: T025
+**Parallel**: No
+
+Test workflow:
+1. Trigger notification (project switch)
+2. Verify notification appears
+3. Wait 1.0 seconds
+4. Verify notification still visible
+5. Wait 0.6 seconds (total 1.6s)
+6. Verify notification dismissed
+7. Verify timer stopped
+
+**Acceptance**: Notification dismisses within 1.5s ± 100ms
+
+---
+
+## Phase 7: Bug Fixes (3 tasks)
+
+### T031: Fix dot file handling in commit settings
+**Files**:
+- `internal/gitcleanup/categorize.go` (likely)
+- Or: `handlers/cleanup_handler.go`
+
+**Description**: Fix bug where files/dirs starting with "." cannot be modified
+**Dependencies**: None (bug fix)
+**Parallel**: No
+
+**Investigation**:
+1. Reproduce bug: Create .github directory, try to modify in commit settings
+2. Find where dot files are filtered
+3. Update filter to ONLY skip .git/ directory
+4. Preserve .github, .goreleaser.yaml, etc.
+
+**Test**:
+- Create .github/workflows/test.yml
+- Modify file in cleanup tab
+- Verify can commit, skip, ignore
+
+**Reference**:
+- Bug noted in contracts/ui-states.md Known Issues
+
+**Acceptance**: Dot files (except .git/) work in commit settings
+
+---
+
+### T032: Fix switchedToPath persistence (use notification system)
+**Files**: `app.go`
+**Description**: Replace manual keypress clearing with notification auto-dismiss
+**Dependencies**: T025
+**Parallel**: No
+
 **Implementation**:
-- Added `SmartCommitPrefsView` to ViewType enum
-- Added `SmartCommitPrefsModel` field to ConfigureModel
-- Added 'p' key handler in Cleanup tab to open preferences
-- Added view delegation case in UpdateConfigureView
-- Updated configure_view.go to render SmartCommitPrefsView
-- Updated cleanup_view.go actions to show [p] Preferences hint
-- Added SetSize method for proper dimension handling
-- Updated WindowSizeMsg handling to resize SmartCommitPrefsModel
-**Pattern**: Follows exact pattern of GitHubView and CommitView integration
-**Estimate**: 3 points
-**Dependencies**: T-V32-009, T-V32-010
+- Already done in T025 (notification integration)
+- This task verifies fix works correctly
+- Remove any remaining switchedToPath clearing logic
 
-### ☑ T-V32-012: Add Default Rules Reset Functionality [COMPLETED]
-**File**: handlers/smart_commit_prefs_handler.go
-**Description**: Implemented reset to defaults with confirmation
+**Test**:
+- Switch projects
+- Verify notification shows
+- Don't press any keys
+- Wait 1.5 seconds
+- Verify notification dismissed automatically
+
+**Acceptance**: No manual keypress needed, auto-dismisses correctly
+
+---
+
+### T033: Fix space toggle YAML cleanup in preferences
+**Files**: `handlers/smart_commit_prefs_handler.go`
+**Description**: Ensure toggling off custom mode removes custom_rules from YAML
+**Dependencies**: T014
+**Parallel**: No
+
 **Implementation**:
-- Added ShowConfirm bool field to model
-- Added handleConfirm method that handles 'y' and 'n' keys
-- Added resetToDefaults method: sets UseCustomRules = false, clears Categories map, saves config
-- Pressing 'r' in normal mode triggers ShowConfirm = true
-- View renders confirmation modal: "Reset custom rules to defaults?" with [y] Yes [n] No
-- After reset, returns to preferences view showing defaults
-**Estimate**: 2 points
-**Dependencies**: T-V32-009
+- In ToggleCustomMode function (T013):
+  - When disabling: set CustomRules = nil (not empty slice)
+  - This triggers omitempty YAML tag
+  - Field excluded from saved YAML
 
-### ☐ T-V32-013: [P] Write Unit Tests for Pattern Matching
-**File**: internal/gitcleanup/matcher_test.go (NEW)
-**Description**: Table-driven tests for pattern matching logic
-**Test Cases**:
-- Extension matching: ".go" matches "file.go"
-- Pattern matching: "**/src/**" matches "project/src/main.go"
-- Globstar: "**/test/**" matches "a/b/c/test/d/file.go"
-- Case insensitive: ".GO" matches ".go"
-- No match: returns "other"
-- Multiple patterns: first match wins
-**Estimate**: 3 points
-**Dependencies**: T-V32-007
+**Test**:
+- Enable custom rules
+- Add several rules
+- Save
+- Toggle off custom mode
+- Save
+- Open YAML file
+- Verify custom_rules field NOT present
 
-### ☐ T-V32-014: [P] Write Integration Tests for Preferences UI
-**File**: handlers/smart_commit_prefs_handler_test.go (NEW)
-**Description**: Test handler update logic with Bubble Tea test messages
-**Test Scenarios**:
-- Toggle custom rules on/off
-- Navigate categories with arrow keys
-- Add extension: press 'a', type ".proto", press enter
-- Remove extension: select, press 'd'
-- Reset to defaults: press 'r', confirm
-- Save preferences: press 's'
-**Estimate**: 3 points
-**Dependencies**: T-V32-009
+**Acceptance**: Toggling off completely removes custom_rules from YAML file
 
 ---
 
-## Phase 4: Workflow Generation Tasks
+## Summary
 
-### ☑ T-V32-015: [P] Create internal/workflow/template.go with Embedded YAML [COMPLETED]
-**File**: internal/workflow/template.go (NEW)
-**Description**: Define GitHub Actions workflow template as Go text/template
-**Template Structure**:
-```yaml
-name: Release
-on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
+**Total Tasks**: 33
+**Completed**: 3 (T014, T018, T022 - Smart Commit Preferences feature)
+**Remaining**: 30
+**Estimated Duration**:
+- Phase 0-1: 2-3 days (setup + tests)
+- Phase 2-3: 3-4 days (core logic + handlers)
+- Phase 4: 1-2 days (views - parallel)
+- Phase 5-7: 2-3 days (integration + bugs)
+- **Total**: 8-12 days (reduced with 3 tasks complete)
 
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.21'
-      {{if .IncludeTests}}
-      - name: Run tests
-        run: go test ./...
-      {{end}}
-      - uses: goreleaser/goreleaser-action@v5
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          {{if .NPMEnabled}}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          {{end}}
-```
-**Actions**:
-- Use `text/template` package
-- Define template variables: IncludeTests, NPMEnabled, HomebrewEnabled
-- Add comments documenting required secrets
-- Keep template readable and maintainable
-**Estimate**: 4 points
-**Dependencies**: T-V32-002
+**Parallel Opportunities**:
+- Phase 0: All 4 tasks can run in parallel
+- Phase 1: All 4 test tasks can run in parallel
+- Phase 3: All 4 handler tasks can run in parallel (separate files)
+- Phase 4: All 4 view tasks can run in parallel (separate files)
 
-### ☑ T-V32-016: [P] Create internal/workflow/generator.go [COMPLETED]
-**File**: internal/workflow/generator.go (NEW)
-**Description**: Implement workflow generation logic
-**Functions Needed**:
-```go
-// GenerateWorkflow creates YAML from template and config
-func GenerateWorkflow(config *models.ProjectConfig) (string, error)
+**Critical Path**:
+T001 → T005 → T009 → T015 → T023 (Repo cleanup)
+T001 → T007 → T011 → T016 → T024 (Branch selection)
+T001 → T005 → T013 → T014 → T022 (Preferences)
+T001 → T008 → T017 → T025 (Notifications)
 
-// ValidateWorkflow checks generated YAML is valid
-func ValidateWorkflow(yamlContent string) error
+**Key Principles**:
+- TDD: Tests written before implementation
+- Constitution compliance: TUI Layout Integrity, clean code, no nesting
+- Atomic operations: File writes use temp + rename
+- Direct execution: No script generation
+- Early returns: Minimize nesting throughout
 
-// GetRequiredSecrets returns list of secrets needed
-func GetRequiredSecrets(config *models.ProjectConfig) []string
-
-// WriteWorkflowFile writes YAML to .github/workflows/release.yml
-func WriteWorkflowFile(projectPath, yamlContent string) error
-```
-**Actions**:
-- Execute template with config data
-- Validate YAML syntax (basic check)
-- Create .github/workflows/ directory if needed
-- Atomic write (temp file + rename)
-- Return list of required secrets
-**Estimate**: 4 points
-**Dependencies**: T-V32-015
-
-### ☑ T-V32-017: Add workflow_generation Section Parsing to Config Loader [COMPLETED]
-**File**: internal/config/loader.go
-**Description**: Parse ci_cd.github_actions section from YAML
-**Actions**:
-- Add parsing for ci_cd.github_actions section
-- Set defaults if missing:
-  ```go
-  if config.Config.CICD.GitHubActions == nil {
-      config.Config.CICD.GitHubActions = &models.WorkflowConfig{
-          Enabled: false,
-          WorkflowPath: ".github/workflows/release.yml",
-          IncludeTests: true,
-      }
-  }
-  ```
-- Update SaveProject() to serialize workflow config
-**Estimate**: 2 points
-**Dependencies**: T-V32-003, T-V32-006
-
-### ☑ T-V32-018: Create handlers/workflow_gen_handler.go [COMPLETED]
-**File**: handlers/workflow_gen_handler.go (NEW)
-**Description**: Handler for workflow generation UI
-**Model Struct**:
-```go
-type WorkflowGenModel struct {
-    ProjectConfig     *models.ProjectConfig
-    PreviewMode       bool
-    PreviewContent    string
-    GeneratedYAML     string
-    RequiredSecrets   []string
-    ShowConfirmation  bool
-    Width             int
-    Height            int
-}
-```
-**Key Functions**:
-- `NewWorkflowGenModel()` - Initialize
-- `Update()` - Handle key presses (space toggle, p preview, g generate, ESC cancel)
-- `ToggleEnabled()` - Enable/disable workflow generation
-- `PreviewWorkflow()` - Generate and show YAML preview
-- `GenerateWorkflow()` - Create file with user confirmation
-- `CheckIfWorkflowExists()` - Detect existing workflow file
-**Actions**:
-- Check if file exists before overwriting
-- Show required secrets list
-- Add confirmation modal before file creation
-- Keep under 300 lines
-**Estimate**: 5 points
-**Dependencies**: T-V32-016, T-V32-017
-
-### ☑ T-V32-019: Create views/workflow_gen_view.go [COMPLETED]
-**File**: views/workflow_gen_view.go (NEW)
-**Description**: Render workflow generation UI
-**Layout**:
-```
-┌─ GitHub Actions Workflow ──────────┐
-│ [✓] Enable Workflow Generation     │
-│                                     │
-│ Options:                            │
-│ [✓] Include Tests                  │
-│ [✓] Auto-regenerate on config      │
-│                                     │
-│ Required Secrets:                   │
-│  • GITHUB_TOKEN (automatic)        │
-│  • NPM_TOKEN (if NPM enabled)      │
-│                                     │
-│ [p] Preview  [g] Generate          │
-│ [ESC] Cancel                        │
-└─────────────────────────────────────┘
-```
-**Preview Modal**:
-```
-┌─ Workflow Preview ──────────────────┐
-│ name: Release                       │
-│ on:                                 │
-│   push:                             │
-│     tags: ['v*']                    │
-│ ...                                 │
-│                                     │
-│ [ESC] Close                         │
-└─────────────────────────────────────┘
-```
-**Actions**:
-- Use lipgloss for styling
-- Syntax highlighting for YAML (basic, optional)
-- Scrollable preview if content too long
-- Keep under 200 lines
-**Estimate**: 4 points
-**Dependencies**: T-V32-018
-
-### ☐ T-V32-020: Integrate Workflow Gen into Configure View Advanced Tab
-**Files**: handlers/configure_handler.go, views/configure_view.go
-**Description**: Add workflow generation section to Advanced tab
-**Changes in configure_handler.go**:
-- Add `WorkflowGenModel` field to ConfigureModel
-- Initialize in NewConfigureModel()
-- Add key binding 'w' for workflow in Advanced tab
-- Route to workflow model when 'w' pressed
-**Changes in configure_view.go**:
-- Add "GitHub Workflow Generation" section in Advanced tab
-- Show enabled state and shortcut '[w] Configure Workflow'
-- Display warning if secrets missing
-**Estimate**: 3 points
-**Dependencies**: T-V32-018, T-V32-019
-
-### ☐ T-V32-021: Add Preview Modal for Workflow YAML
-**File**: views/workflow_gen_view.go
-**Description**: Implement scrollable preview modal showing generated YAML
-**Features**:
-- Full-screen modal overlay
-- Scrollable content (↑/↓ or j/k)
-- Line numbers optional
-- ESC to close
-- Proper word wrapping for long lines
-**Actions**:
-- Use lipgloss.Place() for centering
-- Add scroll state to WorkflowGenModel
-- Handle WindowSizeMsg for responsive sizing
-**Estimate**: 3 points
-**Dependencies**: T-V32-019
-
-### ☐ T-V32-022: Add File Generation with User Consent
-**File**: handlers/workflow_gen_handler.go
-**Description**: Implement workflow file creation with confirmation modal
-**Confirmation Flow**:
-1. User presses 'g' to generate
-2. Check if .github/workflows/release.yml exists
-3. If exists: "File exists. Overwrite?" [y/n]
-4. If new: "Create workflow file?" [y/n]
-5. On confirm: call WriteWorkflowFile()
-6. Show success message with file path
-**Actions**:
-- Add confirmation modal state
-- Handle yes/no key presses
-- Create directory if needed
-- Show error if write fails (permissions, etc.)
-**Estimate**: 3 points
-**Dependencies**: T-V32-018, T-V32-021
-
-### ☐ T-V32-023: [P] Write Tests for Template Generation
-**File**: internal/workflow/template_test.go (NEW)
-**Description**: Test workflow template with various configs
-**Test Cases**:
-- NPM enabled: includes NPM_TOKEN secret
-- NPM disabled: no NPM_TOKEN
-- Tests enabled: includes test step
-- Tests disabled: no test step
-- Homebrew: handled by GoReleaser (no special workflow changes)
-- All combinations: NPM+Tests, NPM only, Tests only, neither
-**Estimate**: 3 points
-**Dependencies**: T-V32-015, T-V32-016
-
-### ☐ T-V32-024: [P] Write Tests for Workflow Validation
-**File**: internal/workflow/generator_test.go (NEW)
-**Description**: Test workflow generation and validation
-**Test Cases**:
-- Generated YAML is valid
-- Required secrets detected correctly
-- File write creates .github/workflows/ directory
-- Overwrites existing file correctly
-- Handles permission errors gracefully
-**Estimate**: 3 points
-**Dependencies**: T-V32-016
-
----
-
-## Phase 5: Integration Tasks
-
-### ☐ T-V32-025: Update Configure View to Handle Advanced Tab Expansion
-**File**: handlers/configure_handler.go
-**Description**: Expand Advanced tab to accommodate two new feature sections
-**Actions**:
-- Increase Advanced tab height allocation if needed
-- Add routing logic for 'p' (prefs) and 'w' (workflow) keys
-- Update chrome calculations for new UI lines
-- Ensure scrolling works if content exceeds screen
-**Chrome Update**:
-- Smart Commit Prefs section: +3 lines
-- Workflow Generation section: +4 lines
-- Total Advanced tab increase: +7 lines
-**Estimate**: 2 points
-**Dependencies**: T-V32-011, T-V32-020
-
-### ☐ T-V32-026: Add Navigation Between Smart Commit Prefs and Workflow Gen
-**File**: handlers/configure_handler.go
-**Description**: Allow seamless navigation between the two features
-**Navigation**:
-- From Advanced tab: 'p' for prefs, 'w' for workflow
-- From Prefs: ESC back to Advanced tab
-- From Workflow: ESC back to Advanced tab
-- From Prefs: 'w' to switch to Workflow (optional)
-- From Workflow: 'p' to switch to Prefs (optional)
-**Actions**:
-- Add view state tracking (advanced/prefs/workflow)
-- Route key presses to appropriate sub-model
-- Maintain scroll position when navigating back
-**Estimate**: 2 points
-**Dependencies**: T-V32-011, T-V32-020
-
-### ☐ T-V32-027: Wire Up Save/Load for Both Feature Configs
-**File**: internal/config/loader.go
-**Description**: Ensure both smart_commit and ci_cd sections persist correctly
-**Actions**:
-- Test save after modifying smart commit prefs
-- Test save after enabling workflow generation
-- Verify YAML serialization is correct
-- Test load on app restart
-- Ensure atomic writes work for both sections
-**Test Manually**:
-```bash
-# Edit prefs, save, restart
-distui # verify prefs loaded
-
-# Enable workflow, save, restart
-distui # verify workflow config loaded
-```
-**Estimate**: 2 points
-**Dependencies**: T-V32-006, T-V32-017
-
-### ☐ T-V32-028: Test Full Integration with Existing Features
-**Description**: Manual integration testing of new features with v0.0.31 features
-**Test Scenarios**:
-1. **Smart Commit with Custom Rules**:
-   - Configure custom rules for .proto → code
-   - Create .proto file
-   - Open Cleanup tab
-   - Verify .proto categorized as "code"
-   - Commit file using smart commit
-
-2. **Workflow Generation with NPM**:
-   - Enable NPM distribution
-   - Enable workflow generation
-   - Preview workflow
-   - Verify NPM_TOKEN in required secrets
-   - Generate workflow file
-   - Verify .github/workflows/release.yml created
-
-3. **Dot File Handling**:
-   - Create .github/workflows/test.yml
-   - Open Cleanup tab
-   - Verify file visible and committable
-
-4. **Configuration Persistence**:
-   - Set custom rules + enable workflow
-   - Save, exit distui
-   - Restart distui
-   - Verify settings loaded correctly
-
-**Acceptance**: All scenarios pass without errors
-**Estimate**: 3 points
-**Dependencies**: T-V32-011, T-V32-020, T-V32-027
-
-### ☐ T-V32-029: Update Quickstart.md Validation
-**File**: specs/001-build-a-terminal/quickstart.md
-**Description**: Validate all quickstart scenarios work with implementation
-**Actions**:
-- Run through all 6 test scenarios
-- Verify expected outcomes match actual behavior
-- Update any steps that changed during implementation
-- Add troubleshooting notes if needed
-- Mark all scenarios as validated
-**Estimate**: 2 points
-**Dependencies**: T-V32-028
-
----
-
-## Phase 6: Polish Tasks
-
-### ☐ T-V32-030: [P] Add Error Handling for Invalid Patterns
-**Files**: internal/gitcleanup/matcher.go, handlers/smart_commit_prefs_handler.go
-**Description**: Validate glob patterns before saving
-**Validation Rules**:
-- Reject patterns with unmatched brackets: `[[[invalid`
-- Reject empty patterns
-- Test pattern with doublestar before saving
-- Show error message to user if invalid
-**Error Messages**:
-- "Invalid pattern: [pattern]"
-- "Pattern must not be empty"
-- "Pattern syntax error: [details]"
-**Actions**:
-- Add ValidatePattern() function
-- Call before adding pattern to list
-- Display error in UI (red text)
-**Estimate**: 2 points
-**Dependencies**: T-V32-007, T-V32-009
-
-### ☐ T-V32-031: [P] Add Loading States for Async Operations
-**Files**: handlers/smart_commit_prefs_handler.go, handlers/workflow_gen_handler.go
-**Description**: Show spinner during file I/O operations
-**Operations to Cover**:
-- Loading project config
-- Saving preferences
-- Generating workflow file
-- Validating workflow YAML
-**Actions**:
-- Add spinner model to handlers
-- Show "Saving..." with spinner
-- Show "Generating..." with spinner
-- Hide spinner on completion or error
-**Estimate**: 2 points
-**Dependencies**: T-V32-009, T-V32-018
-
-### ☐ T-V32-032: [P] Add Keyboard Shortcuts Documentation
-**File**: README.md or docs/SHORTCUTS.md (if exists)
-**Description**: Document new keyboard shortcuts for v0.0.32
-**New Shortcuts**:
-- Advanced Tab:
-  - `p` - Edit Smart Commit Preferences
-  - `w` - Configure GitHub Workflow
-- Smart Commit Prefs:
-  - `↑/↓` - Navigate categories
-  - `e` - Edit selected category
-  - `a` - Add extension/pattern
-  - `d` - Delete extension/pattern
-  - `r` - Reset to defaults
-  - `s` - Save preferences
-- Workflow Gen:
-  - `space` - Toggle enabled
-  - `p` - Preview workflow
-  - `g` - Generate file
-**Estimate**: 1 point
-**Dependencies**: None (documentation only)
-
-### ☐ T-V32-033: [P] Performance Testing for Pattern Matching
-**File**: internal/gitcleanup/matcher_bench_test.go (NEW)
-**Description**: Benchmark pattern matching performance
-**Benchmarks**:
-```go
-func BenchmarkMatchesPattern(b *testing.B)
-func BenchmarkMatchesExtension(b *testing.B)
-func BenchmarkCategorizeWithRules(b *testing.B)
-```
-**Performance Targets** (from research.md):
-- Pattern matching: <1ms for 100 files
-- Extension matching: <0.1ms per file
-- Full categorization: <100ms for typical project
-**Actions**:
-- Run benchmarks: `go test -bench=. ./internal/gitcleanup`
-- Verify meets performance targets
-- Optimize if needed (unlikely)
-**Estimate**: 2 points
-**Dependencies**: T-V32-007
-
----
-
-## Execution Guide for v0.0.32
-
-### Sequential Task Order
-1. Run Setup tasks (T-V32-001 to T-V32-003) first
-2. Run Bug Fix tasks (T-V32-004 to T-V32-005)
-3. Run Smart Commit Preferences tasks (T-V32-006 to T-V32-014)
-4. Run Workflow Generation tasks (T-V32-015 to T-V32-024)
-5. Run Integration tasks (T-V32-025 to T-V32-029)
-6. Run Polish tasks (T-V32-030 to T-V32-033)
-
-### Parallel Execution Opportunities
-
-**Can Run in Parallel After Setup**:
-```bash
-# After T-V32-003, run these together:
-- T-V32-005 (dot file test)
-- T-V32-006 (config parsing)
-- T-V32-007 (pattern matching)
-```
-
-**Smart Commit Tests (Parallel)**:
-```bash
-# After T-V32-012, run these together:
-- T-V32-013 (pattern matching tests)
-- T-V32-014 (UI integration tests)
-```
-
-**Workflow Tasks (Parallel)**:
-```bash
-# After T-V32-002, run these together:
-- T-V32-015 (template)
-- T-V32-016 (generator)
-```
-
-**Workflow Tests (Parallel)**:
-```bash
-# After T-V32-022, run these together:
-- T-V32-023 (template tests)
-- T-V32-024 (generator tests)
-```
-
-**Polish Tasks (All Parallel After Integration)**:
-```bash
-# After T-V32-029, run these together:
-- T-V32-030 (error handling)
-- T-V32-031 (loading states)
-- T-V32-032 (documentation)
-- T-V32-033 (performance testing)
-```
-
-### Testing Checkpoints
-- After T-V32-005: Run dot file tests
-- After T-V32-013: Run pattern matching tests
-- After T-V32-014: Run preferences UI tests
-- After T-V32-023: Run workflow template tests
-- After T-V32-024: Run workflow generator tests
-- After T-V32-028: Full integration testing
-- After T-V32-033: Performance validation
-
-### Success Criteria
-- All 34 tasks completed
-- All tests passing (unit + integration)
-- Performance targets met (<100ms categorization)
-- Quickstart scenarios validated
-- No regressions in v0.0.31 features
-- Ready for v0.0.32 release
-
----
-
-## Implementation Notes for v0.0.32
-
-### Code Quality Reminders
-- Keep files under 300 lines (strong refactoring target)
-- Use early returns, avoid nested conditionals
-- No comments except API docs
-- Self-documenting names
-- Test each component in isolation
-
-### Constitutional Compliance
-- Smart commit prefs in ~/.distui (not in repo)
-- Workflow generation requires explicit user consent
-- Easy to disable all new features
-- User maintains full control
-- No forced behaviors
-
-### Terminal Layout Integrity
-When adding UI elements:
-- **Smart Commit Prefs section in Advanced**: +3 lines
-- **Workflow Generation section in Advanced**: +4 lines
-- Update chrome calculations in configure_handler.go
-- Test with small terminal size (80x24)
-- Ensure no overflow/scrolling issues
-
-### Integration with Existing Code
-- Smart commit prefs integrates with Cleanup tab
-- Workflow generation reads from Distributions config
-- Both use existing config loader patterns
-- No breaking changes to existing APIs
-
----
+**Next Step**: Begin Phase 0 by executing T001-T004 in parallel terminals.

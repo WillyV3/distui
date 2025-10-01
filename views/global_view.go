@@ -8,7 +8,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderGlobalContent(projects []models.ProjectConfig, selectedIndex int, deleteMode bool) string {
+func RenderGlobalContent(projects []models.ProjectConfig, selectedIndex int, detecting bool, status string, spinnerView string, settingWorkingDir bool, workingDirInput string, workingDirResults []string, workingDirSelected int) string {
+	if settingWorkingDir {
+		return renderWorkingDirPicker(workingDirInput, workingDirResults, workingDirSelected)
+	}
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true).
@@ -31,7 +34,6 @@ func RenderGlobalContent(projects []models.ProjectConfig, selectedIndex int, del
 		MarginLeft(2)
 
 	subtleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
 
 	var content strings.Builder
 
@@ -81,25 +83,26 @@ func RenderGlobalContent(projects []models.ProjectConfig, selectedIndex int, del
 			}
 		}
 	} else {
-		content.WriteString(projectStyle.Render("  No projects registered yet") + "\n")
-		content.WriteString(projectStyle.Render("  Press [a] to add your first project") + "\n")
+		content.WriteString(projectStyle.Render("  No projects detected yet") + "\n")
+		content.WriteString(projectStyle.Render("  Press [D] to detect & import distributions") + "\n")
+	}
+
+	if detecting {
+		content.WriteString("\n" + spinnerView + " Detecting distributions...\n")
+	} else if status != "" {
+		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Padding(0, 1)
+		content.WriteString("\n" + statusStyle.Render(status) + "\n")
 	}
 
 	content.WriteString("\n" + headerStyle.Render("ACTIONS") + "\n\n")
 
-	if deleteMode {
-		content.WriteString(errorStyle.Render("  DELETE MODE ACTIVE") + "\n")
-		content.WriteString(errorStyle.Render("  Press [enter] to delete or [esc] to cancel") + "\n")
-	} else {
-		actions := []string{
-			"[a] Add New Project",
-			"[d] Delete Selected",
-			"[enter] Open Selected Project",
-		}
+	actions := []string{
+		"[D] Detect & Import All Distributions",
+		"[enter] Open Selected Project",
+	}
 
-		for _, action := range actions {
-			content.WriteString(actionStyle.Render(fmt.Sprintf("  %s", action)) + "\n")
-		}
+	for _, action := range actions {
+		content.WriteString(actionStyle.Render(fmt.Sprintf("  %s", action)) + "\n")
 	}
 
 	content.WriteString("\n" + subtleStyle.Render("Manage all your Go projects from one place"))
@@ -113,4 +116,58 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func renderWorkingDirPicker(inputView string, results []string, selected int) string {
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("117")).
+		Bold(true)
+
+	selectedStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("117")).
+		Bold(true)
+
+	normalStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252"))
+
+	subtleStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241"))
+
+	var content strings.Builder
+
+	content.WriteString(headerStyle.Render("SET WORKING DIRECTORY"))
+	content.WriteString("\n\n")
+	content.WriteString(subtleStyle.Render("This project needs a working directory to track releases."))
+	content.WriteString("\n")
+	content.WriteString(subtleStyle.Render("Type to search (min 2 chars):"))
+	content.WriteString("\n\n")
+
+	content.WriteString(inputView)
+	content.WriteString("\n\n")
+
+	if len(results) > 0 {
+		content.WriteString(headerStyle.Render("RESULTS"))
+		content.WriteString("\n\n")
+
+		for i, result := range results {
+			if i >= 3 {
+				break
+			}
+
+			marker := "  "
+			style := normalStyle
+			if i == selected {
+				marker = "→ "
+				style = selectedStyle
+			}
+
+			content.WriteString(style.Render(marker + result))
+			content.WriteString("\n")
+		}
+	}
+
+	content.WriteString("\n")
+	content.WriteString(subtleStyle.Render("↑/↓: navigate • enter: select • esc: cancel"))
+
+	return content.String()
 }

@@ -37,6 +37,26 @@ type filesGeneratedMsg struct {
 	err error
 }
 
+type distributionVerifiedMsg struct {
+	homebrewVersion string
+	homebrewExists  bool
+	npmVersion      string
+	npmExists       bool
+	err             error
+}
+
+type distributionDetectedMsg struct {
+	homebrewTap       string
+	homebrewFormula   string
+	homebrewVersion   string
+	homebrewExists    bool
+	homebrewFromFile  bool // Detected from .goreleaser.yaml
+	npmPackage        string
+	npmVersion        string
+	npmExists         bool
+	npmFromFile       bool // Detected from package.json
+}
+
 func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
 	return func() tea.Msg {
 		// Delete files first
@@ -65,6 +85,7 @@ const (
 	SmartCommitConfirm
 	GenerateConfigConsent
 	SmartCommitPrefsView
+	FirstTimeSetupView
 )
 
 // ConfigureModel holds the state for the configure view
@@ -80,6 +101,7 @@ type ConfigureModel struct {
 	// Project config for persistence
 	ProjectConfig    *models.ProjectConfig
 	ProjectIdentifier string
+	GlobalConfig      *models.GlobalConfig
 
 	// Sub-models for composable views
 	CleanupModel         *CleanupModel
@@ -121,6 +143,22 @@ type ConfigureModel struct {
 	// NPM package name editing
 	NPMEditMode   bool
 	NPMNameInput  textinput.Model
+
+	// First-time setup for existing distributions
+	FirstTimeSetup             bool
+	FirstTimeSetupConfirmation bool   // Show confirmation screen before verifying
+	DetectingDistributions     bool   // Auto-detecting from tap/npm
+	AutoDetected               bool   // True if distributions were auto-detected
+	HomebrewDetectedFromFile   bool   // Detected from .goreleaser.yaml
+	NPMDetectedFromFile        bool   // Detected from package.json
+	HomebrewCheckEnabled       bool
+	NPMCheckEnabled            bool
+	HomebrewTapInput           textinput.Model
+	HomebrewFormulaInput       textinput.Model
+	NPMPackageInput            textinput.Model
+	FirstTimeSetupFocus        int    // 0=homebrew checkbox, 1=tap, 2=formula, 3=npm checkbox, 4=package
+	VerifyingDistributions     bool
+	DistributionVerifyError    string
 }
 
 // Distribution item for the list
@@ -298,7 +336,7 @@ func (m *ConfigureModel) saveConfigWithRegenFlag(needsRegen bool) error {
 }
 
 // Initialize the configure model
-func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount, projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo) *ConfigureModel {
+func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount, projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo, globalConfig *models.GlobalConfig) *ConfigureModel {
 	// Use provided dimensions or defaults
 	if width <= 0 {
 		width = 100
@@ -306,6 +344,9 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	if height <= 0 {
 		height = 30
 	}
+
+	// Track if this is first-time (no saved config exists)
+	hadSavedConfig := projectConfig != nil
 
 	// If no config exists, create initial structure from detected project
 	if projectConfig == nil && detectedProject != nil {
@@ -326,6 +367,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 		ProjectConfig:     projectConfig,
 		DetectedProject:   detectedProject,
 		ProjectIdentifier: "",
+		GlobalConfig:      globalConfig,
 	}
 
 	if projectConfig != nil && projectConfig.Project != nil {
@@ -470,6 +512,30 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	advList.SetFilteringEnabled(false)
 	advList.SetShowHelp(false)
 	m.Lists[3] = advList
+
+	// Check if this is first-time setup
+	// Trigger if:
+	// 1. No saved config + has versions (normal first-time)
+	// 2. Bulk-imported: has distributions enabled but empty release history
+	hasDistributionsEnabled := projectConfig != nil && projectConfig.Config != nil &&
+		((projectConfig.Config.Distributions.Homebrew != nil && projectConfig.Config.Distributions.Homebrew.Enabled) ||
+			(projectConfig.Config.Distributions.NPM != nil && projectConfig.Config.Distributions.NPM.Enabled))
+
+	hasEmptyHistory := projectConfig != nil &&
+		(projectConfig.History == nil || len(projectConfig.History.Releases) == 0)
+
+	isBulkImported := hadSavedConfig && hasDistributionsEnabled && hasEmptyHistory
+
+	isFirstTime := (!hadSavedConfig && detectedProject != nil &&
+		detectedProject.Module != nil && detectedProject.Module.Version != "" &&
+		detectedProject.Module.Version != "v0.0.1") ||
+		isBulkImported
+
+	if isFirstTime {
+		m.FirstTimeSetup = true
+		m.DetectingDistributions = true
+		m.CurrentView = FirstTimeSetupView
+	}
 
 	// Cache GitHub status on initialization
 	m.refreshGitHubStatus()
@@ -740,6 +806,126 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
+	case distributionDetectedMsg:
+		m.DetectingDistributions = false
+
+		// Initialize text inputs
+		homebrewTap := textinput.New()
+		homebrewTap.Placeholder = "owner/repo"
+		homebrewTap.CharLimit = 100
+		homebrewTap.Width = 40
+
+		homebrewFormula := textinput.New()
+		homebrewFormula.Placeholder = "formula-name"
+		homebrewFormula.CharLimit = 100
+		homebrewFormula.Width = 40
+
+		npmPackage := textinput.New()
+		npmPackage.Placeholder = "package-name or @scope/package-name"
+		npmPackage.CharLimit = 214
+		npmPackage.Width = 40
+
+		// If we found distributions OR config files, populate and go to confirmation
+		if msg.homebrewExists || msg.npmExists || msg.homebrewFromFile || msg.npmFromFile {
+			m.AutoDetected = true
+			m.HomebrewDetectedFromFile = msg.homebrewFromFile
+			m.NPMDetectedFromFile = msg.npmFromFile
+
+			// Enable Homebrew if found in registry OR in .goreleaser.yaml
+			if msg.homebrewExists || msg.homebrewFromFile {
+				if msg.homebrewTap != "" && msg.homebrewFormula != "" {
+					m.HomebrewCheckEnabled = true
+					homebrewTap.SetValue(msg.homebrewTap)
+					homebrewFormula.SetValue(msg.homebrewFormula)
+				}
+			}
+
+			// Enable NPM if found in registry OR in package.json
+			if msg.npmExists || msg.npmFromFile {
+				if msg.npmPackage != "" {
+					m.NPMCheckEnabled = true
+					npmPackage.SetValue(msg.npmPackage)
+				}
+			}
+
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+
+			// Go straight to confirmation
+			m.FirstTimeSetupConfirmation = true
+		} else {
+			// Nothing found, show manual input screen
+			m.AutoDetected = false
+
+			// Prefill with defaults from global config and detected project
+			if m.GlobalConfig != nil && m.GlobalConfig.User.DefaultHomebrewTap != "" {
+				homebrewTap.SetValue(m.GlobalConfig.User.DefaultHomebrewTap)
+			}
+
+			if m.DetectedProject != nil {
+				if m.DetectedProject.Binary != nil {
+					homebrewFormula.SetValue(m.DetectedProject.Binary.Name)
+				}
+				if m.DetectedProject.Module != nil {
+					npmPackage.SetValue(m.DetectedProject.Module.Name)
+				}
+			}
+
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+		}
+
+		return m, nil
+
+	case distributionVerifiedMsg:
+		m.VerifyingDistributions = false
+		if msg.err != nil {
+			m.DistributionVerifyError = msg.err.Error()
+			return m, nil
+		}
+
+		// Update project config with detected versions
+		if msg.homebrewExists && msg.homebrewVersion != "" {
+			if m.ProjectConfig.Config.Distributions.Homebrew == nil {
+				m.ProjectConfig.Config.Distributions.Homebrew = &models.HomebrewConfig{}
+			}
+			m.ProjectConfig.Config.Distributions.Homebrew.Enabled = true
+			m.ProjectConfig.Config.Distributions.Homebrew.TapRepo = m.HomebrewTapInput.Value()
+			m.ProjectConfig.Config.Distributions.Homebrew.FormulaName = m.HomebrewFormulaInput.Value()
+			if m.ProjectConfig.Project != nil && m.ProjectConfig.Project.Module != nil {
+				m.ProjectConfig.Project.Module.Version = msg.homebrewVersion
+			}
+		}
+
+		if msg.npmExists && msg.npmVersion != "" {
+			if m.ProjectConfig.Config.Distributions.NPM == nil {
+				m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
+			}
+			m.ProjectConfig.Config.Distributions.NPM.Enabled = true
+			m.ProjectConfig.Config.Distributions.NPM.PackageName = m.NPMPackageInput.Value()
+			if m.ProjectConfig.Project != nil && m.ProjectConfig.Project.Module != nil {
+				if msg.homebrewVersion == "" {
+					m.ProjectConfig.Project.Module.Version = msg.npmVersion
+				}
+			}
+		}
+
+		// Save config and return to normal view
+		m.FirstTimeSetup = false
+		m.CurrentView = TabView
+		config.SaveProject(m.ProjectConfig)
+
+		// Rebuild distributions list with updated config
+		distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject)
+		distributions := make([]list.Item, len(distItems))
+		for i, item := range distItems {
+			distributions[i] = item
+		}
+		m.Lists[1].SetItems(distributions)
+
+		return m, nil
 	case npmNameCheckMsg:
 		m.NPMNameStatus = string(msg.result.Status)
 		m.NPMNameError = msg.result.Error
@@ -825,6 +1011,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// Handle first-time setup view
+		if m.CurrentView == FirstTimeSetupView {
+			return m.handleFirstTimeSetupKeys(msg)
+		}
+
 		// Handle NPM name editing mode first
 		if m.NPMEditMode {
 			switch msg.String() {
@@ -891,6 +1082,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			// Refresh cleanup tab when entering it
 			if m.ActiveTab == 0 && oldTab != 0 {
 				m.Loading = true
+				m.refreshGitHubStatus()
 				listWidth := m.Width - 2
 				listHeight := m.Height - 13
 				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
@@ -929,6 +1121,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			// Refresh cleanup tab when entering it
 			if m.ActiveTab == 0 && oldTab != 0 {
 				m.Loading = true
+				m.refreshGitHubStatus()
 				listWidth := m.Width - 2
 				listHeight := m.Height - 13
 				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
@@ -1181,17 +1374,23 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				return currentPage, false, cmd, configModel
 			}
 		} else if configModel.CurrentView == SmartCommitPrefsView {
-			switch msg.String() {
-			case "esc":
-				configModel.CurrentView = TabView
-				// Save any changes before returning
-				if configModel.ProjectConfig != nil {
-					config.SaveProject(configModel.ProjectConfig)
-				}
-				return currentPage, false, nil, configModel
-			default:
+			// Always delegate to model first to handle edit mode transitions
+			if configModel.SmartCommitPrefsModel != nil {
+				// Check if we're in normal mode BEFORE processing ESC
+				wasInNormalMode := configModel.SmartCommitPrefsModel.EditMode == ModeNormal
+
 				newModel, cmd := configModel.SmartCommitPrefsModel.Update(msg)
 				configModel.SmartCommitPrefsModel = newModel
+
+				// Only exit to TabView if ESC was pressed while already in normal mode
+				if msg.String() == "esc" && wasInNormalMode {
+					configModel.CurrentView = TabView
+					// Save any changes before returning
+					if configModel.ProjectConfig != nil {
+						config.SaveProject(configModel.ProjectConfig)
+					}
+					return currentPage, false, nil, configModel
+				}
 				return currentPage, false, cmd, configModel
 			}
 		}
@@ -1386,12 +1585,24 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				newModel, cmd := configModel.Update(msg)
 				return currentPage, false, cmd, newModel
 			}
-			return 0, false, nil, configModel // back to projectView
+			// If we're in a nested view, return to TabView (shouldn't normally reach here)
+			if configModel != nil && configModel.CurrentView != TabView {
+				configModel.CurrentView = TabView
+				if configModel.ProjectConfig != nil {
+					config.SaveProject(configModel.ProjectConfig)
+				}
+				return currentPage, false, nil, configModel
+			}
+			// From TabView, go back to project view
+			return 0, false, nil, configModel
 		case "r":
 			// Refresh git status in cleanup tab
 			if configModel != nil && configModel.ActiveTab == 0 {
 				configModel.refreshGitHubStatus()
 				configModel.Lists[0].SetItems(configModel.loadGitStatus())
+				if configModel.CleanupModel != nil {
+					configModel.CleanupModel.Refresh()
+				}
 			}
 			return currentPage, false, nil, configModel
 		case "s":

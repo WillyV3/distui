@@ -58,6 +58,7 @@ type model struct {
 	settingsModel       *handlers.SettingsModel
 	globalModel         *handlers.GlobalModel
 	releaseModel        *handlers.ReleaseModel
+	switchedToPath      string
 }
 
 func initialModel() model {
@@ -90,11 +91,8 @@ func initialModel() model {
 		currentProject, _ = config.LoadProject(detectedProject.Identifier)
 	}
 
-	// Load all projects (simplified for now)
-	var allProjects []models.ProjectConfig
-	if distui, err := config.LoadProject("distui"); err == nil {
-		allProjects = append(allProjects, *distui)
-	}
+	// Load all projects from disk
+	allProjects, _ := config.LoadAllProjects()
 
 	// Always start at project view
 	initialPage := projectView
@@ -122,6 +120,8 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		m.switchedToPath = ""
+
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			m.quitting = true
 			return m, tea.Quit
@@ -131,6 +131,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		// Don't return early - let the message pass through to handlers
+
+	case handlers.ProjectsReloadedMsg:
+		m.allProjects = msg.Projects
+		if m.globalModel != nil {
+			m.globalModel.Projects = msg.Projects
+		}
+		return m, nil
+
+	case handlers.ProjectSwitchedMsg:
+		m.currentProject = msg.ProjectConfig
+		m.releaseModel = nil
+		m.configureModel = nil
+
+		if msg.DetectedProject != nil {
+			m.detectedProject = msg.DetectedProject
+		} else if msg.ProjectConfig != nil && msg.ProjectConfig.Project != nil {
+			m.detectedProject = msg.ProjectConfig.Project
+		}
+
+		if msg.ProjectConfig != nil && msg.ProjectConfig.Project != nil && msg.ProjectConfig.Project.Path != "" {
+			m.switchedToPath = msg.ProjectConfig.Project.Path
+		}
+
+		return m, nil
 	}
 
 	// Update spinner
@@ -164,12 +188,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
 			accounts := extractGitHubAccounts(m.globalConfig)
-			m.configureModel = handlers.NewConfigureModel(width, height, accounts, m.currentProject, m.detectedProject)
+			m.configureModel = handlers.NewConfigureModel(width, height, accounts, m.currentProject, m.detectedProject, m.globalConfig)
 			// Change page NOW, start spinner and trigger async load
 			m.currentPage = pageState(newPage)
 			m.quitting = quitting
 			listWidth := width - 2
 			listHeight := height - 13
+
+			// If first-time setup, also trigger auto-detection
+			if m.configureModel.FirstTimeSetup {
+				detectionCmd := handlers.StartDistributionDetectionCmd(m.detectedProject, m.globalConfig)
+				return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), detectionCmd, tea.ClearScreen)
+			}
+
 			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), tea.ClearScreen)
 		}
 		m.currentPage = pageState(newPage)
@@ -177,10 +208,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, pageCmd)
 	case globalView:
 		if m.globalModel == nil {
-			m.globalModel = handlers.NewGlobalModel(m.allProjects)
+			m.globalModel = handlers.NewGlobalModel(m.allProjects, m.globalConfig)
 		}
 		newPage, quitting, pageCmd, newGlobalModel := handlers.UpdateGlobalView(
-			int(m.currentPage), int(projectView), msg, m.globalModel)
+			int(m.currentPage), int(projectView), msg, m.globalModel, m.globalConfig)
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
 		m.globalModel = newGlobalModel
@@ -210,6 +241,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
 		m.configureModel = newConfigModel
+
+		// Sync currentProject with configureModel's updated ProjectConfig
+		if m.configureModel != nil && m.configureModel.ProjectConfig != nil {
+			m.currentProject = m.configureModel.ProjectConfig
+		}
+
 		return m, tea.Batch(cmd, pageCmd)
 	case newProjectView:
 		newPage, quitting, pageCmd := handlers.UpdateNewProjectView(int(m.currentPage), int(globalView), msg)
@@ -267,15 +304,29 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel)
+	return views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, m.switchedToPath)
 }
 
 func (m model) renderGlobalView() string {
-	deleteMode := false
+	detecting := false
+	status := ""
+	spinnerView := ""
+	settingWorkingDir := false
+	workingDirInput := ""
+	var workingDirResults []string
+	workingDirSelected := 0
+
 	if m.globalModel != nil {
-		deleteMode = m.globalModel.DeletingMode
+		detecting = m.globalModel.Detecting
+		status = m.globalModel.DetectStatus
+		spinnerView = m.globalModel.DetectSpinner.View()
+		settingWorkingDir = m.globalModel.SettingWorkingDir
+		workingDirInput = m.globalModel.WorkingDirInput.View()
+		workingDirResults = m.globalModel.WorkingDirResults
+		workingDirSelected = m.globalModel.WorkingDirSelected
 	}
-	return views.RenderGlobalContent(m.allProjects, m.selectedProjectIndex, deleteMode)
+
+	return views.RenderGlobalContent(m.allProjects, m.selectedProjectIndex, detecting, status, spinnerView, settingWorkingDir, workingDirInput, workingDirResults, workingDirSelected)
 }
 
 func (m model) renderConfigureView() string {
