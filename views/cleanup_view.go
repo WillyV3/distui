@@ -233,7 +233,7 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		}
 	} else if model.RepoInfo != nil && model.RepoInfo.UnpushedCommits > 0 {
 		branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
-		lines = append(lines, "  [P] Push  "+branchStyle.Render("[B] Switch branch")+"  [f] File scan  [p] Preferences  [r] Refresh")
+		lines = append(lines, "  "+branchStyle.Render("[P] Push/Branch options")+"  [f] File scan  [p] Preferences  [r] Refresh")
 	} else if needsGitHubRepo {
 		// Remote is configured but repo doesn't exist on GitHub
 		actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)

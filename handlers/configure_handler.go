@@ -1525,20 +1525,18 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
-		// Handle 'P' key to push to remote (only in TabView, Cleanup tab, and only if there are unpushed commits)
+		// Handle 'P' key to open branch selection modal (only in TabView, Cleanup tab, with unpushed commits)
 		if msg.String() == "P" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
-			// Push to remote only if there are unpushed commits
 			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
 				configModel.CleanupModel.RepoInfo.RemoteExists &&
-				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 &&
-				!configModel.IsCreating {
-				// Start spinner and execute async push
-				configModel.IsCreating = true
-				configModel.CreateStatus = "Pushing to remote..."
-				return currentPage, false, tea.Batch(
-					configModel.CreateSpinner.Tick,
-					pushCmd(),
-				), configModel
+				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 {
+				// Open branch selection modal
+				if configModel.BranchModal == nil {
+					model := NewBranchSelectionModel(configModel.Width, configModel.Height)
+					configModel.BranchModal = &model
+				}
+				configModel.ShowingBranchModal = true
+				return currentPage, false, configModel.BranchModal.Init(), configModel
 			}
 			return currentPage, false, nil, configModel
 		}
