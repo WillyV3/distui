@@ -46,6 +46,16 @@ type distributionVerifiedMsg struct {
 	err             error
 }
 
+type distributionDetectedMsg struct {
+	homebrewTap     string
+	homebrewFormula string
+	homebrewVersion string
+	homebrewExists  bool
+	npmPackage      string
+	npmVersion      string
+	npmExists       bool
+}
+
 func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
 	return func() tea.Msg {
 		// Delete files first
@@ -90,6 +100,7 @@ type ConfigureModel struct {
 	// Project config for persistence
 	ProjectConfig    *models.ProjectConfig
 	ProjectIdentifier string
+	GlobalConfig      *models.GlobalConfig
 
 	// Sub-models for composable views
 	CleanupModel         *CleanupModel
@@ -133,15 +144,18 @@ type ConfigureModel struct {
 	NPMNameInput  textinput.Model
 
 	// First-time setup for existing distributions
-	FirstTimeSetup          bool
-	HomebrewCheckEnabled    bool
-	NPMCheckEnabled         bool
-	HomebrewTapInput        textinput.Model
-	HomebrewFormulaInput    textinput.Model
-	NPMPackageInput         textinput.Model
-	FirstTimeSetupFocus     int // 0=homebrew checkbox, 1=tap, 2=formula, 3=npm checkbox, 4=package
-	VerifyingDistributions  bool
-	DistributionVerifyError string
+	FirstTimeSetup             bool
+	FirstTimeSetupConfirmation bool // Show confirmation screen before verifying
+	DetectingDistributions     bool // Auto-detecting from tap/npm
+	AutoDetected               bool // True if distributions were auto-detected
+	HomebrewCheckEnabled       bool
+	NPMCheckEnabled            bool
+	HomebrewTapInput           textinput.Model
+	HomebrewFormulaInput       textinput.Model
+	NPMPackageInput            textinput.Model
+	FirstTimeSetupFocus        int // 0=homebrew checkbox, 1=tap, 2=formula, 3=npm checkbox, 4=package
+	VerifyingDistributions     bool
+	DistributionVerifyError    string
 }
 
 // Distribution item for the list
@@ -319,7 +333,7 @@ func (m *ConfigureModel) saveConfigWithRegenFlag(needsRegen bool) error {
 }
 
 // Initialize the configure model
-func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount, projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo) *ConfigureModel {
+func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount, projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo, globalConfig *models.GlobalConfig) *ConfigureModel {
 	// Use provided dimensions or defaults
 	if width <= 0 {
 		width = 100
@@ -327,6 +341,9 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	if height <= 0 {
 		height = 30
 	}
+
+	// Track if this is first-time (no saved config exists)
+	hadSavedConfig := projectConfig != nil
 
 	// If no config exists, create initial structure from detected project
 	if projectConfig == nil && detectedProject != nil {
@@ -347,6 +364,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 		ProjectConfig:     projectConfig,
 		DetectedProject:   detectedProject,
 		ProjectIdentifier: "",
+		GlobalConfig:      globalConfig,
 	}
 
 	if projectConfig != nil && projectConfig.Project != nil {
@@ -493,39 +511,14 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	m.Lists[3] = advList
 
 	// Check if this is first-time setup (no saved config + has versions)
-	isFirstTime := projectConfig != nil && projectConfig.Project != nil &&
-		projectConfig.Project.DetectedAt != nil && projectConfig.Project.Module != nil &&
-		projectConfig.Project.Module.Version != "" && projectConfig.Project.Module.Version != "v0.0.1"
+	isFirstTime := !hadSavedConfig && detectedProject != nil &&
+		detectedProject.Module != nil && detectedProject.Module.Version != "" &&
+		detectedProject.Module.Version != "v0.0.1"
 
 	if isFirstTime {
 		m.FirstTimeSetup = true
+		m.DetectingDistributions = true
 		m.CurrentView = FirstTimeSetupView
-
-		// Initialize Homebrew inputs with defaults
-		homebrewTap := textinput.New()
-		homebrewTap.Placeholder = "owner/repo"
-		homebrewTap.CharLimit = 100
-		homebrewTap.Width = 40
-		m.HomebrewTapInput = homebrewTap
-
-		homebrewFormula := textinput.New()
-		homebrewFormula.Placeholder = "formula-name"
-		homebrewFormula.CharLimit = 100
-		homebrewFormula.Width = 40
-		if detectedProject != nil && detectedProject.Binary != nil {
-			homebrewFormula.SetValue(detectedProject.Binary.Name)
-		}
-		m.HomebrewFormulaInput = homebrewFormula
-
-		// Initialize NPM input with default
-		npmPackage := textinput.New()
-		npmPackage.Placeholder = "package-name or @scope/package-name"
-		npmPackage.CharLimit = 214
-		npmPackage.Width = 40
-		if detectedProject != nil && detectedProject.Module != nil {
-			npmPackage.SetValue(detectedProject.Module.Name)
-		}
-		m.NPMPackageInput = npmPackage
 	}
 
 	// Cache GitHub status on initialization
@@ -539,6 +532,74 @@ func LoadCleanupCmd(width, height int) tea.Cmd {
 	return func() tea.Msg {
 		cleanupModel := NewCleanupModel(width, height)
 		return loadCompleteMsg{cleanupModel: cleanupModel}
+	}
+}
+
+// StartDistributionDetectionCmd creates detection command from config
+func StartDistributionDetectionCmd(detectedProject *models.ProjectInfo, globalConfig *models.GlobalConfig) tea.Cmd {
+	if detectedProject == nil {
+		return nil
+	}
+
+	homebrewTap := ""
+	homebrewFormula := ""
+	npmPackage := ""
+	npmScopedPackage := ""
+
+	if globalConfig != nil && globalConfig.User.DefaultHomebrewTap != "" {
+		homebrewTap = globalConfig.User.DefaultHomebrewTap
+	}
+
+	if detectedProject.Binary != nil {
+		homebrewFormula = detectedProject.Binary.Name
+	}
+
+	if detectedProject.Module != nil {
+		npmPackage = detectedProject.Module.Name
+		if globalConfig != nil && globalConfig.User.NPMScope != "" {
+			npmScopedPackage = "@" + globalConfig.User.NPMScope + "/" + detectedProject.Module.Name
+		}
+	}
+
+	return DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedPackage)
+}
+
+// DetectDistributionsCmd auto-detects if project exists in user's tap/npm
+func DetectDistributionsCmd(homebrewTap, homebrewFormula, npmPackage, npmScopedPackage string) tea.Cmd {
+	return func() tea.Msg {
+		result := distributionDetectedMsg{}
+
+		// Try Homebrew tap if configured
+		if homebrewTap != "" && homebrewFormula != "" {
+			info, err := detection.VerifyHomebrewFormula(homebrewTap, homebrewFormula)
+			if err == nil && info.Exists {
+				result.homebrewTap = homebrewTap
+				result.homebrewFormula = homebrewFormula
+				result.homebrewVersion = info.Version
+				result.homebrewExists = true
+			}
+		}
+
+		// Try NPM package (with scope first, then without)
+		if npmScopedPackage != "" {
+			info, err := detection.VerifyNPMPackage(npmScopedPackage)
+			if err == nil && info.Exists {
+				result.npmPackage = npmScopedPackage
+				result.npmVersion = info.Version
+				result.npmExists = true
+			}
+		}
+
+		if !result.npmExists && npmPackage != "" {
+			info, err := detection.VerifyNPMPackage(npmPackage)
+			if err == nil && info.Exists {
+				result.npmPackage = npmPackage
+				result.npmVersion = info.Version
+				result.npmExists = true
+			}
+		}
+
+		return result
 	}
 }
 
@@ -619,6 +680,32 @@ func regularCommitCmd(files []string, message string) tea.Cmd {
 
 // handleFirstTimeSetupKeys handles keyboard input for first-time setup wizard
 func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureModel, tea.Cmd) {
+	// Handle confirmation screen separately
+	if m.FirstTimeSetupConfirmation {
+		switch msg.String() {
+		case "esc":
+			// Go back to editing
+			m.FirstTimeSetupConfirmation = false
+			return m, nil
+		case "enter":
+			// Proceed with verification
+			m.VerifyingDistributions = true
+			m.DistributionVerifyError = ""
+
+			return m, tea.Batch(
+				m.CreateSpinner.Tick,
+				VerifyDistributionsCmd(
+					m.HomebrewCheckEnabled,
+					m.HomebrewTapInput.Value(),
+					m.HomebrewFormulaInput.Value(),
+					m.NPMCheckEnabled,
+					m.NPMPackageInput.Value(),
+				),
+			)
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "esc":
 		// Skip setup and go to normal view
@@ -688,25 +775,13 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		}
 		return m, nil
 
-	case "enter":
-		// Verify distributions if at least one is checked
+	case "s", "S":
+		// Show confirmation screen if at least one is checked
 		if !m.HomebrewCheckEnabled && !m.NPMCheckEnabled {
 			return m, nil
 		}
-
-		m.VerifyingDistributions = true
-		m.DistributionVerifyError = ""
-
-		return m, tea.Batch(
-			m.CreateSpinner.Tick,
-			VerifyDistributionsCmd(
-				m.HomebrewCheckEnabled,
-				m.HomebrewTapInput.Value(),
-				m.HomebrewFormulaInput.Value(),
-				m.NPMCheckEnabled,
-				m.NPMPackageInput.Value(),
-			),
-		)
+		m.FirstTimeSetupConfirmation = true
+		return m, nil
 
 	default:
 		// Handle text input
@@ -931,6 +1006,71 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
+	case distributionDetectedMsg:
+		m.DetectingDistributions = false
+
+		// Initialize text inputs
+		homebrewTap := textinput.New()
+		homebrewTap.Placeholder = "owner/repo"
+		homebrewTap.CharLimit = 100
+		homebrewTap.Width = 40
+
+		homebrewFormula := textinput.New()
+		homebrewFormula.Placeholder = "formula-name"
+		homebrewFormula.CharLimit = 100
+		homebrewFormula.Width = 40
+
+		npmPackage := textinput.New()
+		npmPackage.Placeholder = "package-name or @scope/package-name"
+		npmPackage.CharLimit = 214
+		npmPackage.Width = 40
+
+		// If we found distributions, populate and go to confirmation
+		if msg.homebrewExists || msg.npmExists {
+			m.AutoDetected = true
+
+			if msg.homebrewExists {
+				m.HomebrewCheckEnabled = true
+				homebrewTap.SetValue(msg.homebrewTap)
+				homebrewFormula.SetValue(msg.homebrewFormula)
+			}
+
+			if msg.npmExists {
+				m.NPMCheckEnabled = true
+				npmPackage.SetValue(msg.npmPackage)
+			}
+
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+
+			// Go straight to confirmation
+			m.FirstTimeSetupConfirmation = true
+		} else {
+			// Nothing found, show manual input screen
+			m.AutoDetected = false
+
+			// Prefill with defaults from global config and detected project
+			if m.GlobalConfig != nil && m.GlobalConfig.User.DefaultHomebrewTap != "" {
+				homebrewTap.SetValue(m.GlobalConfig.User.DefaultHomebrewTap)
+			}
+
+			if m.DetectedProject != nil {
+				if m.DetectedProject.Binary != nil {
+					homebrewFormula.SetValue(m.DetectedProject.Binary.Name)
+				}
+				if m.DetectedProject.Module != nil {
+					npmPackage.SetValue(m.DetectedProject.Module.Name)
+				}
+			}
+
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+		}
+
+		return m, nil
+
 	case distributionVerifiedMsg:
 		m.VerifyingDistributions = false
 		if msg.err != nil {

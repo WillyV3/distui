@@ -19,11 +19,86 @@ func RenderFirstTimeSetup(model *handlers.ConfigureModel) string {
 	selectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("46"))
 	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
 
 	var content strings.Builder
 
 	content.WriteString(headerStyle.Render("FIRST-TIME SETUP"))
 	content.WriteString("\n\n")
+
+	// Show detection spinner
+	if model.DetectingDistributions {
+		content.WriteString(spinnerStyle.Render(model.CreateSpinner.View()))
+		content.WriteString(" Detecting existing distributions...")
+		content.WriteString("\n\n")
+		content.WriteString(dimStyle.Render("Checking your Homebrew tap and NPM packages..."))
+		return content.String()
+	}
+
+	// Show confirmation screen
+	if model.FirstTimeSetupConfirmation {
+		if model.AutoDetected {
+			content.WriteString(successStyle.Render("AUTO-DETECTED DISTRIBUTIONS"))
+		} else {
+			content.WriteString(warningStyle.Render("CONFIRM DISTRIBUTION SETTINGS"))
+		}
+		content.WriteString("\n\n")
+
+		if model.AutoDetected {
+			content.WriteString(labelStyle.Render("We found this project in the following distributions:"))
+		} else {
+			content.WriteString(labelStyle.Render("The following distributions will be verified:"))
+		}
+		content.WriteString("\n\n")
+
+		if model.HomebrewCheckEnabled {
+			if model.AutoDetected {
+				content.WriteString(successStyle.Render("✓ Found in Homebrew"))
+			} else {
+				content.WriteString(successStyle.Render("✓ Homebrew Formula"))
+			}
+			content.WriteString("\n")
+			content.WriteString(dimStyle.Render("  Tap:     " + model.HomebrewTapInput.Value()))
+			content.WriteString("\n")
+			content.WriteString(dimStyle.Render("  Formula: " + model.HomebrewFormulaInput.Value()))
+			content.WriteString("\n\n")
+		}
+
+		if model.NPMCheckEnabled {
+			if model.AutoDetected {
+				content.WriteString(successStyle.Render("✓ Found in NPM"))
+			} else {
+				content.WriteString(successStyle.Render("✓ NPM Package"))
+			}
+			content.WriteString("\n")
+			content.WriteString(dimStyle.Render("  Package: " + model.NPMPackageInput.Value()))
+			content.WriteString("\n\n")
+		}
+
+		content.WriteString("\n")
+
+		if model.AutoDetected {
+			content.WriteString(labelStyle.Render("Current versions will be imported from:"))
+		} else {
+			content.WriteString(labelStyle.Render("This will run:"))
+		}
+		content.WriteString("\n")
+		if model.HomebrewCheckEnabled {
+			content.WriteString(dimStyle.Render("  brew info " + model.HomebrewTapInput.Value() + "/" + model.HomebrewFormulaInput.Value() + " --json=v2"))
+			content.WriteString("\n")
+		}
+		if model.NPMCheckEnabled {
+			content.WriteString(dimStyle.Render("  npm view " + model.NPMPackageInput.Value() + " version"))
+			content.WriteString("\n")
+		}
+		content.WriteString("\n")
+
+		content.WriteString(successStyle.Render("[Enter] Confirm & Import"))
+		content.WriteString("  ")
+		content.WriteString(dimStyle.Render("[Esc] Go Back"))
+
+		return content.String()
+	}
 
 	if model.VerifyingDistributions {
 		content.WriteString(spinnerStyle.Render(model.CreateSpinner.View()))
@@ -113,9 +188,9 @@ func RenderFirstTimeSetup(model *handlers.ConfigureModel) string {
 	content.WriteString("\n\n")
 
 	if model.HomebrewCheckEnabled || model.NPMCheckEnabled {
-		content.WriteString(successStyle.Render("[Enter] Verify & Import Versions"))
+		content.WriteString(successStyle.Render("[s] Save & Continue"))
 	} else {
-		content.WriteString(dimStyle.Render("[Enter] Verify & Import Versions (select at least one)"))
+		content.WriteString(dimStyle.Render("[s] Save & Continue (select at least one)"))
 	}
 
 	content.WriteString("\n")

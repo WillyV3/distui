@@ -164,12 +164,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			width := m.width - 4   // border (2) + padding (2)
 			height := m.height - 4 // border (2) + padding (2)
 			accounts := extractGitHubAccounts(m.globalConfig)
-			m.configureModel = handlers.NewConfigureModel(width, height, accounts, m.currentProject, m.detectedProject)
+			m.configureModel = handlers.NewConfigureModel(width, height, accounts, m.currentProject, m.detectedProject, m.globalConfig)
 			// Change page NOW, start spinner and trigger async load
 			m.currentPage = pageState(newPage)
 			m.quitting = quitting
 			listWidth := width - 2
 			listHeight := height - 13
+
+			// If first-time setup, also trigger auto-detection
+			if m.configureModel.FirstTimeSetup {
+				detectionCmd := handlers.StartDistributionDetectionCmd(m.detectedProject, m.globalConfig)
+				return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), detectionCmd, tea.ClearScreen)
+			}
+
 			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), tea.ClearScreen)
 		}
 		m.currentPage = pageState(newPage)
