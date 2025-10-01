@@ -48,7 +48,7 @@ func NewBranchSelectionModel(width, height int) BranchSelectionModel {
 func (m BranchSelectionModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.LoadSpinner.Tick,
-		loadBranchesCmd,
+		loadBranchesCmd(),
 	)
 }
 
@@ -116,9 +116,11 @@ func (m BranchSelectionModel) Update(msg tea.Msg) (BranchSelectionModel, tea.Cmd
 	return m, nil
 }
 
-func loadBranchesCmd() tea.Msg {
-	branches, err := gitops.ListBranches()
-	return branchesLoadedMsg{branches: branches, err: err}
+func loadBranchesCmd() tea.Cmd {
+	return func() tea.Msg {
+		branches, err := gitops.ListBranches()
+		return branchesLoadedMsg{branches: branches, err: err}
+	}
 }
 
 func pushToBranchCmd(branch string) tea.Cmd {
