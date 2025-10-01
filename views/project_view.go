@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel) string {
+func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel, switchedToPath string) string {
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true).
@@ -38,6 +38,11 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(successStyle.Render(fmt.Sprintf("✓ GitHub: %s", globalConfig.User.GitHubUsername)) + "\n\n")
 	} else {
 		content.WriteString(warningStyle.Render("⚠ GitHub not configured") + "\n\n")
+	}
+
+	// Project switch notification
+	if switchedToPath != "" {
+		content.WriteString(successStyle.Render(fmt.Sprintf("→ Switched to: %s", switchedToPath)) + "\n\n")
 	}
 
 	// Regeneration warning

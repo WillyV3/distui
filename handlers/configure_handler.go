@@ -513,10 +513,23 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	advList.SetShowHelp(false)
 	m.Lists[3] = advList
 
-	// Check if this is first-time setup (no saved config + has versions)
-	isFirstTime := !hadSavedConfig && detectedProject != nil &&
+	// Check if this is first-time setup
+	// Trigger if:
+	// 1. No saved config + has versions (normal first-time)
+	// 2. Bulk-imported: has distributions enabled but empty release history
+	hasDistributionsEnabled := projectConfig != nil && projectConfig.Config != nil &&
+		((projectConfig.Config.Distributions.Homebrew != nil && projectConfig.Config.Distributions.Homebrew.Enabled) ||
+			(projectConfig.Config.Distributions.NPM != nil && projectConfig.Config.Distributions.NPM.Enabled))
+
+	hasEmptyHistory := projectConfig != nil &&
+		(projectConfig.History == nil || len(projectConfig.History.Releases) == 0)
+
+	isBulkImported := hadSavedConfig && hasDistributionsEnabled && hasEmptyHistory
+
+	isFirstTime := (!hadSavedConfig && detectedProject != nil &&
 		detectedProject.Module != nil && detectedProject.Module.Version != "" &&
-		detectedProject.Module.Version != "v0.0.1"
+		detectedProject.Module.Version != "v0.0.1") ||
+		isBulkImported
 
 	if isFirstTime {
 		m.FirstTimeSetup = true
