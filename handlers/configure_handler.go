@@ -1302,11 +1302,13 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			newModal, cmd := configModel.BranchModal.Update(msg)
 			*configModel.BranchModal = newModal
 
-			// Check if push completed successfully - close modal
-			if !configModel.BranchModal.Loading && configModel.BranchModal.Error == "" {
-				if _, ok := msg.(pushResultMsg); ok {
+			// Check if push completed successfully - close modal and refresh
+			if _, ok := msg.(pushResultMsg); ok {
+				if !configModel.BranchModal.Pushing && configModel.BranchModal.Error == "" {
+					// Success - close modal and refresh
 					configModel.ShowingBranchModal = false
 					configModel.CleanupModel.Refresh()
+					return currentPage, false, nil, configModel
 				}
 			}
 			return currentPage, false, cmd, configModel

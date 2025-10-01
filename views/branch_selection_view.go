@@ -20,6 +20,10 @@ func RenderBranchSelection(m handlers.BranchSelectionModel) string {
 		return fmt.Sprintf("\n%s Loading branches...\n", m.LoadSpinner.View())
 	}
 
+	if m.Pushing {
+		return fmt.Sprintf("\n%s %s\n", m.LoadSpinner.View(), m.PushStatus)
+	}
+
 	if m.Error != "" {
 		return fmt.Sprintf("\nError: %s\n\nPress Esc to cancel\n", m.Error)
 	}

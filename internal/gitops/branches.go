@@ -61,3 +61,29 @@ func PushToBranch(branch string) error {
 
 	return nil
 }
+
+func PushCurrentBranch() error {
+	cmd := exec.Command("git", "push", "origin", "HEAD")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pushing current branch: %w\nOutput: %s", err, string(output))
+	}
+
+	return nil
+}
+
+func CreatePullRequest(targetBranch string) error {
+	// First push current branch
+	if err := PushCurrentBranch(); err != nil {
+		return err
+	}
+
+	// Create PR using gh CLI
+	cmd := exec.Command("gh", "pr", "create", "--base", targetBranch, "--fill")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("creating PR to %s: %w\nOutput: %s", targetBranch, err, string(output))
+	}
+
+	return nil
+}
