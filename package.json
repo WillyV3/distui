@@ -1,6 +1,6 @@
 {
   "name": "distui-cli-go",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "description": "distui - distributed via distui",
   "bin": {
     "distui": "./bin/distui"
