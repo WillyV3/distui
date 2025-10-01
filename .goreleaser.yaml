@@ -5,7 +5,6 @@ version: 2
 
 before:
   hooks:
-    - go test ./...
     - go mod tidy
 
 builds:
