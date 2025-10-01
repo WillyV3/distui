@@ -155,7 +155,7 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		if m.Phase != models.PhaseComplete && m.Phase != models.PhaseFailed && m.Phase != models.PhaseVersionSelect {
 			// Animate progress smoothly, but cap at 97%
 			if m.Progress.Percent() < 0.97 {
-				cmd := m.Progress.IncrPercent(0.01) // Faster increment (was 0.002)
+				cmd := m.Progress.IncrPercent(0.008) // Faster increment (was 0.002)
 				return m, tea.Batch(cmd, tickProgress())
 			}
 			// At 97%, keep ticking but don't increment
