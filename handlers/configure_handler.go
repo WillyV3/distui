@@ -1294,6 +1294,21 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			newModel, cmd := configModel.Update(msg)
 			return currentPage, false, cmd, newModel
 		}
+	case branchesLoadedMsg, pushResultMsg:
+		// Route branch modal messages
+		if configModel != nil && configModel.ShowingBranchModal && configModel.BranchModal != nil {
+			newModal, cmd := configModel.BranchModal.Update(msg)
+			*configModel.BranchModal = newModal
+
+			// Check if push completed successfully - close modal
+			if !configModel.BranchModal.Loading && configModel.BranchModal.Error == "" {
+				if _, ok := msg.(pushResultMsg); ok {
+					configModel.ShowingBranchModal = false
+					configModel.CleanupModel.Refresh()
+				}
+			}
+			return currentPage, false, cmd, configModel
+		}
 	case spinner.TickMsg:
 		// Route spinner to branch modal if showing
 		if configModel != nil && configModel.ShowingBranchModal && configModel.BranchModal != nil {
