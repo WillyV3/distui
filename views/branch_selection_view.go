@@ -30,8 +30,26 @@ func RenderBranchSelection(m handlers.BranchSelectionModel) string {
 
 	var b strings.Builder
 
-	b.WriteString("\n┌─ SELECT BRANCH TO PUSH ──────────────────────\n")
-	b.WriteString("│\n")
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
+
+	// Find current branch
+	currentBranch := ""
+	for _, branch := range m.Branches {
+		if branch.IsCurrent {
+			currentBranch = branch.Name
+			break
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(headerStyle.Render("PUSH YOUR CODE") + "\n\n")
+
+	if currentBranch != "" {
+		b.WriteString(infoStyle.Render(fmt.Sprintf("Current branch: %s", currentBranch)) + "\n")
+		b.WriteString(infoStyle.Render("Select where to push your changes:") + "\n\n")
+	}
 
 	for i, branch := range m.Branches {
 		prefix := "  "
@@ -40,24 +58,27 @@ func RenderBranchSelection(m handlers.BranchSelectionModel) string {
 		}
 
 		branchDisplay := branch.Name
+		action := ""
+
 		if branch.IsCurrent {
-			branchDisplay += " (current)"
+			// Pushing to current branch
+			action = actionStyle.Render(" → Push to origin/" + branch.Name)
+		} else if branch.Name == "main" || branch.Name == "master" {
+			// Pushing to main
+			action = actionStyle.Render(" → Merge into " + branch.Name + " (creates PR)")
+		} else {
+			// Pushing to another branch
+			action = " → Push to " + branch.Name
 		}
 
 		tracking := ""
-		if branch.TrackingBranch != "" {
-			tracking = fmt.Sprintf(" → %s", branch.TrackingBranch)
+		if branch.TrackingBranch != "" && branch.IsCurrent {
 			if branch.AheadCount > 0 {
-				tracking += fmt.Sprintf(" (ahead %d)", branch.AheadCount)
+				tracking = fmt.Sprintf(" (%d commits ahead)", branch.AheadCount)
 			}
-			if branch.BehindCount > 0 {
-				tracking += fmt.Sprintf(" (behind %d)", branch.BehindCount)
-			}
-		} else {
-			tracking = " (no tracking)"
 		}
 
-		line := fmt.Sprintf("│  %s%s%s", prefix, branchDisplay, tracking)
+		line := fmt.Sprintf("%s%s%s%s", prefix, branchDisplay, action, tracking)
 
 		if i == m.SelectedIndex {
 			b.WriteString(branchSelectedStyle.Render(line) + "\n")
@@ -68,9 +89,9 @@ func RenderBranchSelection(m handlers.BranchSelectionModel) string {
 		}
 	}
 
-	b.WriteString("│\n")
-	b.WriteString("│  ↑/↓: navigate • enter: push • esc: cancel\n")
-	b.WriteString("└──────────────────────────────────────────────\n")
+	b.WriteString("\n")
+	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	b.WriteString(helpStyle.Render("↑/↓: navigate • enter: push • esc: cancel") + "\n")
 
 	return b.String()
 }
