@@ -26,6 +26,7 @@ type EditModeType int
 
 const (
 	ModeNormal EditModeType = iota
+	ModeEditCategory
 	ModeAddExtension
 	ModeAddPattern
 )
@@ -71,6 +72,8 @@ func (m *SmartCommitPrefsModel) Update(msg tea.Msg) (*SmartCommitPrefsModel, tea
 		}
 
 		switch m.EditMode {
+		case ModeEditCategory:
+			return m.handleEditCategory(msg)
 		case ModeAddExtension:
 			return m.handleExtensionInput(msg)
 		case ModeAddPattern:
@@ -85,23 +88,19 @@ func (m *SmartCommitPrefsModel) Update(msg tea.Msg) (*SmartCommitPrefsModel, tea
 func (m *SmartCommitPrefsModel) handleNormalMode(msg tea.KeyMsg) (*SmartCommitPrefsModel, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if m.SelectedCategory > 0 {
+		if m.ProjectConfig.Config.SmartCommit.UseCustomRules && m.SelectedCategory > 0 {
 			m.SelectedCategory--
 		}
 	case "down", "j":
-		if m.SelectedCategory < len(m.Categories)-1 {
+		if m.ProjectConfig.Config.SmartCommit.UseCustomRules && m.SelectedCategory < len(m.Categories)-1 {
 			m.SelectedCategory++
 		}
 	case " ", "space":
 		m.toggleCustomRules()
 	case "e":
-		m.EditMode = ModeAddExtension
-		m.ExtensionInput.Focus()
-	case "p":
-		m.EditMode = ModeAddPattern
-		m.PatternInput.Focus()
-	case "d":
-		m.removeSelected()
+		if m.ProjectConfig.Config.SmartCommit.UseCustomRules {
+			m.EditMode = ModeEditCategory
+		}
 	case "r":
 		m.ShowConfirm = true
 	case "s":
@@ -111,15 +110,31 @@ func (m *SmartCommitPrefsModel) handleNormalMode(msg tea.KeyMsg) (*SmartCommitPr
 	return m, nil
 }
 
+func (m *SmartCommitPrefsModel) handleEditCategory(msg tea.KeyMsg) (*SmartCommitPrefsModel, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.EditMode = ModeNormal
+	case "e":
+		m.EditMode = ModeAddExtension
+		m.ExtensionInput.Focus()
+	case "p":
+		m.EditMode = ModeAddPattern
+		m.PatternInput.Focus()
+	case "d":
+		m.removeSelected()
+	}
+	return m, nil
+}
+
 func (m *SmartCommitPrefsModel) handleExtensionInput(msg tea.KeyMsg) (*SmartCommitPrefsModel, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		m.addExtension()
-		m.EditMode = ModeNormal
+		m.EditMode = ModeEditCategory
 		m.ExtensionInput.Blur()
 		m.ExtensionInput.SetValue("")
 	case "esc":
-		m.EditMode = ModeNormal
+		m.EditMode = ModeEditCategory
 		m.ExtensionInput.Blur()
 		m.ExtensionInput.SetValue("")
 	default:
@@ -134,11 +149,11 @@ func (m *SmartCommitPrefsModel) handlePatternInput(msg tea.KeyMsg) (*SmartCommit
 	switch msg.String() {
 	case "enter":
 		m.addPattern()
-		m.EditMode = ModeNormal
+		m.EditMode = ModeEditCategory
 		m.PatternInput.Blur()
 		m.PatternInput.SetValue("")
 	case "esc":
-		m.EditMode = ModeNormal
+		m.EditMode = ModeEditCategory
 		m.PatternInput.Blur()
 		m.PatternInput.SetValue("")
 	default:

@@ -1,6 +1,7 @@
 package gitcleanup
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -16,6 +17,28 @@ const (
 	CategoryIgnore FileCategory = "ignore" // Never commit (binaries)
 	CategoryOther  FileCategory = "other"  // Unknown - ask user
 )
+
+// directoryContainsGoFiles checks if a directory contains any .go files
+func directoryContainsGoFiles(dir string) bool {
+	if dir == "." || dir == "" {
+		dir = "."
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".go") {
+			return true
+		}
+	}
+	return false
+}
 
 // CategorizeFile determines the category of a file based on its path
 // If projectConfig is provided and has custom rules enabled, uses those rules
@@ -98,22 +121,29 @@ func categorizeWithDefaults(path string) FileCategory {
 		return CategoryIgnore
 	}
 
-	// Auto-commit patterns (Go code and project files)
-	autoExtensions := []string{".go", ".mod", ".sum"}
-	autoFiles := []string{"go.work", "go.work.sum", ".goreleaser.yaml", ".goreleaser.yml", "package.json"}
+	// Check if file's directory contains Go files
+	hasGoFiles := directoryContainsGoFiles(dir)
 
-	for _, e := range autoExtensions {
-		if ext == e {
-			return CategoryAuto
-		}
-	}
-	for _, f := range autoFiles {
+	// Root-level project files (always auto-commit regardless of directory)
+	rootProjectFiles := []string{"go.mod", "go.sum", "go.work", "go.work.sum", ".goreleaser.yaml", ".goreleaser.yml"}
+	for _, f := range rootProjectFiles {
 		if base == f {
 			return CategoryAuto
 		}
 	}
 
-	// Documentation and config files (ask user)
+	// Go files in Go directories (auto-commit)
+	if ext == ".go" && hasGoFiles {
+		return CategoryAuto
+	}
+
+	// Non-Go files in Go directories (ask user)
+	if hasGoFiles {
+		return CategoryOther
+	}
+
+	// Files in non-Go directories (ask user)
+	// Documentation and config files
 	docsExtensions := []string{".md", ".txt", ".json", ".yaml", ".yml", ".toml"}
 	for _, e := range docsExtensions {
 		if ext == e {
@@ -121,7 +151,7 @@ func categorizeWithDefaults(path string) FileCategory {
 		}
 	}
 
-	// Everything else
+	// Everything else (ask user)
 	return CategoryOther
 }
 
