@@ -57,11 +57,46 @@ func GetGitStatus() ([]GitFile, error) {
 			continue
 		}
 
+		// If path is a directory, expand it to individual files
+		if strings.HasSuffix(path, "/") {
+			expandedFiles, err := expandDirectory(path, status)
+			if err == nil {
+				files = append(files, expandedFiles...)
+			}
+			continue
+		}
+
 		// Categorize the file
 		category := CategorizeFile(path)
 
 		files = append(files, GitFile{
 			Path:     path,
+			Status:   status,
+			Category: category,
+		})
+	}
+
+	return files, nil
+}
+
+func expandDirectory(dirPath, status string) ([]GitFile, error) {
+	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard", dirPath)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var files []GitFile
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		category := CategorizeFile(line)
+		files = append(files, GitFile{
+			Path:     line,
 			Status:   status,
 			Category: category,
 		})
@@ -89,6 +124,15 @@ func GetFileChanges() ([]FileChange, error) {
 		status := strings.TrimSpace(line[:2])
 		path := strings.TrimSpace(line[2:])
 
+		// If path is a directory, expand it to individual files
+		if strings.HasSuffix(path, "/") {
+			expandedChanges, err := expandDirectoryToChanges(path, status)
+			if err == nil {
+				changes = append(changes, expandedChanges...)
+			}
+			continue
+		}
+
 		change := FileChange{
 			Path:   path,
 			Status: status,
@@ -113,6 +157,34 @@ func GetFileChanges() ([]FileChange, error) {
 		default:
 			change.StatusText = "changed"
 			change.Icon = "📝"
+		}
+
+		changes = append(changes, change)
+	}
+
+	return changes, nil
+}
+
+func expandDirectoryToChanges(dirPath, status string) ([]FileChange, error) {
+	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard", dirPath)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var changes []FileChange
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		change := FileChange{
+			Path:       line,
+			Status:     status,
+			StatusText: "untracked",
+			Icon:       "❓",
 		}
 
 		changes = append(changes, change)

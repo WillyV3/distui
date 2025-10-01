@@ -335,7 +335,7 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		if configModel.CreateStatus != "" && !configModel.IsCreating {
 			statusMessage = configModel.CreateStatus
 		}
-		statusContent := RenderCleanupStatusWithMessage(configModel.CleanupModel, statusMessage)
+		statusContent := RenderCleanupStatusWithMessage(configModel.CleanupModel, statusMessage, configModel.ProjectConfig)
 		baseContent = statusContent
 	} else if configModel.Initialized {
 		// Wrap list content in the content box

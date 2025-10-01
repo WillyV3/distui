@@ -5,14 +5,15 @@ import (
 	"strings"
 
 	"distui/handlers"
+	"distui/internal/models"
 	"github.com/charmbracelet/lipgloss"
 )
 
 func RenderCleanupStatus(model *handlers.CleanupModel) string {
-	return RenderCleanupStatusWithMessage(model, "")
+	return RenderCleanupStatusWithMessage(model, "", nil)
 }
 
-func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage string) string {
+func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage string, projectConfig *models.ProjectConfig) string {
 	if model == nil {
 		return "Loading repository status..."
 	}
@@ -102,6 +103,24 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		lines = append(lines, fmt.Sprintf("  %s%s",
 			grayStyle.Render("Branch: "),
 			blueStyle.Render(model.RepoInfo.Branch)))
+	}
+
+	// Smart commit mode indicator
+	customRulesEnabled := projectConfig != nil &&
+		projectConfig.Config != nil &&
+		projectConfig.Config.SmartCommit != nil &&
+		projectConfig.Config.SmartCommit.UseCustomRules
+
+	if customRulesEnabled {
+		modeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
+		lines = append(lines, fmt.Sprintf("  %s%s",
+			grayStyle.Render("Smart Commit: "),
+			modeStyle.Render("Custom Rules")))
+	} else {
+		modeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+		lines = append(lines, fmt.Sprintf("  %s%s",
+			grayStyle.Render("Smart Commit: "),
+			modeStyle.Render("Default (Go only)")))
 	}
 
 	// Show "All synced!" message if clean and pushed
