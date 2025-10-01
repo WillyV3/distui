@@ -44,6 +44,7 @@ type ReleaseModel struct {
 	EnableHomebrew bool
 	EnableNPM      bool
 	HomebrewTap    string
+	SkipTests      bool  // From config: Run tests before release
 
 	// Channel for receiving output
 	outputChan chan string
@@ -101,6 +102,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 	enableHomebrew := false
 	enableNPM := false
 	homebrewTap := ""
+	skipTests := false  // Default: run tests
 
 	if projectConfig != nil && projectConfig.Config != nil {
 		if projectConfig.Config.Distributions.Homebrew != nil {
@@ -109,6 +111,9 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		}
 		if projectConfig.Config.Distributions.NPM != nil {
 			enableNPM = projectConfig.Config.Distributions.NPM.Enabled
+		}
+		if projectConfig.Config.Release != nil {
+			skipTests = projectConfig.Config.Release.SkipTests
 		}
 	}
 
@@ -132,6 +137,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		EnableHomebrew:  enableHomebrew,
 		EnableNPM:       enableNPM,
 		HomebrewTap:     homebrewTap,
+		SkipTests:       skipTests,
 	}
 }
 
@@ -399,7 +405,7 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 
 	releaseConfig := executor.ReleaseConfig{
 		Version:        version,
-		SkipTests:      false,
+		SkipTests:      m.SkipTests,  // Use config value instead of hardcoded false
 		EnableHomebrew: m.EnableHomebrew,
 		EnableNPM:      m.EnableNPM,
 		HomebrewTap:    m.HomebrewTap,

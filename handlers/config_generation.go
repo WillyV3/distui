@@ -145,7 +145,6 @@ func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *mo
 	// Check if .goreleaser.yaml exists and if it's custom
 	goreleaserExists := false
 	goreleaserIsCustom := false
-	var goreleaserPath string
 	goreleaserPaths := []string{
 		projectPath + "/.goreleaser.yaml",
 		projectPath + "/.goreleaser.yml",
@@ -153,7 +152,6 @@ func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *mo
 	for _, p := range goreleaserPaths {
 		if _, err := os.Stat(p); err == nil {
 			goreleaserExists = true
-			goreleaserPath = p
 			goreleaserIsCustom = detection.IsCustomConfig(p)
 			break
 		}
