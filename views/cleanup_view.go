@@ -227,22 +227,23 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		if needsGitHubRepo {
 			// Show both commit and GitHub repo creation
 			actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-			lines = append(lines, "  [C] Commit  [s] Smart commit  "+actionStyle.Render("[G] Create GitHub Repo")+"  [p] Preferences  [r] Refresh")
+			lines = append(lines, "  [C] Commit  [s] Smart commit  "+actionStyle.Render("[G] Create GitHub Repo")+"  [f] File scan  [p] Preferences  [r] Refresh")
 		} else {
-			lines = append(lines, "  [C] Commit  [s] Smart commit  [p] Preferences  [r] Refresh")
+			lines = append(lines, "  [C] Commit  [s] Smart commit  [f] File scan  [p] Preferences  [r] Refresh")
 		}
 	} else if model.RepoInfo != nil && model.RepoInfo.UnpushedCommits > 0 {
-		lines = append(lines, "  [P] Push to remote  [p] Preferences  [r] Refresh")
+		branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
+		lines = append(lines, "  [P] Push  "+branchStyle.Render("[B] Switch branch")+"  [f] File scan  [p] Preferences  [r] Refresh")
 	} else if needsGitHubRepo {
 		// Remote is configured but repo doesn't exist on GitHub
 		actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
-		lines = append(lines, "  "+actionStyle.Render("[G] Create Repository on GitHub")+"  [p] Preferences  [r] Refresh")
+		lines = append(lines, "  "+actionStyle.Render("[G] Create Repository on GitHub")+"  [f] File scan  [p] Preferences  [r] Refresh")
 	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
-		lines = append(lines, "  [p] Preferences  [r] Refresh")
+		lines = append(lines, "  [f] File scan  [p] Preferences  [r] Refresh")
 	} else if model.NeedsGitHub() {
-		lines = append(lines, "  [G] Set up GitHub  [p] Preferences  [r] Refresh")
+		lines = append(lines, "  [G] Set up GitHub  [f] File scan  [p] Preferences  [r] Refresh")
 	} else {
-		lines = append(lines, "  [p] Preferences  [r] Refresh")
+		lines = append(lines, "  [f] File scan  [p] Preferences  [r] Refresh")
 	}
 
 	return strings.Join(lines, "\n")
