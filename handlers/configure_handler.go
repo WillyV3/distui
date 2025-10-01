@@ -83,6 +83,7 @@ const (
 	GitHubView
 	CommitView
 	SmartCommitConfirm
+	SmartCommitFileSelection
 	GenerateConfigConsent
 	SmartCommitPrefsView
 	RepoCleanupView
@@ -111,6 +112,7 @@ type ConfigureModel struct {
 	SmartCommitPrefsModel *SmartCommitPrefsModel
 	RepoCleanupModel      *RepoCleanupModel
 	BranchModal           *BranchSelectionModel
+	FileSelectionModel    *FileSelectionModel
 	ScanningRepo          bool
 	ShowingBranchModal    bool
 
@@ -1377,48 +1379,59 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 					configModel.ProjectConfig.Config.SmartCommit != nil &&
 					configModel.ProjectConfig.Config.SmartCommit.UseCustomRules
 
+				// Create file selection model and switch to selection view
 				changes, _ := gitcleanup.GetFileChanges()
-				items := []gitcleanup.CleanupItem{}
+				configModel.FileSelectionModel = NewFileSelectionModel(changes, customRulesEnabled, configModel.ProjectConfig)
+				configModel.FileSelectionModel.Width = configModel.Width
+				configModel.FileSelectionModel.Height = configModel.Height
+				configModel.CurrentView = SmartCommitFileSelection
+				return currentPage, false, nil, configModel
 
-				for _, change := range changes {
-					category := gitcleanup.CategorizeFileWithConfig(change.Path, configModel.ProjectConfig)
+			case "n", "N", "esc":
+				// User cancelled
+				configModel.CurrentView = TabView
+				return currentPage, false, nil, configModel
+			}
+		} else if configModel.CurrentView == SmartCommitFileSelection {
+			switch msg.String() {
+			case "esc":
+				// Cancel file selection
+				configModel.CurrentView = TabView
+				configModel.FileSelectionModel = nil
+				return currentPage, false, nil, configModel
 
-					// If custom rules enabled: commit all non-ignore files
-					// If custom rules disabled: only commit auto files (Go code)
-					shouldCommit := false
-					if customRulesEnabled {
-						shouldCommit = category != gitcleanup.CategoryIgnore
-					} else {
-						shouldCommit = category == gitcleanup.CategoryAuto
-					}
+			case "enter":
+				// Commit selected files
+				if configModel.FileSelectionModel != nil && configModel.FileSelectionModel.HasSelectedFiles() {
+					items := configModel.FileSelectionModel.GetSelectedFiles()
 
-					if shouldCommit {
-						items = append(items, gitcleanup.CleanupItem{
-							Path:     change.Path,
-							Status:   change.Status,
-							Category: string(category),
-							Action:   "commit",
-						})
-					}
-				}
+					customRulesEnabled := configModel.ProjectConfig != nil &&
+						configModel.ProjectConfig.Config != nil &&
+						configModel.ProjectConfig.Config.SmartCommit != nil &&
+						configModel.ProjectConfig.Config.SmartCommit.UseCustomRules
 
-				if len(items) > 0 {
 					configModel.CurrentView = TabView
 					configModel.IsCreating = true
 					if customRulesEnabled {
 						configModel.CreateStatus = "Committing with custom rules..."
 					} else {
-						configModel.CreateStatus = "Committing auto-commit files..."
+						configModel.CreateStatus = "Committing selected files..."
 					}
+					configModel.FileSelectionModel = nil
 					return currentPage, false, tea.Batch(
 						configModel.CreateSpinner.Tick,
 						smartCommitCmd(items),
 					), configModel
 				}
-			case "n", "N", "esc":
-				// User cancelled
-				configModel.CurrentView = TabView
 				return currentPage, false, nil, configModel
+
+			default:
+				// Pass keys to file selection model
+				if configModel.FileSelectionModel != nil {
+					var cmd tea.Cmd
+					configModel.FileSelectionModel, cmd = configModel.FileSelectionModel.Update(msg)
+					return currentPage, false, cmd, configModel
+				}
 			}
 		} else if configModel.CurrentView == GenerateConfigConsent {
 			switch msg.String() {

@@ -57,6 +57,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		return RenderGitHubManagement(configModel.GitHubModel)
 	case handlers.SmartCommitConfirm:
 		return RenderSmartCommitConfirm(configModel.CleanupModel, configModel.ProjectConfig)
+	case handlers.SmartCommitFileSelection:
+		return RenderFileSelection(configModel.FileSelectionModel)
 	case handlers.CommitView:
 		return RenderCommitView(configModel.CommitModel)
 	case handlers.GenerateConfigConsent:
