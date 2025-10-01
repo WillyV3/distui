@@ -81,7 +81,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
 
 	p := progress.New(
-		progress.WithDefaultGradient(),
+		progress.WithScaledGradient("#00CED1", "#9370DB"), // Teal to Purple
 		progress.WithWidth(40),
 		progress.WithoutPercentage(),
 	)
@@ -153,9 +153,13 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 	case ProgressTickMsg:
 		// Gradually increment progress while release is running
 		if m.Phase != models.PhaseComplete && m.Phase != models.PhaseFailed && m.Phase != models.PhaseVersionSelect {
-			// Animate progress smoothly
-			cmd := m.Progress.IncrPercent(0.002) // Slow increment
-			return m, tea.Batch(cmd, tickProgress())
+			// Animate progress smoothly, but cap at 97%
+			if m.Progress.Percent() < 0.97 {
+				cmd := m.Progress.IncrPercent(0.01) // Faster increment (was 0.002)
+				return m, tea.Batch(cmd, tickProgress())
+			}
+			// At 97%, keep ticking but don't increment
+			return m, tickProgress()
 		}
 		return m, nil
 
