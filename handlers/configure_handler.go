@@ -1333,12 +1333,6 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				return currentPage, false, nil, configModel
 			}
 
-			// Check if push completed successfully - close modal
-			if !configModel.BranchModal.Loading && configModel.BranchModal.Error == "" {
-				// Push succeeded, close modal and refresh
-				configModel.ShowingBranchModal = false
-				configModel.CleanupModel.Refresh()
-			}
 			return currentPage, false, cmd, configModel
 		}
 
