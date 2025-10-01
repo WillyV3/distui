@@ -1525,11 +1525,10 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
-		// Handle 'P' key to open branch selection modal (only in TabView, Cleanup tab, with unpushed commits)
+		// Handle 'P' key to open branch selection modal (only in TabView, Cleanup tab)
 		if msg.String() == "P" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
 			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
-				configModel.CleanupModel.RepoInfo.RemoteExists &&
-				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 {
+				configModel.CleanupModel.RepoInfo.RemoteExists {
 				// Open branch selection modal
 				if configModel.BranchModal == nil {
 					model := NewBranchSelectionModel(configModel.Width, configModel.Height)
@@ -1541,20 +1540,6 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			return currentPage, false, nil, configModel
 		}
 
-		// Handle 'B' key for branch selection modal (only in TabView, Cleanup tab, with unpushed commits)
-		if msg.String() == "B" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
-			if configModel.CleanupModel != nil && configModel.CleanupModel.RepoInfo != nil &&
-				configModel.CleanupModel.RepoInfo.RemoteExists &&
-				configModel.CleanupModel.RepoInfo.UnpushedCommits > 0 {
-				if configModel.BranchModal == nil {
-					model := NewBranchSelectionModel(configModel.Width, configModel.Height)
-					configModel.BranchModal = &model
-				}
-				configModel.ShowingBranchModal = true
-				return currentPage, false, configModel.BranchModal.Init(), configModel
-			}
-			return currentPage, false, nil, configModel
-		}
 
 		// Handle 'G' key to create GitHub repository (only in TabView, Cleanup tab)
 		if msg.String() == "G" && configModel != nil && !configModel.CreatingRepo && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {

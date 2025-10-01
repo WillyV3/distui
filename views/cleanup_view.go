@@ -231,9 +231,13 @@ func RenderCleanupStatusWithMessage(model *handlers.CleanupModel, statusMessage 
 		} else {
 			lines = append(lines, "  [C] Commit  [s] Smart commit  [f] File scan  [p] Preferences  [r] Refresh")
 		}
-	} else if model.RepoInfo != nil && model.RepoInfo.UnpushedCommits > 0 {
+	} else if model.RepoInfo != nil && model.RepoInfo.RemoteExists {
 		branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true)
-		lines = append(lines, "  "+branchStyle.Render("[P] Push/Branch options")+"  [f] File scan  [p] Preferences  [r] Refresh")
+		if model.RepoInfo.UnpushedCommits > 0 {
+			lines = append(lines, "  "+branchStyle.Render("[P] Push/Branch options")+"  [f] File scan  [p] Preferences  [r] Refresh")
+		} else {
+			lines = append(lines, "  [P] Branch options  [f] File scan  [p] Preferences  [r] Refresh")
+		}
 	} else if needsGitHubRepo {
 		// Remote is configured but repo doesn't exist on GitHub
 		actionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Bold(true)
