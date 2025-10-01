@@ -74,10 +74,11 @@ type BinaryInfo struct {
 }
 
 type ProjectSettings struct {
-	Distributions Distributions    `yaml:"distributions"`
-	Build         *BuildSettings   `yaml:"build,omitempty"`
-	Release       *ReleaseSettings `yaml:"release,omitempty"`
-	CICD          *CICDSettings    `yaml:"ci_cd,omitempty"`
+	Distributions Distributions      `yaml:"distributions"`
+	Build         *BuildSettings     `yaml:"build,omitempty"`
+	Release       *ReleaseSettings   `yaml:"release,omitempty"`
+	SmartCommit   *SmartCommitPrefs  `yaml:"smart_commit,omitempty"`
+	CICD          *CICDSettings      `yaml:"ci_cd,omitempty"`
 }
 
 type Distributions struct {
@@ -131,8 +132,23 @@ type CICDSettings struct {
 }
 
 type GitHubActionsConfig struct {
-	Enabled      bool   `yaml:"enabled"`
-	WorkflowPath string `yaml:"workflow_path,omitempty"`
+	Enabled          bool     `yaml:"enabled"`
+	WorkflowPath     string   `yaml:"workflow_path,omitempty"`
+	AutoRegenerate   bool     `yaml:"auto_regenerate,omitempty"`
+	IncludeTests     bool     `yaml:"include_tests,omitempty"`
+	Environments     []string `yaml:"environments,omitempty"`
+	SecretsRequired  []string `yaml:"secrets_required,omitempty"`
+}
+
+type CategoryRules struct {
+	Extensions []string `yaml:"extensions"`
+	Patterns   []string `yaml:"patterns"`
+}
+
+type SmartCommitPrefs struct {
+	Enabled        bool                     `yaml:"enabled"`
+	UseCustomRules bool                     `yaml:"use_custom_rules"`
+	Categories     map[string]CategoryRules `yaml:"categories"`
 }
 
 type ReleaseHistory struct {

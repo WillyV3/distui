@@ -59,7 +59,28 @@ func LoadProject(identifier string) (*models.ProjectConfig, error) {
 		return nil, fmt.Errorf("parsing project %s: %w", identifier, err)
 	}
 
+	if project.Config != nil && project.Config.SmartCommit == nil {
+		project.Config.SmartCommit = getDefaultSmartCommitPrefs()
+	}
+
+	if project.Config != nil && project.Config.CICD != nil && project.Config.CICD.GitHubActions == nil {
+		project.Config.CICD.GitHubActions = &models.GitHubActionsConfig{
+			Enabled:        false,
+			WorkflowPath:   ".github/workflows/release.yml",
+			IncludeTests:   true,
+			AutoRegenerate: false,
+		}
+	}
+
 	return &project, nil
+}
+
+func getDefaultSmartCommitPrefs() *models.SmartCommitPrefs {
+	return &models.SmartCommitPrefs{
+		Enabled:        true,
+		UseCustomRules: false,
+		Categories:     make(map[string]models.CategoryRules),
+	}
 }
 
 func SaveGlobalConfig(config *models.GlobalConfig) error {

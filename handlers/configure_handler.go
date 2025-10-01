@@ -33,6 +33,28 @@ type loadCompleteMsg struct {
 	cleanupModel *CleanupModel
 }
 
+type filesGeneratedMsg struct {
+	err error
+}
+
+func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
+	return func() tea.Msg {
+		// Delete files first
+		if len(filesToDelete) > 0 {
+			if err := DeleteConfigFiles(detectedProject.Path, filesToDelete); err != nil {
+				return filesGeneratedMsg{err: err}
+			}
+		}
+		// Then generate new files
+		if len(filesToGenerate) > 0 {
+			if err := GenerateConfigFiles(detectedProject, projectConfig, filesToGenerate); err != nil {
+				return filesGeneratedMsg{err: err}
+			}
+		}
+		return filesGeneratedMsg{err: nil}
+	}
+}
+
 // ViewType for the configure screen
 type ViewType uint
 
@@ -41,6 +63,8 @@ const (
 	GitHubView
 	CommitView
 	SmartCommitConfirm
+	GenerateConfigConsent
+	SmartCommitPrefsView
 )
 
 // ConfigureModel holds the state for the configure view
@@ -58,9 +82,18 @@ type ConfigureModel struct {
 	ProjectIdentifier string
 
 	// Sub-models for composable views
-	CleanupModel    *CleanupModel
-	GitHubModel     *GitHubModel
-	CommitModel     *CommitModel
+	CleanupModel         *CleanupModel
+	GitHubModel          *GitHubModel
+	CommitModel          *CommitModel
+	SmartCommitPrefsModel *SmartCommitPrefsModel
+
+	// Config generation consent
+	PendingGenerateFiles []string // Files that need to be generated
+	PendingDeleteFiles   []string // Files that need to be deleted
+	DetectedProject      *models.ProjectInfo
+	GeneratingFiles      bool   // Currently generating files
+	GenerateStatus       string // Status message for generation
+	NeedsRegeneration    bool   // Config changed, files need regeneration
 
 	// Legacy fields (to be removed)
 	CreatingRepo       bool
@@ -79,6 +112,15 @@ type ConfigureModel struct {
 	GitHubOwner      string
 	GitHubRepo       string
 	HasGitRemote     bool
+
+	// NPM package name validation
+	NPMNameStatus      string   // available, unavailable, checking, error
+	NPMNameSuggestions []string // Alternative names if unavailable
+	NPMNameError       string   // Error message if check failed
+
+	// NPM package name editing
+	NPMEditMode   bool
+	NPMNameInput  textinput.Model
 }
 
 // Distribution item for the list
@@ -170,8 +212,11 @@ func (i CleanupItem) Description() string {
 
 func (i CleanupItem) FilterValue() string { return i.Path }
 
-// saveConfig saves the current configuration to disk
 func (m *ConfigureModel) saveConfig() error {
+	return m.saveConfigWithRegenFlag(true)
+}
+
+func (m *ConfigureModel) saveConfigWithRegenFlag(needsRegen bool) error {
 	if m.ProjectConfig == nil || m.ProjectIdentifier == "" {
 		return fmt.Errorf("no project config to save")
 	}
@@ -243,6 +288,11 @@ func (m *ConfigureModel) saveConfig() error {
 		}
 	}
 
+	// Mark that regeneration is needed when config changes
+	if needsRegen {
+		m.NeedsRegeneration = true
+	}
+
 	// Save to disk
 	return config.SaveProject(m.ProjectConfig)
 }
@@ -274,6 +324,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 		Loading:           true,
 		GitHubAccounts:    githubAccounts,
 		ProjectConfig:     projectConfig,
+		DetectedProject:   detectedProject,
 		ProjectIdentifier: "",
 	}
 
@@ -303,6 +354,13 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	s.Spinner = spinner.MiniDot
 	m.CreateSpinner = s
 
+	// Initialize NPM package name input
+	npmInput := textinput.New()
+	npmInput.Placeholder = "package-name"
+	npmInput.CharLimit = 214 // npm package name limit
+	npmInput.Width = width - 8
+	m.NPMNameInput = npmInput
+
 	// Calculate list height more precisely
 	// Account for UI elements:
 	// - Header: 1 line
@@ -311,8 +369,20 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	// - Content box border: 2 lines (top + bottom)
 	// - Content padding: 2 lines (vertical padding restored)
 	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome
-	listHeight := m.Height - 13
+	// Total: 13 lines of chrome, +1 if warning shown, +3 to 7 for NPM status
+	chromeLines := 13
+	if m.NeedsRegeneration {
+		chromeLines = 14
+	}
+	// Add NPM status lines when on Distributions tab and status exists
+	// NPM status: 2 blank lines + status line = 3 lines minimum
+	// With suggestions: 2 blanks + status + 2 blanks + header + 3 suggestions + help = 10 lines
+	if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+		chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+	} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+		chromeLines += 3 // 2 blanks + status line
+	}
+	listHeight := m.Height - chromeLines
 	if listHeight < 5 {
 		listHeight = 5
 	}
@@ -336,60 +406,11 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	cleanupList.SetShowHelp(false)
 	m.Lists[0] = cleanupList
 
-	// Initialize distributions list (tab 1) - load from config
-	githubEnabled := true
-	homebrewEnabled := false
-	npmEnabled := false
-	goInstallEnabled := true
-	homebrewDesc := "Tap: not configured"
-	npmDesc := "Scope: not configured"
-
-	if projectConfig != nil && projectConfig.Config != nil {
-		if projectConfig.Config.Distributions.GitHubRelease != nil {
-			githubEnabled = projectConfig.Config.Distributions.GitHubRelease.Enabled
-		}
-		if projectConfig.Config.Distributions.Homebrew != nil {
-			homebrewEnabled = projectConfig.Config.Distributions.Homebrew.Enabled
-			if projectConfig.Config.Distributions.Homebrew.TapRepo != "" {
-				homebrewDesc = "Tap: " + projectConfig.Config.Distributions.Homebrew.TapRepo
-			}
-		}
-		if projectConfig.Config.Distributions.NPM != nil {
-			npmEnabled = projectConfig.Config.Distributions.NPM.Enabled
-			if projectConfig.Config.Distributions.NPM.PackageName != "" {
-				npmDesc = "Package: " + projectConfig.Config.Distributions.NPM.PackageName
-			}
-		}
-		if projectConfig.Config.Distributions.GoModule != nil {
-			goInstallEnabled = projectConfig.Config.Distributions.GoModule.Enabled
-		}
-	}
-
-	distributions := []list.Item{
-		DistributionItem{
-			Name:    "GitHub Releases",
-			Desc:    "Create releases on GitHub",
-			Enabled: githubEnabled,
-			Key:     "github",
-		},
-		DistributionItem{
-			Name:    "Homebrew",
-			Desc:    homebrewDesc,
-			Enabled: homebrewEnabled,
-			Key:     "homebrew",
-		},
-		DistributionItem{
-			Name:    "NPM Package",
-			Desc:    npmDesc,
-			Enabled: npmEnabled,
-			Key:     "npm",
-		},
-		DistributionItem{
-			Name:    "Go Install",
-			Desc:    "Enable 'go install' support",
-			Enabled: goInstallEnabled,
-			Key:     "go_install",
-		},
+	// Initialize distributions list (tab 1) - using centralized builder
+	distItems := BuildDistributionsList(projectConfig, detectedProject)
+	distributions := make([]list.Item, len(distItems))
+	for i, item := range distItems {
+		distributions[i] = item
 	}
 
 	distList := list.New(distributions, list.NewDefaultDelegate(), listWidth, listHeight)
@@ -611,8 +632,18 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	// Update list sizes based on current dimensions
 	if m.Width > 0 && m.Height > 0 {
-		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines
-		listHeight := m.Height - 13
+		// Same calculation as in NewConfigureModel - Total UI chrome: 13 lines, +1 if warning, +3 to 10 for NPM
+		chromeLines := 13
+		if m.NeedsRegeneration {
+			chromeLines = 14
+		}
+		// Add NPM status lines when on Distributions tab and status exists
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3 // 2 blanks + status line
+		}
+		listHeight := m.Height - chromeLines
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -636,7 +667,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		var cmd tea.Cmd
 		m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
 		// Only continue ticking if we're showing the spinner
-		if m.IsCreating || m.Loading {
+		if m.IsCreating || m.Loading || m.GeneratingFiles {
 			return m, cmd
 		}
 		return m, nil
@@ -648,7 +679,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 		// Create project config file if it doesn't exist
 		if m.ProjectConfig != nil && m.ProjectConfig.Project != nil {
-			m.saveConfig() // This will create the file if needed
+			m.saveConfigWithRegenFlag(false) // Don't trigger regen warning on initial load
 		}
 
 		return m, nil
@@ -667,14 +698,14 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			}
 			m.Lists[0].SetItems(m.loadGitStatus())
 			m.CreateStatus = "✓ Repository created successfully!"
-			// Clear status after 3 seconds
-			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			// Clear status after 1 second
+			return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 				return struct{}{}
 			})
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Failed: %v", msg.err)
-			// Clear status after 3 seconds
-			return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			// Clear status after 1 second
+			return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 				return struct{}{}
 			})
 		}
@@ -688,10 +719,36 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Push failed: %v", msg.err)
 		}
-		// Clear status after 3 seconds
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
+	case filesGeneratedMsg:
+		m.GeneratingFiles = false
+		if msg.err == nil {
+			m.GenerateStatus = "✓ Release files updated successfully!"
+			m.CurrentView = TabView
+			m.PendingGenerateFiles = nil
+			m.PendingDeleteFiles = nil
+			m.NeedsRegeneration = false
+			// Reload git status to show the newly generated files
+			m.Lists[0].SetItems(m.loadGitStatus())
+		} else {
+			m.GenerateStatus = fmt.Sprintf("✗ Generation failed: %v", msg.err)
+		}
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+			return struct{}{}
+		})
+	case npmNameCheckMsg:
+		m.NPMNameStatus = string(msg.result.Status)
+		m.NPMNameError = msg.result.Error
+		m.NPMNameSuggestions = msg.result.Suggestions
+
+		// No need to rebuild list - status shows below content box
+		// List items stay clean, status displayed separately like cleanup tab
+
+		return m, nil
 	case commitCompleteMsg:
 		m.IsCreating = false
 		if msg.err == nil {
@@ -706,8 +763,8 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		} else {
 			m.CreateStatus = fmt.Sprintf("✗ Commit failed: %v", msg.err)
 		}
-		// Clear status after 3 seconds
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		// Clear status after 1 second
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
 	case tea.WindowSizeMsg:
@@ -724,8 +781,18 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		// Update list sizes with same calculation as NewConfigureModel
-		// Total UI chrome: 13 lines
-		listHeight := height - 13
+		// Total UI chrome: 13 lines, +1 if warning, +3 to 10 for NPM
+		chromeLines := 13
+		if m.NeedsRegeneration {
+			chromeLines = 14
+		}
+		// Add NPM status lines when on Distributions tab and status exists
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3 // 2 blanks + status line
+		}
+		listHeight := height - chromeLines
 		if listHeight < 5 {
 			listHeight = 5
 		}
@@ -745,6 +812,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		if m.CommitModel != nil {
 			m.CommitModel.SetSize(listWidth, listHeight)
 		}
+		if m.SmartCommitPrefsModel != nil {
+			m.SmartCommitPrefsModel.SetSize(listWidth, listHeight)
+		}
 		for i := range m.Lists {
 			m.Lists[i].SetWidth(listWidth)
 			m.Lists[i].SetHeight(listHeight)
@@ -755,6 +825,53 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// Handle NPM name editing mode first
+		if m.NPMEditMode {
+			switch msg.String() {
+			case "enter":
+				// Save the new package name
+				newName := m.NPMNameInput.Value()
+				if newName != "" {
+					if m.ProjectConfig.Config.Distributions.NPM == nil {
+						m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
+					}
+					m.ProjectConfig.Config.Distributions.NPM.PackageName = newName
+					m.saveConfig()
+
+					// Rebuild distributions list with new package name
+					distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject)
+					listItems := make([]list.Item, len(distItems))
+					for i, item := range distItems {
+						listItems[i] = item
+					}
+					m.Lists[1].SetItems(listItems)
+
+					// Trigger name check
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+					m.NPMNameStatus = "checking"
+					m.NPMEditMode = false
+					m.NPMNameInput.Blur()
+					return m, checkNPMNameCmd(newName, username)
+				}
+				m.NPMEditMode = false
+				m.NPMNameInput.Blur()
+				return m, nil
+			case "esc":
+				// Cancel editing
+				m.NPMEditMode = false
+				m.NPMNameInput.Blur()
+				return m, nil
+			default:
+				// Pass to text input
+				var cmd tea.Cmd
+				m.NPMNameInput, cmd = m.NPMNameInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		// If we're on the cleanup tab and there are no changes, delegate navigation to the repo browser
 		if m.ActiveTab == 0 && m.CleanupModel != nil && !m.CleanupModel.HasChanges() {
 			// Check if this is a navigation key that should go to the repo browser
@@ -768,10 +885,55 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 		switch msg.String() {
 		case "tab":
+			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 1) % 4
+
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 {
+				m.Loading = true
+				listWidth := m.Width - 2
+				listHeight := m.Height - 13
+				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
+			}
+
+			// Check NPM name when entering Distributions tab
+			if m.ActiveTab == 1 && oldTab != 1 && m.NPMNameStatus == "" {
+				if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+					m.ProjectConfig.Config.Distributions.NPM != nil &&
+					m.ProjectConfig.Config.Distributions.NPM.Enabled {
+
+					packageName := m.ProjectConfig.Config.Distributions.NPM.PackageName
+					if packageName == "" && m.DetectedProject != nil {
+						if m.DetectedProject.Binary.Name != "" {
+							packageName = m.DetectedProject.Binary.Name
+						} else {
+							packageName = m.DetectedProject.Module.Name
+						}
+					}
+
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+
+					m.NPMNameStatus = "checking"
+					return m, checkNPMNameCmd(packageName, username)
+				}
+			}
+
 			return m, nil
 		case "shift+tab":
+			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 3) % 4
+
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 {
+				m.Loading = true
+				listWidth := m.Width - 2
+				listHeight := m.Height - 13
+				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
+			}
+
 			return m, nil
 		case " ", "space":
 			// Toggle the selected item
@@ -791,6 +953,36 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				currentList.SetItems(items)
 				// Save config after toggle
 				m.saveConfig()
+
+				// If NPM was just enabled, trigger name check immediately
+				if i.Key == "npm" && i.Enabled {
+					packageName := ""
+					if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+						m.ProjectConfig.Config.Distributions.NPM != nil {
+						packageName = m.ProjectConfig.Config.Distributions.NPM.PackageName
+					}
+					// If no package name yet, use project name
+					if packageName == "" && m.DetectedProject != nil {
+						if m.DetectedProject.Binary.Name != "" {
+							packageName = m.DetectedProject.Binary.Name
+						} else {
+							packageName = m.DetectedProject.Module.Name
+						}
+					}
+
+					username := ""
+					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
+						username = m.DetectedProject.Repository.Owner
+					}
+
+					m.NPMNameStatus = "checking"
+					return m, checkNPMNameCmd(packageName, username)
+				} else if i.Key == "npm" && !i.Enabled {
+					// NPM was disabled, clear status
+					m.NPMNameStatus = ""
+					m.NPMNameError = ""
+					m.NPMNameSuggestions = nil
+				}
 			} else if i, ok := currentList.SelectedItem().(BuildItem); ok {
 				i.Enabled = !i.Enabled
 				items := currentList.Items()
@@ -822,6 +1014,24 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 				items := currentList.Items()
 				items[currentList.Index()] = i
 				currentList.SetItems(items)
+			}
+			return m, nil
+		case "e":
+			// Edit package name when on NPM item in Distributions tab
+			if m.ActiveTab == 1 {
+				selectedItem := m.Lists[1].SelectedItem()
+				if dist, ok := selectedItem.(DistributionItem); ok && dist.Key == "npm" {
+					// Enter edit mode
+					m.NPMEditMode = true
+					currentName := ""
+					if m.ProjectConfig != nil && m.ProjectConfig.Config != nil &&
+						m.ProjectConfig.Config.Distributions.NPM != nil {
+						currentName = m.ProjectConfig.Config.Distributions.NPM.PackageName
+					}
+					m.NPMNameInput.SetValue(currentName)
+					m.NPMNameInput.Focus()
+					return m, nil
+				}
 			}
 			return m, nil
 		case "a":
@@ -874,7 +1084,7 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	// Model will be created in app.go with proper dimensions
 
 	switch msg := msg.(type) {
-	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg:
+	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg, filesGeneratedMsg:
 		// Pass these messages directly to the model's Update
 		if configModel != nil {
 			newModel, cmd := configModel.Update(msg)
@@ -943,6 +1153,22 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				configModel.CurrentView = TabView
 				return currentPage, false, nil, configModel
 			}
+		} else if configModel.CurrentView == GenerateConfigConsent {
+			switch msg.String() {
+			case "y", "Y":
+				// Start async file generation with spinner
+				configModel.GeneratingFiles = true
+				configModel.GenerateStatus = "Generating release files..."
+				return currentPage, false, tea.Batch(
+					configModel.CreateSpinner.Tick,
+					generateFilesCmd(configModel.DetectedProject, configModel.ProjectConfig, configModel.PendingGenerateFiles, configModel.PendingDeleteFiles),
+				), configModel
+			case "n", "N", "esc":
+				configModel.CurrentView = TabView
+				configModel.PendingGenerateFiles = nil
+				configModel.PendingDeleteFiles = nil
+				return currentPage, false, nil, configModel
+			}
 		} else if configModel.CurrentView == GitHubView {
 			switch msg.String() {
 			case "esc":
@@ -952,6 +1178,20 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			default:
 				newModel, cmd := configModel.GitHubModel.Update(msg)
 				configModel.GitHubModel = newModel
+				return currentPage, false, cmd, configModel
+			}
+		} else if configModel.CurrentView == SmartCommitPrefsView {
+			switch msg.String() {
+			case "esc":
+				configModel.CurrentView = TabView
+				// Save any changes before returning
+				if configModel.ProjectConfig != nil {
+					config.SaveProject(configModel.ProjectConfig)
+				}
+				return currentPage, false, nil, configModel
+			default:
+				newModel, cmd := configModel.SmartCommitPrefsModel.Update(msg)
+				configModel.SmartCommitPrefsModel = newModel
 				return currentPage, false, cmd, configModel
 			}
 		}
@@ -967,6 +1207,33 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				}
 				configModel.CurrentView = CommitView
 			}
+			return currentPage, false, nil, configModel
+		}
+
+		// Handle 'p' key to switch to Smart Commit Preferences view (only in TabView, Cleanup tab)
+		if msg.String() == "p" && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
+			// Initialize preferences model if needed
+			if configModel.SmartCommitPrefsModel == nil {
+				configModel.SmartCommitPrefsModel = NewSmartCommitPrefsModel(configModel.ProjectConfig, configModel.Width-2, configModel.Height-13)
+			}
+			configModel.CurrentView = SmartCommitPrefsView
+			return currentPage, false, nil, configModel
+		}
+
+		// Handle 'R' key to confirm and generate/regenerate release files (only in TabView, not on Cleanup tab)
+		if (msg.String() == "r" || msg.String() == "R") && configModel.CurrentView == TabView && configModel.ActiveTab != 0 {
+			missing := CheckMissingConfigFiles(configModel.DetectedProject, configModel.ProjectConfig)
+			if len(missing) > 0 {
+				// Files don't exist - show consent for creation
+				configModel.PendingGenerateFiles = missing
+				configModel.PendingDeleteFiles = nil
+			} else {
+				// Files exist - check what needs to be regenerated/deleted
+				changes := GetConfigFileChanges(configModel.DetectedProject, configModel.ProjectConfig)
+				configModel.PendingGenerateFiles = changes.FilesToGenerate
+				configModel.PendingDeleteFiles = changes.FilesToDelete
+			}
+			configModel.CurrentView = GenerateConfigConsent
 			return currentPage, false, nil, configModel
 		}
 
@@ -1114,6 +1381,11 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		case "q", "ctrl+c":
 			return currentPage, true, tea.Quit, configModel
 		case "esc":
+			// If in NPM edit mode, delegate to model's Update to handle cancellation
+			if configModel != nil && configModel.NPMEditMode {
+				newModel, cmd := configModel.Update(msg)
+				return currentPage, false, cmd, newModel
+			}
 			return 0, false, nil, configModel // back to projectView
 		case "r":
 			// Refresh git status in cleanup tab

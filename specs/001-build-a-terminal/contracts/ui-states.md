@@ -484,6 +484,56 @@ func (m Model) View() string {
 
 ### Planned Features 🔄
 
+#### Smart Commit Preferences Editor
+- **Location**: New tab in ConfigureView or separate Settings sub-view
+- **Purpose**: Allow per-project customization of file categorization rules
+- **Architecture**: Keep logic OUT of configure_handler.go - create separate `smart_commit_preferences_handler.go`
+- **Storage**: Project YAML file (~/.distui/projects/<id>/config.yaml) under `smart_commit` section
+- **Features**:
+  - Toggle use_custom_rules (enable/disable custom categorization)
+  - Edit extension lists for each category (config, code, docs, build, test, assets, data)
+  - Edit glob patterns for each category
+  - Preview how files would be categorized with custom rules
+  - Reset to defaults button
+  - Validate patterns before saving
+- **UI Layout**:
+  - List of categories on left (config, code, docs, build, test, assets, data)
+  - Selected category shows its extensions and patterns on right
+  - Add/remove extensions and patterns inline
+  - Live validation feedback
+- **Key Bindings**:
+  - [↑/↓] Navigate categories
+  - [→] Edit selected category
+  - [a] Add extension/pattern
+  - [d] Delete extension/pattern
+  - [r] Reset to defaults
+  - [s] Save preferences
+  - [Esc] Cancel/back
+
+#### GitHub Actions Workflow Generation
+- **Location**: New option in ConfigureView Advanced tab or CI/CD sub-tab
+- **Purpose**: Generate .github/workflows/release.yml for automated releases (opt-in)
+- **Philosophy**: Respect developer autonomy - make it EASY to opt-out, never force opinions
+- **Features**:
+  - Toggle workflow generation on/off
+  - Preview generated workflow before creating file
+  - Choose which distribution channels to include in workflow
+  - Configure workflow triggers (tags, manual dispatch, schedule)
+  - Specify required GitHub secrets (NPM_TOKEN, etc.)
+  - Auto-regenerate workflow when distribution config changes (optional)
+  - Show warning if secrets are missing
+- **UI States**:
+  - Disabled: Simple toggle with explanation "Generate CI/CD workflows"
+  - Enabled: Show workflow preview, generation status, regeneration warning
+  - Preview Mode: Full YAML preview with syntax highlighting
+  - Generation: Spinner while creating .github/workflows/release.yml
+- **Key Bindings**:
+  - [Space] Toggle workflow generation
+  - [p] Preview workflow
+  - [g] Generate/regenerate workflow
+  - [e] Edit workflow settings
+  - [Esc] Back
+
 #### Project View Redesign
 - **Current State**: Boilerplate placeholder content
 - **Needed**: Two distinct states based on configuration status

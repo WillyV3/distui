@@ -1,8 +1,8 @@
 
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Smart Commit Preferences & GitHub Workflow Generation
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `001-build-a-terminal` | **Date**: 2025-09-30 | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/Users/williamvansickleiii/charmtuitemplate/distui/distui-app/specs/001-build-a-terminal/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
@@ -31,23 +31,92 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-[Extract from feature spec: primary requirement + technical approach from research]
+
+This plan adds two major enhancements and one bug fix to the production-ready distui v0.0.31:
+
+1. **Smart Commit Preferences** (FR-040 to FR-047): Allow project-level customization of file categorization rules. Users can define custom file extensions and glob patterns for each category (config, code, docs, build, test, assets, data). Settings stored in project YAML, with implementation kept separate from configure_handler.go per user request.
+
+2. **GitHub Actions Workflow Generation** (FR-048 to FR-056): Optional/opt-in CI/CD workflow file generation. Respects developer autonomy - easy to disable, never forced. Generates .github/workflows/release.yml based on enabled distribution channels with preview before creation.
+
+3. **Bug Fix**: Fix handling of dot files/directories (e.g., .github, .goreleaser) in commit settings interface.
+
+Technical approach follows existing patterns: separate handlers for new features, YAML-based configuration, TUI forms for editing, constitutional compliance (no repository pollution except with consent, user agency preserved).
 
 ## Technical Context
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Go 1.21+
+**Primary Dependencies**: Bubble Tea v0.27.0, Lipgloss v0.13.0, yaml.v3, doublestar (glob matching)
+**Storage**: YAML files in ~/.distui/projects/<id>/config.yaml
+**Testing**: go test, table-driven tests
+**Target Platform**: Terminal (Linux, macOS, Windows with proper terminal emulator)
+**Project Type**: Single (TUI application)
+**Performance Goals**: <100ms UI response, <500ms config save, instant pattern validation
+**Constraints**: Files under 300 lines (strong refactoring target), no nested conditionals, separate handlers from configure_handler.go
+**Scale/Scope**: 3 new handlers (~200 lines each), 2 new models (~150 lines each), YAML contract updates, 1 bug fix
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+### Principle I: Pragmatic Repository Files ✅
+- Smart commit preferences stored in ~/.distui/projects/<id>/config.yaml (NOT in repository)
+- GitHub workflow generation creates .github/workflows/*.yml WITH EXPLICIT USER CONSENT
+- Workflow files are optional, user-controlled, and can be disabled
+- **PASS**: Follows constitution - no forced repository pollution
+
+### Principle II: 30-Second Release Execution ✅
+- New features don't impact release execution time
+- Configuration editing happens outside release workflow
+- **PASS**: No impact on release performance
+
+### Principle III: User Agency and Navigation Freedom ✅
+- Smart commit preferences are optional (defaults provided)
+- Workflow generation is opt-in (easy to disable)
+- No forced navigation paths or modes
+- **PASS**: User maintains full control
+
+### Principle IV: Stateful Global Intelligence ✅
+- Smart commit preferences per-project in ~/.distui/projects/
+- Settings persist and travel with developer
+- **PASS**: Follows global configuration pattern
+
+### Principle V: Clean Go Code Excellence ✅
+- New handlers separate from configure_handler.go per user request
+- Bubble Tea + Lipgloss for all UI
+- Self-documenting code, early returns, minimal nesting
+- **PASS**: Maintains code quality standards
+
+### Principle VI: Direct Command Execution ✅
+- No script generation (workflow files are YAML config, not scripts)
+- Pattern validation happens in-process
+- **PASS**: No intermediate execution layer
+
+### Principle VII: Developer Choice Architecture ✅
+- Supports BOTH local releases AND optional CI/CD generation
+- Workflow generation is opt-in, not required
+- **PASS**: Respects developer preference
+
+### Principle VIII: Smart Detection with Override ✅
+- Default categorization rules provided
+- Users can override any/all rules
+- **PASS**: Detection + override pattern followed
+
+### Principle IX: No Vendor Lock-in ✅
+- YAML configuration readable without distui
+- Workflow files are standard GitHub Actions YAML
+- **PASS**: No proprietary formats
+
+### Principle X: Clean Configuration Separation ✅
+- Smart commit preferences in project config (not global)
+- Workflow settings in project config
+- **PASS**: Clear boundaries maintained
+
+### Code Quality Standards ✅
+- Separate handlers for new features (not in configure_handler.go)
+- Files kept under 300 lines
+- Self-documenting names, no comments except API docs
+- Early returns, minimal nesting
+- **PASS**: Follows all quality standards
+
+**GATE STATUS: PASS** - All constitutional requirements met, no violations to document
 
 ## Project Structure
 
@@ -63,50 +132,38 @@ specs/[###-feature]/
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 ```
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
-
-tests/
-├── contract/
-├── integration/
-└── unit/
-
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
+distui-app/
+├── app.go                                    # Main TUI (no changes)
+├── go.mod                                    # Add doublestar dependency
+├── handlers/
+│   ├── configure_handler.go                 # Existing (minimal changes)
+│   ├── smart_commit_prefs_handler.go        # NEW: Smart commit preferences
+│   ├── workflow_gen_handler.go              # NEW: GitHub workflow generation
+│   └── cleanup_handler.go                   # FIX: Dot file handling bug
+├── views/
+│   ├── smart_commit_prefs_view.go           # NEW: Preferences UI
+│   └── workflow_gen_view.go                 # NEW: Workflow generation UI
+├── internal/
 │   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+│   │   └── types.go                         # UPDATE: Add SmartCommitPrefs, WorkflowConfig
+│   ├── config/
+│   │   └── loader.go                        # UPDATE: Load/save new config sections
+│   ├── gitcleanup/
+│   │   ├── categorize.go                    # UPDATE: Use custom rules if enabled
+│   │   └── dotfiles.go                      # NEW: Fix dot file handling
+│   └── workflow/
+│       ├── generator.go                     # NEW: Generate GitHub Actions YAML
+│       └── template.go                      # NEW: Workflow template
+└── specs/001-build-a-terminal/
+    ├── plan.md                              # This file
+    ├── research.md                          # Phase 0 output
+    ├── data-model.md                        # UPDATE: New entities
+    ├── contracts/                           # UPDATE: project.yaml already done
+    └── quickstart.md                        # Phase 1 output
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Single project TUI application. New features implemented as separate handlers and views following existing patterns. Bug fix isolated to gitcleanup package.
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
@@ -166,19 +223,71 @@ directories captured above]
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
 **Task Generation Strategy**:
-- Load `.specify/templates/tasks-template.md` as base
-- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
+
+1. **Setup Tasks**:
+   - T-SETUP-1: Add doublestar dependency to go.mod
+   - T-SETUP-2: Create internal/workflow package structure
+   - T-SETUP-3: Update internal/models/types.go with new structs
+
+2. **Bug Fix Tasks** (High Priority):
+   - T-BUG-1: Fix dot file handling in internal/gitcleanup/categorize.go
+   - T-BUG-2: Add test for dot file categorization
+
+3. **Smart Commit Preferences Tasks**:
+   - T-SCP-1: [P] Create CategoryRules model in internal/models/types.go
+   - T-SCP-2: [P] Add smart_commit section parsing to internal/config/loader.go
+   - T-SCP-3: [P] Create pattern matching logic with doublestar
+   - T-SCP-4: Update internal/gitcleanup/categorize.go to use custom rules
+   - T-SCP-5: Create handlers/smart_commit_prefs_handler.go
+   - T-SCP-6: Create views/smart_commit_prefs_view.go
+   - T-SCP-7: Integrate into Configure View Advanced tab
+   - T-SCP-8: Add default rules reset functionality
+   - T-SCP-9: [P] Write unit tests for pattern matching
+   - T-SCP-10: [P] Write integration tests for preferences UI
+
+4. **Workflow Generation Tasks**:
+   - T-WF-1: [P] Create internal/workflow/template.go with embedded YAML
+   - T-WF-2: [P] Create internal/workflow/generator.go
+   - T-WF-3: Add workflow_generation section parsing to config loader
+   - T-WF-4: Create handlers/workflow_gen_handler.go
+   - T-WF-5: Create views/workflow_gen_view.go
+   - T-WF-6: Integrate into Configure View Advanced tab
+   - T-WF-7: Add preview modal for workflow YAML
+   - T-WF-8: Add file generation with user consent
+   - T-WF-9: [P] Write tests for template generation
+   - T-WF-10: [P] Write tests for workflow validation
+
+5. **Integration Tasks**:
+   - T-INT-1: Update Configure View to handle Advanced tab expansion
+   - T-INT-2: Add navigation between smart commit prefs and workflow gen
+   - T-INT-3: Wire up save/load for both feature configs
+   - T-INT-4: Test full integration with existing features
+   - T-INT-5: Update quickstart.md scenarios
+
+6. **Polish Tasks**:
+   - T-POL-1: Add error handling for invalid patterns
+   - T-POL-2: Add loading states for async operations
+   - T-POL-3: Add keyboard shortcuts documentation
+   - T-POL-4: Performance testing for pattern matching
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
+- Setup first (dependencies, models)
+- Bug fix next (blocks smart commit improvements)
+- Features in parallel where independent
+- Integration after both features complete
+- Polish last
 
-**Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
+**Dependency Rules**:
+- T-SETUP-* must complete before feature tasks
+- T-BUG-* should complete before T-SCP-4
+- T-SCP-1,2,3 can run parallel
+- T-WF-1,2 can run parallel
+- T-SCP-5,6,7 depend on T-SCP-1,2,3,4
+- T-WF-4,5,6 depend on T-WF-1,2,3
+- T-INT-* depend on all feature tasks
+- T-POL-* can run parallel after integration
+
+**Estimated Output**: ~35 tasks in tasks.md
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
@@ -202,18 +311,28 @@ directories captured above]
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
-- [ ] Phase 3: Tasks generated (/tasks command)
+- [x] Phase 0: Research complete (/plan command) - research.md created
+- [x] Phase 1: Design complete (/plan command) - data-model.md updated, contracts updated, quickstart.md created, CLAUDE.md updated
+- [x] Phase 2: Task planning complete (/plan command - describe approach only) - 35 tasks planned
+- [ ] Phase 3: Tasks generated (/tasks command) - READY TO EXECUTE
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS - All 10 principles met
+- [x] Post-Design Constitution Check: PASS - No new violations
+- [x] All NEEDS CLARIFICATION resolved - No unknowns remain
+- [x] Complexity deviations documented - NONE (no violations)
+
+**Artifacts Created**:
+- [x] `/specs/001-build-a-terminal/plan.md` - This file
+- [x] `/specs/001-build-a-terminal/research.md` - Technical decisions documented
+- [x] `/specs/001-build-a-terminal/quickstart.md` - Integration test scenarios
+- [x] `/specs/001-build-a-terminal/data-model.md` - Updated with new entities (already existed)
+- [x] `/specs/001-build-a-terminal/contracts/project.yaml` - Updated with new config sections (already done)
+- [x] `/CLAUDE.md` - Updated with new dependencies
+
+**Ready for Next Phase**: Execute `/tasks` command to generate tasks.md
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.3.0 (TUI Layout Integrity) - See `.specify/memory/constitution.md`*
