@@ -1313,7 +1313,21 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 			return currentPage, false, cmd, configModel
 		}
+	case scanCompleteMsg:
+		// Route scan result to RepoCleanupModel
+		if configModel != nil && configModel.CurrentView == RepoCleanupView && configModel.RepoCleanupModel != nil {
+			newModel, cmd := configModel.RepoCleanupModel.Update(msg)
+			*configModel.RepoCleanupModel = newModel
+			configModel.ScanningRepo = false
+			return currentPage, false, cmd, configModel
+		}
 	case spinner.TickMsg:
+		// Route spinner to repo cleanup model if scanning
+		if configModel != nil && configModel.CurrentView == RepoCleanupView && configModel.RepoCleanupModel != nil {
+			newModel, cmd := configModel.RepoCleanupModel.Update(msg)
+			*configModel.RepoCleanupModel = newModel
+			return currentPage, false, cmd, configModel
+		}
 		// Route spinner to branch modal if showing
 		if configModel != nil && configModel.ShowingBranchModal && configModel.BranchModal != nil {
 			newModal, cmd := configModel.BranchModal.Update(msg)

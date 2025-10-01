@@ -66,7 +66,10 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	case handlers.SmartCommitPrefsView:
 		return RenderSmartCommitPrefs(configModel.SmartCommitPrefsModel)
 	case handlers.RepoCleanupView:
-		return RenderRepoCleanup(*configModel.RepoCleanupModel)
+		if configModel.RepoCleanupModel != nil {
+			return RenderRepoCleanup(*configModel.RepoCleanupModel)
+		}
+		return "Loading cleanup view..."
 	}
 
 	headerStyle := lipgloss.NewStyle().

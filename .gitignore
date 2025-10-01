@@ -2,6 +2,8 @@
 /.wishlist/
 /.claude/
 specs/
+.specify/
+node_modules/
 
 # Binaries and executables
 tuitemplate

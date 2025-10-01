@@ -55,6 +55,11 @@ func scanTrackedMedia(root string, result *models.CleanupScanResult) error {
 	}
 
 	for file := range ch {
+		// Skip node_modules, vendor, and other dependency directories
+		if shouldSkipPath(file.Path) {
+			continue
+		}
+
 		basename := filepath.Base(file.Path)
 		if isIconOrLogo(basename) {
 			continue
@@ -83,6 +88,11 @@ func scanTrackedDocs(root string, result *models.CleanupScanResult) error {
 	}
 
 	for file := range ch {
+		// Skip node_modules, vendor, and other dependency directories
+		if shouldSkipPath(file.Path) {
+			continue
+		}
+
 		info, _ := os.Stat(file.Path)
 		result.ExcessDocs = append(result.ExcessDocs, models.FlaggedFile{
 			Path:            file.Path,
@@ -163,6 +173,27 @@ func isIconOrLogo(filename string) bool {
 	return strings.Contains(lower, "icon") ||
 		strings.Contains(lower, "logo") ||
 		lower == "favicon.ico"
+}
+
+func shouldSkipPath(path string) bool {
+	// Skip dependency and build directories
+	skipDirs := []string{
+		"node_modules/",
+		"vendor/",
+		"dist/",
+		".next/",
+		"target/",
+		"build/",
+		".vendor/",
+	}
+
+	for _, dir := range skipDirs {
+		if strings.Contains(path, dir) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func calculateTotalSize(result *models.CleanupScanResult) int64 {
