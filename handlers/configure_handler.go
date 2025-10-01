@@ -1348,13 +1348,28 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 		} else if configModel.CurrentView == SmartCommitConfirm {
 			switch msg.String() {
 			case "y", "Y":
-				// User confirmed, categorize and commit auto files only
+				// Check if custom rules are enabled
+				customRulesEnabled := configModel.ProjectConfig != nil &&
+					configModel.ProjectConfig.Config != nil &&
+					configModel.ProjectConfig.Config.SmartCommit != nil &&
+					configModel.ProjectConfig.Config.SmartCommit.UseCustomRules
+
 				changes, _ := gitcleanup.GetFileChanges()
 				items := []gitcleanup.CleanupItem{}
 
 				for _, change := range changes {
-					category := gitcleanup.CategorizeFile(change.Path)
-					if category == gitcleanup.CategoryAuto {
+					category := gitcleanup.CategorizeFileWithConfig(change.Path, configModel.ProjectConfig)
+
+					// If custom rules enabled: commit all non-ignore files
+					// If custom rules disabled: only commit auto files (Go code)
+					shouldCommit := false
+					if customRulesEnabled {
+						shouldCommit = category != gitcleanup.CategoryIgnore
+					} else {
+						shouldCommit = category == gitcleanup.CategoryAuto
+					}
+
+					if shouldCommit {
 						items = append(items, gitcleanup.CleanupItem{
 							Path:     change.Path,
 							Status:   change.Status,
@@ -1367,7 +1382,11 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				if len(items) > 0 {
 					configModel.CurrentView = TabView
 					configModel.IsCreating = true
-					configModel.CreateStatus = "Committing auto-commit files..."
+					if customRulesEnabled {
+						configModel.CreateStatus = "Committing with custom rules..."
+					} else {
+						configModel.CreateStatus = "Committing auto-commit files..."
+					}
 					return currentPage, false, tea.Batch(
 						configModel.CreateSpinner.Tick,
 						smartCommitCmd(items),
