@@ -55,6 +55,11 @@ func (m BranchSelectionModel) Init() tea.Cmd {
 func (m BranchSelectionModel) Update(msg tea.Msg) (BranchSelectionModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Allow Esc even during loading
+		if msg.String() == "esc" {
+			return m, nil
+		}
+
 		if m.Loading {
 			return m, nil
 		}

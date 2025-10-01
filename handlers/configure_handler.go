@@ -1288,8 +1288,20 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	// Model will be created in app.go with proper dimensions
 
 	switch msg := msg.(type) {
-	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, spinner.TickMsg, filesGeneratedMsg:
+	case repoCreatedMsg, pushCompleteMsg, commitCompleteMsg, filesGeneratedMsg:
 		// Pass these messages directly to the model's Update
+		if configModel != nil {
+			newModel, cmd := configModel.Update(msg)
+			return currentPage, false, cmd, newModel
+		}
+	case spinner.TickMsg:
+		// Route spinner to branch modal if showing
+		if configModel != nil && configModel.ShowingBranchModal && configModel.BranchModal != nil {
+			newModal, cmd := configModel.BranchModal.Update(msg)
+			*configModel.BranchModal = newModal
+			return currentPage, false, cmd, configModel
+		}
+		// Otherwise pass to main model
 		if configModel != nil {
 			newModel, cmd := configModel.Update(msg)
 			return currentPage, false, cmd, newModel
@@ -1297,12 +1309,14 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 	case tea.KeyMsg:
 		// Handle branch modal first (highest priority when showing)
 		if configModel.ShowingBranchModal && configModel.BranchModal != nil {
+			newModal, cmd := configModel.BranchModal.Update(msg)
+			*configModel.BranchModal = newModal
+
+			// ESC closes modal immediately (handled in branch handler)
 			if msg.String() == "esc" {
 				configModel.ShowingBranchModal = false
 				return currentPage, false, nil, configModel
 			}
-			newModal, cmd := configModel.BranchModal.Update(msg)
-			*configModel.BranchModal = newModal
 
 			// Check if push completed successfully - close modal
 			if !configModel.BranchModal.Loading && configModel.BranchModal.Error == "" {
