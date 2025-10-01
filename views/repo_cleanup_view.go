@@ -26,52 +26,57 @@ func RenderRepoCleanup(m handlers.RepoCleanupModel) string {
 		return "\nNo scan results available. Press 'r' to scan.\n"
 	}
 
-	var b strings.Builder
+	chromeLines := 10
+	maxFileLines := m.Height - chromeLines
+	if maxFileLines < 5 {
+		maxFileLines = 5
+	}
 
+	var b strings.Builder
 	b.WriteString("\n┌─ REPOSITORY CLEANUP ─────────────────────────\n")
 	b.WriteString("│\n")
 
-	mediaCount := len(m.ScanResult.MediaFiles)
-	docsCount := len(m.ScanResult.ExcessDocs)
-	artifactsCount := len(m.ScanResult.DevArtifacts)
-
 	totalSize := humanizeBytes(m.ScanResult.TotalSizeBytes)
+	totalFiles := len(m.FlaggedFiles)
 
 	b.WriteString(fmt.Sprintf("│  %s (%d files, %s)\n",
 		mediaStyle.Render("Media Files"),
-		mediaCount,
+		len(m.ScanResult.MediaFiles),
 		humanizeBytes(calculateGroupSize(m.ScanResult.MediaFiles))))
 
+	linesUsed := 0
 	currentIndex := 0
-	for _, file := range m.ScanResult.MediaFiles {
-		renderFile(&b, currentIndex, file, m.SelectedIndex)
-		currentIndex++
+	visibleStart, visibleEnd := calculateVisibleRange(m.SelectedIndex, totalFiles, maxFileLines)
+
+	currentIndex = renderGroupPaginated(&b, m.ScanResult.MediaFiles, currentIndex, m.SelectedIndex,
+		visibleStart, visibleEnd, &linesUsed, maxFileLines)
+
+	if linesUsed < maxFileLines {
+		b.WriteString("│\n")
+		linesUsed++
+		b.WriteString(fmt.Sprintf("│  %s (%d files, %s)\n",
+			docsStyle.Render("Excess Docs"),
+			len(m.ScanResult.ExcessDocs),
+			humanizeBytes(calculateGroupSize(m.ScanResult.ExcessDocs))))
+		linesUsed++
+		currentIndex = renderGroupPaginated(&b, m.ScanResult.ExcessDocs, currentIndex, m.SelectedIndex,
+			visibleStart, visibleEnd, &linesUsed, maxFileLines)
+	}
+
+	if linesUsed < maxFileLines {
+		b.WriteString("│\n")
+		linesUsed++
+		b.WriteString(fmt.Sprintf("│  %s (%d files, %s)\n",
+			artifactsStyle.Render("Dev Artifacts"),
+			len(m.ScanResult.DevArtifacts),
+			humanizeBytes(calculateGroupSize(m.ScanResult.DevArtifacts))))
+		linesUsed++
+		renderGroupPaginated(&b, m.ScanResult.DevArtifacts, currentIndex, m.SelectedIndex,
+			visibleStart, visibleEnd, &linesUsed, maxFileLines)
 	}
 
 	b.WriteString("│\n")
-	b.WriteString(fmt.Sprintf("│  %s (%d files, %s)\n",
-		docsStyle.Render("Excess Docs"),
-		docsCount,
-		humanizeBytes(calculateGroupSize(m.ScanResult.ExcessDocs))))
-
-	for _, file := range m.ScanResult.ExcessDocs {
-		renderFile(&b, currentIndex, file, m.SelectedIndex)
-		currentIndex++
-	}
-
-	b.WriteString("│\n")
-	b.WriteString(fmt.Sprintf("│  %s (%d files, %s)\n",
-		artifactsStyle.Render("Dev Artifacts"),
-		artifactsCount,
-		humanizeBytes(calculateGroupSize(m.ScanResult.DevArtifacts))))
-
-	for _, file := range m.ScanResult.DevArtifacts {
-		renderFile(&b, currentIndex, file, m.SelectedIndex)
-		currentIndex++
-	}
-
-	b.WriteString("│\n")
-	b.WriteString(fmt.Sprintf("│  Total: %d files, %s\n", len(m.FlaggedFiles), totalSize))
+	b.WriteString(fmt.Sprintf("│  Total: %d files, %s\n", totalFiles, totalSize))
 	b.WriteString(fmt.Sprintf("│  Scan duration: %s\n", m.ScanResult.ScanDuration))
 	b.WriteString("│\n")
 	b.WriteString("│  [d] Delete  [i] Ignore  [a] Archive  [r] Re-scan  [Esc] Cancel\n")
@@ -99,6 +104,48 @@ func calculateGroupSize(files []models.FlaggedFile) int64 {
 		total += file.SizeBytes
 	}
 	return total
+}
+
+func calculateVisibleRange(selected, total, maxLines int) (int, int) {
+	if total <= maxLines {
+		return 0, total
+	}
+
+	start := selected - maxLines/2
+	if start < 0 {
+		start = 0
+	}
+
+	end := start + maxLines
+	if end > total {
+		end = total
+		start = end - maxLines
+		if start < 0 {
+			start = 0
+		}
+	}
+
+	return start, end
+}
+
+func renderGroupPaginated(b *strings.Builder, files []models.FlaggedFile,
+	startIndex, selectedIndex, visibleStart, visibleEnd int, linesUsed *int, maxLines int) int {
+
+	currentIndex := startIndex
+	for _, file := range files {
+		if *linesUsed >= maxLines {
+			break
+		}
+
+		if currentIndex >= visibleStart && currentIndex < visibleEnd {
+			renderFile(b, currentIndex, file, selectedIndex)
+			*linesUsed++
+		}
+
+		currentIndex++
+	}
+
+	return currentIndex
 }
 
 func humanizeBytes(bytes int64) string {

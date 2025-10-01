@@ -55,7 +55,6 @@ func scanTrackedMedia(root string, result *models.CleanupScanResult) error {
 	}
 
 	for file := range ch {
-		// Skip node_modules, vendor, and other dependency directories
 		if shouldSkipPath(file.Path) {
 			continue
 		}
@@ -65,7 +64,11 @@ func scanTrackedMedia(root string, result *models.CleanupScanResult) error {
 			continue
 		}
 
-		info, _ := os.Stat(file.Path)
+		info, err := os.Stat(file.Path)
+		if err != nil || shouldSkipPath(file.Path) {
+			continue
+		}
+
 		result.MediaFiles = append(result.MediaFiles, models.FlaggedFile{
 			Path:            file.Path,
 			IssueType:       "media",
@@ -88,12 +91,15 @@ func scanTrackedDocs(root string, result *models.CleanupScanResult) error {
 	}
 
 	for file := range ch {
-		// Skip node_modules, vendor, and other dependency directories
 		if shouldSkipPath(file.Path) {
 			continue
 		}
 
-		info, _ := os.Stat(file.Path)
+		info, err := os.Stat(file.Path)
+		if err != nil {
+			continue
+		}
+
 		result.ExcessDocs = append(result.ExcessDocs, models.FlaggedFile{
 			Path:            file.Path,
 			IssueType:       "excess-docs",
@@ -110,7 +116,15 @@ func scanTrackedDocs(root string, result *models.CleanupScanResult) error {
 	}
 
 	for file := range ch {
-		info, _ := os.Stat(file.Path)
+		if shouldSkipPath(file.Path) {
+			continue
+		}
+
+		info, err := os.Stat(file.Path)
+		if err != nil {
+			continue
+		}
+
 		result.ExcessDocs = append(result.ExcessDocs, models.FlaggedFile{
 			Path:            file.Path,
 			IssueType:       "excess-docs",

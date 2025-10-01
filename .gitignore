@@ -53,3 +53,4 @@ go.sum
 # Test coverage
 *.cover
 coverage.outascii-art-txt
+*.gif
