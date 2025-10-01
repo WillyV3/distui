@@ -1181,17 +1181,23 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				return currentPage, false, cmd, configModel
 			}
 		} else if configModel.CurrentView == SmartCommitPrefsView {
-			switch msg.String() {
-			case "esc":
-				configModel.CurrentView = TabView
-				// Save any changes before returning
-				if configModel.ProjectConfig != nil {
-					config.SaveProject(configModel.ProjectConfig)
-				}
-				return currentPage, false, nil, configModel
-			default:
+			// Always delegate to model first to handle edit mode transitions
+			if configModel.SmartCommitPrefsModel != nil {
+				// Check if we're in normal mode BEFORE processing ESC
+				wasInNormalMode := configModel.SmartCommitPrefsModel.EditMode == ModeNormal
+
 				newModel, cmd := configModel.SmartCommitPrefsModel.Update(msg)
 				configModel.SmartCommitPrefsModel = newModel
+
+				// Only exit to TabView if ESC was pressed while already in normal mode
+				if msg.String() == "esc" && wasInNormalMode {
+					configModel.CurrentView = TabView
+					// Save any changes before returning
+					if configModel.ProjectConfig != nil {
+						config.SaveProject(configModel.ProjectConfig)
+					}
+					return currentPage, false, nil, configModel
+				}
 				return currentPage, false, cmd, configModel
 			}
 		}
@@ -1386,7 +1392,16 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 				newModel, cmd := configModel.Update(msg)
 				return currentPage, false, cmd, newModel
 			}
-			return 0, false, nil, configModel // back to projectView
+			// If we're in a nested view, return to TabView (shouldn't normally reach here)
+			if configModel != nil && configModel.CurrentView != TabView {
+				configModel.CurrentView = TabView
+				if configModel.ProjectConfig != nil {
+					config.SaveProject(configModel.ProjectConfig)
+				}
+				return currentPage, false, nil, configModel
+			}
+			// From TabView, go back to project view
+			return 0, false, nil, configModel
 		case "r":
 			// Refresh git status in cleanup tab
 			if configModel != nil && configModel.ActiveTab == 0 {
