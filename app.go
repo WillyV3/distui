@@ -217,6 +217,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
 		m.configureModel = newConfigModel
+
+		// Sync currentProject with configureModel's updated ProjectConfig
+		if m.configureModel != nil && m.configureModel.ProjectConfig != nil {
+			m.currentProject = m.configureModel.ProjectConfig
+		}
+
 		return m, tea.Batch(cmd, pageCmd)
 	case newProjectView:
 		newPage, quitting, pageCmd := handlers.UpdateNewProjectView(int(m.currentPage), int(globalView), msg)
