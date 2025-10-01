@@ -78,11 +78,18 @@ func CreatePullRequest(targetBranch string) error {
 		return err
 	}
 
-	// Create PR using gh CLI
+	// Try to create PR using gh CLI
 	cmd := exec.Command("gh", "pr", "create", "--base", targetBranch, "--fill")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("creating PR to %s: %w\nOutput: %s", targetBranch, err, string(output))
+		// Check if error is because PR already exists
+		outputStr := string(output)
+		if strings.Contains(outputStr, "pull request already exists") ||
+		   strings.Contains(outputStr, "A pull request already exists") {
+			// PR exists - that's fine, we just pushed to it
+			return nil
+		}
+		return fmt.Errorf("creating PR to %s: %w\nOutput: %s", targetBranch, err, outputStr)
 	}
 
 	return nil
