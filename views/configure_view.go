@@ -46,6 +46,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 	// Check if we're in a sub-view
 	switch configModel.CurrentView {
+	case handlers.FirstTimeSetupView:
+		return RenderFirstTimeSetup(configModel)
 	case handlers.GitHubView:
 		return RenderGitHubManagement(configModel.GitHubModel)
 	case handlers.SmartCommitConfirm:

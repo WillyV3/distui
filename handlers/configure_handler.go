@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"distui/internal/config"
+	"distui/internal/detection"
 	"distui/internal/gitcleanup"
 	"distui/internal/models"
 )
@@ -35,6 +36,14 @@ type loadCompleteMsg struct {
 
 type filesGeneratedMsg struct {
 	err error
+}
+
+type distributionVerifiedMsg struct {
+	homebrewVersion string
+	homebrewExists  bool
+	npmVersion      string
+	npmExists       bool
+	err             error
 }
 
 func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
@@ -65,6 +74,7 @@ const (
 	SmartCommitConfirm
 	GenerateConfigConsent
 	SmartCommitPrefsView
+	FirstTimeSetupView
 )
 
 // ConfigureModel holds the state for the configure view
@@ -121,6 +131,17 @@ type ConfigureModel struct {
 	// NPM package name editing
 	NPMEditMode   bool
 	NPMNameInput  textinput.Model
+
+	// First-time setup for existing distributions
+	FirstTimeSetup          bool
+	HomebrewCheckEnabled    bool
+	NPMCheckEnabled         bool
+	HomebrewTapInput        textinput.Model
+	HomebrewFormulaInput    textinput.Model
+	NPMPackageInput         textinput.Model
+	FirstTimeSetupFocus     int // 0=homebrew checkbox, 1=tap, 2=formula, 3=npm checkbox, 4=package
+	VerifyingDistributions  bool
+	DistributionVerifyError string
 }
 
 // Distribution item for the list
@@ -471,6 +492,42 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	advList.SetShowHelp(false)
 	m.Lists[3] = advList
 
+	// Check if this is first-time setup (no saved config + has versions)
+	isFirstTime := projectConfig != nil && projectConfig.Project != nil &&
+		projectConfig.Project.DetectedAt != nil && projectConfig.Project.Module != nil &&
+		projectConfig.Project.Module.Version != "" && projectConfig.Project.Module.Version != "v0.0.1"
+
+	if isFirstTime {
+		m.FirstTimeSetup = true
+		m.CurrentView = FirstTimeSetupView
+
+		// Initialize Homebrew inputs with defaults
+		homebrewTap := textinput.New()
+		homebrewTap.Placeholder = "owner/repo"
+		homebrewTap.CharLimit = 100
+		homebrewTap.Width = 40
+		m.HomebrewTapInput = homebrewTap
+
+		homebrewFormula := textinput.New()
+		homebrewFormula.Placeholder = "formula-name"
+		homebrewFormula.CharLimit = 100
+		homebrewFormula.Width = 40
+		if detectedProject != nil && detectedProject.Binary != nil {
+			homebrewFormula.SetValue(detectedProject.Binary.Name)
+		}
+		m.HomebrewFormulaInput = homebrewFormula
+
+		// Initialize NPM input with default
+		npmPackage := textinput.New()
+		npmPackage.Placeholder = "package-name or @scope/package-name"
+		npmPackage.CharLimit = 214
+		npmPackage.Width = 40
+		if detectedProject != nil && detectedProject.Module != nil {
+			npmPackage.SetValue(detectedProject.Module.Name)
+		}
+		m.NPMPackageInput = npmPackage
+	}
+
 	// Cache GitHub status on initialization
 	m.refreshGitHubStatus()
 
@@ -482,6 +539,35 @@ func LoadCleanupCmd(width, height int) tea.Cmd {
 	return func() tea.Msg {
 		cleanupModel := NewCleanupModel(width, height)
 		return loadCompleteMsg{cleanupModel: cleanupModel}
+	}
+}
+
+// VerifyDistributionsCmd verifies existing homebrew/npm distributions
+func VerifyDistributionsCmd(checkHomebrew bool, homebrewTap, homebrewFormula string, checkNPM bool, npmPackage string) tea.Cmd {
+	return func() tea.Msg {
+		result := distributionVerifiedMsg{}
+
+		if checkHomebrew && homebrewTap != "" && homebrewFormula != "" {
+			info, err := detection.VerifyHomebrewFormula(homebrewTap, homebrewFormula)
+			if err != nil {
+				result.err = err
+				return result
+			}
+			result.homebrewExists = info.Exists
+			result.homebrewVersion = info.Version
+		}
+
+		if checkNPM && npmPackage != "" {
+			info, err := detection.VerifyNPMPackage(npmPackage)
+			if err != nil {
+				result.err = err
+				return result
+			}
+			result.npmExists = info.Exists
+			result.npmVersion = info.Version
+		}
+
+		return result
 	}
 }
 
@@ -528,6 +614,111 @@ func regularCommitCmd(files []string, message string) tea.Cmd {
 		}
 
 		return commitCompleteMsg{message: message}
+	}
+}
+
+// handleFirstTimeSetupKeys handles keyboard input for first-time setup wizard
+func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureModel, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Skip setup and go to normal view
+		m.FirstTimeSetup = false
+		m.CurrentView = TabView
+		return m, nil
+
+	case "up", "k":
+		if m.FirstTimeSetupFocus > 0 {
+			m.FirstTimeSetupFocus--
+			// Skip tap/formula fields if homebrew unchecked
+			if !m.HomebrewCheckEnabled && m.FirstTimeSetupFocus == 2 {
+				m.FirstTimeSetupFocus = 0
+			}
+			if !m.HomebrewCheckEnabled && m.FirstTimeSetupFocus == 1 {
+				m.FirstTimeSetupFocus = 0
+			}
+			// Skip package field if npm unchecked
+			if !m.NPMCheckEnabled && m.FirstTimeSetupFocus == 4 {
+				m.FirstTimeSetupFocus = 3
+			}
+		}
+		return m, nil
+
+	case "down", "j":
+		maxFocus := 4
+		if m.FirstTimeSetupFocus < maxFocus {
+			m.FirstTimeSetupFocus++
+			// Skip tap/formula fields if homebrew unchecked
+			if !m.HomebrewCheckEnabled && m.FirstTimeSetupFocus == 1 {
+				m.FirstTimeSetupFocus = 3
+			}
+			if !m.HomebrewCheckEnabled && m.FirstTimeSetupFocus == 2 {
+				m.FirstTimeSetupFocus = 3
+			}
+			// Skip package field if npm unchecked
+			if !m.NPMCheckEnabled && m.FirstTimeSetupFocus == 4 {
+				m.FirstTimeSetupFocus = 0
+			}
+		}
+		return m, nil
+
+	case "tab":
+		// Cycle through all fields
+		m.FirstTimeSetupFocus = (m.FirstTimeSetupFocus + 1) % 5
+		// Skip disabled fields
+		if !m.HomebrewCheckEnabled && (m.FirstTimeSetupFocus == 1 || m.FirstTimeSetupFocus == 2) {
+			m.FirstTimeSetupFocus = 3
+		}
+		if !m.NPMCheckEnabled && m.FirstTimeSetupFocus == 4 {
+			m.FirstTimeSetupFocus = 0
+		}
+		return m, nil
+
+	case " ", "space":
+		// Toggle checkboxes
+		if m.FirstTimeSetupFocus == 0 {
+			m.HomebrewCheckEnabled = !m.HomebrewCheckEnabled
+			if m.HomebrewCheckEnabled {
+				m.HomebrewTapInput.Focus()
+			}
+		} else if m.FirstTimeSetupFocus == 3 {
+			m.NPMCheckEnabled = !m.NPMCheckEnabled
+			if m.NPMCheckEnabled {
+				m.NPMPackageInput.Focus()
+			}
+		}
+		return m, nil
+
+	case "enter":
+		// Verify distributions if at least one is checked
+		if !m.HomebrewCheckEnabled && !m.NPMCheckEnabled {
+			return m, nil
+		}
+
+		m.VerifyingDistributions = true
+		m.DistributionVerifyError = ""
+
+		return m, tea.Batch(
+			m.CreateSpinner.Tick,
+			VerifyDistributionsCmd(
+				m.HomebrewCheckEnabled,
+				m.HomebrewTapInput.Value(),
+				m.HomebrewFormulaInput.Value(),
+				m.NPMCheckEnabled,
+				m.NPMPackageInput.Value(),
+			),
+		)
+
+	default:
+		// Handle text input
+		var cmd tea.Cmd
+		if m.FirstTimeSetupFocus == 1 {
+			m.HomebrewTapInput, cmd = m.HomebrewTapInput.Update(msg)
+		} else if m.FirstTimeSetupFocus == 2 {
+			m.HomebrewFormulaInput, cmd = m.HomebrewFormulaInput.Update(msg)
+		} else if m.FirstTimeSetupFocus == 4 {
+			m.NPMPackageInput, cmd = m.NPMPackageInput.Update(msg)
+		}
+		return m, cmd
 	}
 }
 
@@ -740,6 +931,44 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
 			return struct{}{}
 		})
+	case distributionVerifiedMsg:
+		m.VerifyingDistributions = false
+		if msg.err != nil {
+			m.DistributionVerifyError = msg.err.Error()
+			return m, nil
+		}
+
+		// Update project config with detected versions
+		if msg.homebrewExists && msg.homebrewVersion != "" {
+			if m.ProjectConfig.Config.Distributions.Homebrew == nil {
+				m.ProjectConfig.Config.Distributions.Homebrew = &models.HomebrewConfig{}
+			}
+			m.ProjectConfig.Config.Distributions.Homebrew.Enabled = true
+			m.ProjectConfig.Config.Distributions.Homebrew.TapRepo = m.HomebrewTapInput.Value()
+			m.ProjectConfig.Config.Distributions.Homebrew.FormulaName = m.HomebrewFormulaInput.Value()
+			if m.ProjectConfig.Project != nil && m.ProjectConfig.Project.Module != nil {
+				m.ProjectConfig.Project.Module.Version = msg.homebrewVersion
+			}
+		}
+
+		if msg.npmExists && msg.npmVersion != "" {
+			if m.ProjectConfig.Config.Distributions.NPM == nil {
+				m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
+			}
+			m.ProjectConfig.Config.Distributions.NPM.Enabled = true
+			m.ProjectConfig.Config.Distributions.NPM.PackageName = m.NPMPackageInput.Value()
+			if m.ProjectConfig.Project != nil && m.ProjectConfig.Project.Module != nil {
+				if msg.homebrewVersion == "" {
+					m.ProjectConfig.Project.Module.Version = msg.npmVersion
+				}
+			}
+		}
+
+		// Save config and return to normal view
+		m.FirstTimeSetup = false
+		m.CurrentView = TabView
+		config.SaveProject(m.ProjectConfig)
+		return m, nil
 	case npmNameCheckMsg:
 		m.NPMNameStatus = string(msg.result.Status)
 		m.NPMNameError = msg.result.Error
@@ -825,6 +1054,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.Initialized = true
 
 	case tea.KeyMsg:
+		// Handle first-time setup view
+		if m.CurrentView == FirstTimeSetupView {
+			return m.handleFirstTimeSetupKeys(msg)
+		}
+
 		// Handle NPM name editing mode first
 		if m.NPMEditMode {
 			switch msg.String() {
