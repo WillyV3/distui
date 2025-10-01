@@ -4,6 +4,8 @@
 specs/
 .specify/
 node_modules/
+docs/
+examples/
 
 # Binaries and executables
 tuitemplate
