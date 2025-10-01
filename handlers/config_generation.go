@@ -3,7 +3,9 @@ package handlers
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"distui/internal/detection"
 	"distui/internal/generator"
 	"distui/internal/models"
 )
@@ -52,12 +54,19 @@ func GenerateConfigFiles(detectedProject *models.ProjectInfo, projectConfig *mod
 	}
 
 	for _, fileName := range files {
+		fullPath := filepath.Join(detectedProject.Path, fileName)
+
+		// Check if file exists and is NOT distui-generated (custom config)
+		if detection.IsCustomConfig(fullPath) {
+			return fmt.Errorf("%s exists and appears to be custom. distui will use it as-is for releases. To regenerate, delete it first or use 'Force Regenerate'", fileName)
+		}
+
 		if fileName == ".goreleaser.yaml" {
 			content, err := generator.GenerateGoReleaserConfig(detectedProject, projectConfig)
 			if err != nil {
 				return err
 			}
-			// Allow overwrite for regeneration
+			// Safe to overwrite - file doesn't exist or is distui-generated
 			if err := generator.WriteGoReleaserConfigForce(detectedProject.Path, content); err != nil {
 				return err
 			}
@@ -66,7 +75,7 @@ func GenerateConfigFiles(detectedProject *models.ProjectInfo, projectConfig *mod
 			if err != nil {
 				return err
 			}
-			// Allow overwrite for regeneration
+			// Safe to overwrite - file doesn't exist or is distui-generated
 			if err := generator.WritePackageJSONForce(detectedProject.Path, content); err != nil {
 				return err
 			}
@@ -133,8 +142,10 @@ func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *mo
 		}
 	}
 
-	// Check if .goreleaser.yaml exists
+	// Check if .goreleaser.yaml exists and if it's custom
 	goreleaserExists := false
+	goreleaserIsCustom := false
+	var goreleaserPath string
 	goreleaserPaths := []string{
 		projectPath + "/.goreleaser.yaml",
 		projectPath + "/.goreleaser.yml",
@@ -142,12 +153,17 @@ func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *mo
 	for _, p := range goreleaserPaths {
 		if _, err := os.Stat(p); err == nil {
 			goreleaserExists = true
+			goreleaserPath = p
+			goreleaserIsCustom = detection.IsCustomConfig(p)
 			break
 		}
 	}
 
 	// Determine GoReleaser action
-	if needsGoreleaser {
+	// If file is custom, don't suggest regeneration or deletion
+	if goreleaserIsCustom {
+		// Custom file - leave it alone, don't suggest any changes
+	} else if needsGoreleaser {
 		changes.FilesToGenerate = append(changes.FilesToGenerate, ".goreleaser.yaml")
 	} else if goreleaserExists {
 		changes.FilesToDelete = append(changes.FilesToDelete, ".goreleaser.yaml")
@@ -161,14 +177,20 @@ func GetConfigFileChanges(detectedProject *models.ProjectInfo, projectConfig *mo
 		npmEnabled = true
 	}
 
-	// Check if package.json exists
+	// Check if package.json exists and if it's custom
+	packageJsonPath := projectPath + "/package.json"
 	packageJsonExists := false
-	if _, err := os.Stat(projectPath + "/package.json"); err == nil {
+	packageJsonIsCustom := false
+	if _, err := os.Stat(packageJsonPath); err == nil {
 		packageJsonExists = true
+		packageJsonIsCustom = detection.IsCustomConfig(packageJsonPath)
 	}
 
 	// Determine package.json action
-	if npmEnabled {
+	// If file is custom, don't suggest regeneration or deletion
+	if packageJsonIsCustom {
+		// Custom file - leave it alone, don't suggest any changes
+	} else if npmEnabled {
 		changes.FilesToGenerate = append(changes.FilesToGenerate, "package.json")
 	} else if packageJsonExists {
 		changes.FilesToDelete = append(changes.FilesToDelete, "package.json")

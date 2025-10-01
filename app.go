@@ -206,10 +206,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// If first-time setup, also trigger auto-detection
 			if m.configureModel.FirstTimeSetup {
 				detectionCmd := handlers.StartDistributionDetectionCmd(m.detectedProject, m.globalConfig)
-				return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), detectionCmd, tea.ClearScreen)
+				return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), detectionCmd, handlers.RefreshGitHubStatusCmd(), tea.ClearScreen)
 			}
 
-			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), tea.ClearScreen)
+			return m, tea.Batch(cmd, pageCmd, m.configureModel.CreateSpinner.Tick, handlers.LoadCleanupCmd(listWidth, listHeight), handlers.RefreshGitHubStatusCmd(), tea.ClearScreen)
 		}
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting

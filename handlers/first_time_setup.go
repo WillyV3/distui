@@ -22,23 +22,27 @@ func StartDistributionDetectionCmd(detectedProject *models.ProjectInfo, globalCo
 
 	// First check for existing .goreleaser.yaml and package.json
 	if detectedProject.Path != "" {
-		goreleaserConfig, _ := detection.DetectGoReleaserConfig(detectedProject.Path)
-		packageJSON, _ := detection.DetectPackageJSON(detectedProject.Path)
-
-		if goreleaserConfig != nil && goreleaserConfig.HasHomebrew {
+		goreleaserConfig, err := detection.DetectGoReleaserConfig(detectedProject.Path)
+		// Debug: Log detection results
+		// fmt.Printf("DEBUG: GoReleaser detection - err: %v, config: %+v\n", err, goreleaserConfig)
+		if err == nil && goreleaserConfig != nil && goreleaserConfig.HasHomebrew {
 			homebrewTap = goreleaserConfig.HomebrewTap
 			homebrewFormula = goreleaserConfig.FormulaName
 			homebrewFromFile = true
+			// Debug: Log detected values
+			// fmt.Printf("DEBUG: Detected Homebrew - Tap: %s, Formula: %s\n", homebrewTap, homebrewFormula)
 		}
 
-		if packageJSON != nil && packageJSON.Name != "" {
+		packageJSON, err := detection.DetectPackageJSON(detectedProject.Path)
+		if err == nil && packageJSON != nil && packageJSON.Name != "" {
 			npmPackage = packageJSON.Name
 			npmScopedPackage = packageJSON.Name
 			npmFromFile = true
 		}
 	}
 
-	// Fall back to global config if not found in files
+	// Fall back to global config ONLY for Homebrew (not found in .goreleaser.yaml)
+	// NPM: If package.json doesn't exist, assume NO npm distribution
 	if homebrewTap == "" && globalConfig != nil && globalConfig.User.DefaultHomebrewTap != "" {
 		homebrewTap = globalConfig.User.DefaultHomebrewTap
 	}
@@ -47,12 +51,8 @@ func StartDistributionDetectionCmd(detectedProject *models.ProjectInfo, globalCo
 		homebrewFormula = detectedProject.Binary.Name
 	}
 
-	if npmPackage == "" && detectedProject.Module != nil {
-		npmPackage = detectedProject.Module.Name
-		if globalConfig != nil && globalConfig.User.NPMScope != "" {
-			npmScopedPackage = "@" + globalConfig.User.NPMScope + "/" + detectedProject.Module.Name
-		}
-	}
+	// NPM fallback logic REMOVED - if package.json doesn't exist, no npm distribution
+	// npmPackage and npmScopedPackage stay empty if npmFromFile is false
 
 	return DetectDistributionsCmd(homebrewTap, homebrewFormula, homebrewFromFile, npmPackage, npmScopedPackage, npmFromFile)
 }
@@ -65,46 +65,56 @@ func DetectDistributionsCmd(homebrewTap, homebrewFormula string, homebrewFromFil
 			npmFromFile:      npmFromFile,
 		}
 
-		// Try Homebrew tap if configured
-		if homebrewTap != "" && homebrewFormula != "" {
+		// If detected from file, always include the config
+		if homebrewFromFile && homebrewTap != "" && homebrewFormula != "" {
+			result.homebrewTap = homebrewTap
+			result.homebrewFormula = homebrewFormula
+			result.homebrewExists = false
+
+			// Try to verify if it actually exists in registry
+			info, err := detection.VerifyHomebrewFormula(homebrewTap, homebrewFormula)
+			if err == nil && info.Exists {
+				result.homebrewVersion = info.Version
+				result.homebrewExists = true
+			}
+		} else if homebrewTap != "" && homebrewFormula != "" {
+			// Not from file, try to verify in registry
 			info, err := detection.VerifyHomebrewFormula(homebrewTap, homebrewFormula)
 			if err == nil && info.Exists {
 				result.homebrewTap = homebrewTap
 				result.homebrewFormula = homebrewFormula
 				result.homebrewVersion = info.Version
 				result.homebrewExists = true
-			} else if homebrewFromFile {
-				// Even if not published yet, if from file, include the config
-				result.homebrewTap = homebrewTap
-				result.homebrewFormula = homebrewFormula
-				result.homebrewExists = false
 			}
 		}
 
-		// Try NPM package (with scope first, then without)
-		if npmScopedPackage != "" {
-			info, err := detection.VerifyNPMPackage(npmScopedPackage)
-			if err == nil && info.Exists {
-				result.npmPackage = npmScopedPackage
-				result.npmVersion = info.Version
-				result.npmExists = true
-			} else if npmFromFile {
-				// Even if not published yet, if from file, include the config
-				result.npmPackage = npmScopedPackage
-				result.npmExists = false
+		// Handle NPM package detection
+		// If detected from package.json, assume it's theirs (don't check registry)
+		// Registry check is only for name conflict detection in Distributions tab
+		if npmFromFile && npmScopedPackage != "" {
+			result.npmPackage = npmScopedPackage
+			result.npmExists = false // Don't check registry - it's their package.json
+		} else if npmFromFile && npmPackage != "" {
+			result.npmPackage = npmPackage
+			result.npmExists = false // Don't check registry - it's their package.json
+		} else {
+			// Not from file, try to verify in registry (fallback only)
+			if npmScopedPackage != "" {
+				info, err := detection.VerifyNPMPackage(npmScopedPackage)
+				if err == nil && info.Exists {
+					result.npmPackage = npmScopedPackage
+					result.npmVersion = info.Version
+					result.npmExists = true
+				}
 			}
-		}
 
-		if !result.npmExists && npmPackage != "" {
-			info, err := detection.VerifyNPMPackage(npmPackage)
-			if err == nil && info.Exists {
-				result.npmPackage = npmPackage
-				result.npmVersion = info.Version
-				result.npmExists = true
-			} else if npmFromFile {
-				// Even if not published yet, if from file, include the config
-				result.npmPackage = npmPackage
-				result.npmExists = false
+			if !result.npmExists && npmPackage != "" {
+				info, err := detection.VerifyNPMPackage(npmPackage)
+				if err == nil && info.Exists {
+					result.npmPackage = npmPackage
+					result.npmVersion = info.Version
+					result.npmExists = true
+				}
 			}
 		}
 

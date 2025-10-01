@@ -2,6 +2,7 @@ package handlers
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"distui/internal/detection"
 	"distui/internal/models"
 )
 
@@ -50,11 +51,29 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 		case "s":
 			return 2, false, tea.ClearScreen, releaseModel // settingsView
 		case "r":
-			// Block release if config needs regeneration
-			if configureModel != nil && configureModel.NeedsRegeneration {
-				// Don't start release - user must regenerate files first
+			// Only block release if files are MISSING, not if they're custom
+			// Check if required files exist (custom or distui-generated)
+			hasGoreleaser := false
+			if configureModel != nil && configureModel.DetectedProject != nil {
+				goreleaserPaths := []string{
+					configureModel.DetectedProject.Path + "/.goreleaser.yaml",
+					configureModel.DetectedProject.Path + "/.goreleaser.yml",
+				}
+				for _, p := range goreleaserPaths {
+					if detection.FileExists(p) {
+						hasGoreleaser = true
+						break
+					}
+				}
+			}
+
+			// Block only if .goreleaser.yaml is completely missing
+			if !hasGoreleaser {
+				// Missing required files - can't release
 				return currentPage, false, nil, releaseModel
 			}
+
+			// Files exist (custom or distui-generated) - allow release
 			if releaseModel != nil {
 				releaseModel.Phase = models.PhaseVersionSelect
 				releaseModel.SelectedVersion = 0

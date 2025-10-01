@@ -57,6 +57,13 @@ type distributionDetectedMsg struct {
 	npmFromFile       bool // Detected from package.json
 }
 
+type githubStatusMsg struct {
+	hasRemote  bool
+	owner      string
+	repo       string
+	repoExists bool
+}
+
 func generateFilesCmd(detectedProject *models.ProjectInfo, projectConfig *models.ProjectConfig, filesToGenerate []string, filesToDelete []string) tea.Cmd {
 	return func() tea.Msg {
 		// Delete files first
@@ -548,8 +555,8 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 		m.CurrentView = FirstTimeSetupView
 	}
 
-	// Cache GitHub status on initialization
-	m.refreshGitHubStatus()
+	// Don't cache GitHub status synchronously - will be loaded async
+	// m.refreshGitHubStatus()  // REMOVED: causes 500ms lag on view switch
 
 	return m
 }
@@ -559,6 +566,25 @@ func LoadCleanupCmd(width, height int) tea.Cmd {
 	return func() tea.Msg {
 		cleanupModel := NewCleanupModel(width, height)
 		return loadCompleteMsg{cleanupModel: cleanupModel}
+	}
+}
+
+// RefreshGitHubStatusCmd loads GitHub status asynchronously (non-blocking)
+func RefreshGitHubStatusCmd() tea.Cmd {
+	return func() tea.Msg {
+		msg := githubStatusMsg{}
+
+		if gitcleanup.HasGitRepo() && gitcleanup.HasGitHubRemote() {
+			msg.hasRemote = true
+			owner, repo, err := gitcleanup.GetRepoInfo()
+			if err == nil {
+				msg.owner = owner
+				msg.repo = repo
+				msg.repoExists = gitcleanup.CheckGitHubRepoExists()
+			}
+		}
+
+		return msg
 	}
 }
 
@@ -760,6 +786,15 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		return m, nil
+
+	case githubStatusMsg:
+		// Update GitHub status from async load (non-blocking)
+		m.HasGitRemote = msg.hasRemote
+		m.GitHubOwner = msg.owner
+		m.GitHubRepo = msg.repo
+		m.GitHubRepoExists = msg.repoExists
+		return m, nil
+
 	case repoCreatedMsg:
 		m.IsCreating = false
 		if msg.err == nil {
@@ -836,34 +871,53 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		npmPackage.CharLimit = 214
 		npmPackage.Width = 40
 
-		// If we found distributions OR config files, populate and go to confirmation
-		if msg.homebrewExists || msg.npmExists || msg.homebrewFromFile || msg.npmFromFile {
-			m.AutoDetected = true
-			m.HomebrewDetectedFromFile = msg.homebrewFromFile
-			m.NPMDetectedFromFile = msg.npmFromFile
-
-			// Enable Homebrew if found in registry OR in .goreleaser.yaml
-			if msg.homebrewExists || msg.homebrewFromFile {
-				if msg.homebrewTap != "" && msg.homebrewFormula != "" {
-					m.HomebrewCheckEnabled = true
-					homebrewTap.SetValue(msg.homebrewTap)
-					homebrewFormula.SetValue(msg.homebrewFormula)
-				}
+		// If we found config files (.goreleaser.yaml or package.json), skip first-time setup
+		// These files mean the user already has distributions configured
+		if msg.homebrewFromFile || msg.npmFromFile {
+			// Files exist - populate config and skip to normal view
+			if msg.homebrewFromFile && msg.homebrewTap != "" && msg.homebrewFormula != "" {
+				homebrewTap.SetValue(msg.homebrewTap)
+				homebrewFormula.SetValue(msg.homebrewFormula)
+				m.HomebrewCheckEnabled = true
 			}
 
-			// Enable NPM if found in registry OR in package.json
-			if msg.npmExists || msg.npmFromFile {
-				if msg.npmPackage != "" {
-					m.NPMCheckEnabled = true
-					npmPackage.SetValue(msg.npmPackage)
-				}
+			if msg.npmFromFile && msg.npmPackage != "" {
+				npmPackage.SetValue(msg.npmPackage)
+				m.NPMCheckEnabled = true
 			}
 
 			m.HomebrewTapInput = homebrewTap
 			m.HomebrewFormulaInput = homebrewFormula
 			m.NPMPackageInput = npmPackage
 
-			// Go straight to confirmation
+			// Skip first-time setup - go straight to normal view
+			m.FirstTimeSetup = false
+			m.CurrentView = TabView
+			m.ProjectConfig.FirstTimeSetupCompleted = true
+		} else if msg.homebrewExists || msg.npmExists {
+			// Found in registry but no config files - show confirmation
+			m.AutoDetected = true
+			m.HomebrewDetectedFromFile = msg.homebrewFromFile
+			m.NPMDetectedFromFile = msg.npmFromFile
+
+			// Enable Homebrew if found in registry
+			if msg.homebrewExists && msg.homebrewTap != "" && msg.homebrewFormula != "" {
+				m.HomebrewCheckEnabled = true
+				homebrewTap.SetValue(msg.homebrewTap)
+				homebrewFormula.SetValue(msg.homebrewFormula)
+			}
+
+			// Enable NPM if found in registry
+			if msg.npmExists && msg.npmPackage != "" {
+				m.NPMCheckEnabled = true
+				npmPackage.SetValue(msg.npmPackage)
+			}
+
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+
+			// Go to confirmation screen
 			m.FirstTimeSetupConfirmation = true
 		} else {
 			// Nothing found, show manual input screen
