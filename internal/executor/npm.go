@@ -153,15 +153,17 @@ func PublishToNPM(projectPath, version, packageName string, outputChan chan<- st
 		return err
 	}
 
-	if err := publisher.Publish(outputChan); err != nil {
-		return err
-	}
-
+	// CRITICAL: Commit package.json version bump BEFORE publishing
+	// This ensures the version bump is committed even if NPM publish fails
 	outputChan <- "Committing package.json version bump..."
 	if err := publisher.CommitAndPush(); err != nil {
 		return fmt.Errorf("committing version bump: %w", err)
 	}
 	outputChan <- "✓ Committed and pushed package.json"
+
+	if err := publisher.Publish(outputChan); err != nil {
+		return err
+	}
 
 	return nil
 }
