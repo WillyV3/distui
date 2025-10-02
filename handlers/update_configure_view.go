@@ -447,8 +447,8 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			// From TabView, go back to project view
 			return 0, false, nil, configModel
 		case "r":
-			// Refresh git status in cleanup tab
-			if configModel != nil && configModel.ActiveTab == 0 {
+			// Refresh git status in cleanup tab (only in TabView)
+			if configModel != nil && configModel.CurrentView == TabView && configModel.ActiveTab == 0 {
 				configModel.refreshGitHubStatus()
 				configModel.Lists[0].SetItems(configModel.loadGitStatus())
 				if configModel.CleanupModel != nil {
@@ -457,8 +457,8 @@ func UpdateConfigureView(currentPage, previousPage int, msg tea.Msg, configModel
 			}
 			return currentPage, false, nil, configModel
 		case "s":
-			// Show smart commit confirmation
-			if configModel != nil && configModel.ActiveTab == 0 && !configModel.IsCreating {
+			// Show smart commit confirmation (only in TabView)
+			if configModel != nil && configModel.CurrentView == TabView && configModel.ActiveTab == 0 && !configModel.IsCreating {
 				if configModel.CleanupModel != nil && configModel.CleanupModel.HasChanges() {
 					// Switch to confirmation view
 					configModel.CurrentView = SmartCommitConfirm

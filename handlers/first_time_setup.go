@@ -246,6 +246,7 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		return m, nil
 
 	case "up", "k":
+		oldFocus := m.FirstTimeSetupFocus
 		if m.FirstTimeSetupFocus > 0 {
 			m.FirstTimeSetupFocus--
 			// Skip tap/formula fields if homebrew unchecked
@@ -260,9 +261,11 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 				m.FirstTimeSetupFocus = 3
 			}
 		}
+		m.updateInputFocus(oldFocus)
 		return m, nil
 
 	case "down", "j":
+		oldFocus := m.FirstTimeSetupFocus
 		maxFocus := 4
 		if m.FirstTimeSetupFocus < maxFocus {
 			m.FirstTimeSetupFocus++
@@ -278,9 +281,11 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 				m.FirstTimeSetupFocus = 0
 			}
 		}
+		m.updateInputFocus(oldFocus)
 		return m, nil
 
 	case "tab":
+		oldFocus := m.FirstTimeSetupFocus
 		// Cycle through all fields
 		m.FirstTimeSetupFocus = (m.FirstTimeSetupFocus + 1) % 5
 		// Skip disabled fields
@@ -290,6 +295,7 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		if !m.NPMCheckEnabled && m.FirstTimeSetupFocus == 4 {
 			m.FirstTimeSetupFocus = 0
 		}
+		m.updateInputFocus(oldFocus)
 		return m, nil
 
 	case " ", "space":
@@ -326,5 +332,28 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 			m.NPMPackageInput, cmd = m.NPMPackageInput.Update(msg)
 		}
 		return m, cmd
+	}
+}
+
+// updateInputFocus manages focus for text inputs based on FirstTimeSetupFocus
+func (m *ConfigureModel) updateInputFocus(oldFocus int) {
+	// Blur old input
+	switch oldFocus {
+	case 1:
+		m.HomebrewTapInput.Blur()
+	case 2:
+		m.HomebrewFormulaInput.Blur()
+	case 4:
+		m.NPMPackageInput.Blur()
+	}
+
+	// Focus new input
+	switch m.FirstTimeSetupFocus {
+	case 1:
+		m.HomebrewTapInput.Focus()
+	case 2:
+		m.HomebrewFormulaInput.Focus()
+	case 4:
+		m.NPMPackageInput.Focus()
 	}
 }
