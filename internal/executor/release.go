@@ -236,13 +236,12 @@ func (r *ReleaseExecutor) failureResult(startTime time.Time, step string, err er
 }
 
 func (r *ReleaseExecutor) countSteps() int {
+	// Base steps: preflight, tag, goreleaser
 	steps := 3
 	if !r.config.SkipTests {
 		steps++
 	}
-	if r.config.EnableHomebrew {
-		steps++
-	}
+	// Homebrew is NOT a separate step - it's handled by GoReleaser's brews config
 	if r.config.EnableNPM {
 		steps++
 	}
