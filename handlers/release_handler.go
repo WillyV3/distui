@@ -127,6 +127,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 	changelogInput := textinput.New()
 	changelogInput.Placeholder = "What's changed in this release?"
 	changelogInput.CharLimit = 500
+	changelogInput.Width = 60
 
 	return &ReleaseModel{
 		Phase:           models.PhaseVersionSelect,
@@ -155,19 +156,29 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 }
 
 func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		return m.handleKeyPress(msg)
+		updatedModel, cmd := m.handleKeyPress(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		m = updatedModel
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.Spinner, cmd = m.Spinner.Update(msg)
-		return m, cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case progress.FrameMsg:
 		progressModel, cmd := m.Progress.Update(msg)
 		m.Progress = progressModel.(progress.Model)
-		return m, cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case ProgressTickMsg:
 		// Gradually increment progress while release is running
@@ -238,6 +249,27 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		}
 		return m, tea.Batch(m.Spinner.Tick, tickProgress())
 
+	default:
+		// Always update textinputs with all messages (needed for cursor blink)
+		var versionCmd, changelogCmd tea.Cmd
+		m.VersionInput, versionCmd = m.VersionInput.Update(msg)
+		m.ChangelogInput, changelogCmd = m.ChangelogInput.Update(msg)
+		if versionCmd != nil {
+			cmds = append(cmds, versionCmd)
+		}
+		if changelogCmd != nil {
+			cmds = append(cmds, changelogCmd)
+		}
+	}
+
+	if len(cmds) > 0 {
+		return m, tea.Batch(cmds...)
+	}
+	return m, nil
+}
+
+func (m *ReleaseModel) regularUpdate(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
+	switch msg := msg.(type) {
 	case models.ReleasePhaseCompleteMsg:
 		// Map phase to package index
 		var pkgIdx int
