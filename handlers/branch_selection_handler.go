@@ -36,7 +36,7 @@ type pushResultMsg struct {
 
 func NewBranchSelectionModel(width, height int) BranchSelectionModel {
 	s := spinner.New()
-	s.Spinner = spinner.Dot
+	s.Spinner = spinner.MiniDot
 
 	chrome := 4
 	listHeight := height - chrome
@@ -83,8 +83,6 @@ func (m BranchSelectionModel) Update(msg tea.Msg) (BranchSelectionModel, tea.Cmd
 				selectedBranch := m.Branches[m.SelectedIndex]
 
 				m.Pushing = true
-				m.LoadSpinner = spinner.New()
-				m.LoadSpinner.Spinner = spinner.Dot
 
 				// Determine action based on selected branch
 				if selectedBranch.IsCurrent {
