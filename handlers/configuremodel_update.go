@@ -65,6 +65,12 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.GitHubOwner = msg.owner
 		m.GitHubRepo = msg.repo
 		m.GitHubRepoExists = msg.repoExists
+
+		// Refresh cleanup model to reflect updated GitHub status
+		if m.CleanupModel != nil {
+			m.CleanupModel.Refresh()
+		}
+
 		return m, nil
 
 	case repoCreatedMsg:
@@ -596,13 +602,18 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 1) % 4
 
-			// Refresh cleanup tab when entering it (only if not loaded yet)
-			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel == nil {
-				m.Loading = true
-				m.refreshGitHubStatus()
-				listWidth := m.Width - 2
-				listHeight := m.Height - 13
-				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 {
+				if m.CleanupModel == nil {
+					// First time - load everything
+					m.Loading = true
+					listWidth := m.Width - 2
+					listHeight := m.Height - 13
+					return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight), RefreshGitHubStatusCmd())
+				} else {
+					// Already loaded - just refresh GitHub status asynchronously
+					return m, RefreshGitHubStatusCmd()
+				}
 			}
 
 			// NPM name checking removed from tab switch for performance
@@ -624,13 +635,18 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			oldTab := m.ActiveTab
 			m.ActiveTab = (m.ActiveTab + 3) % 4
 
-			// Refresh cleanup tab when entering it (only if not loaded yet)
-			if m.ActiveTab == 0 && oldTab != 0 && m.CleanupModel == nil {
-				m.Loading = true
-				m.refreshGitHubStatus()
-				listWidth := m.Width - 2
-				listHeight := m.Height - 13
-				return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight))
+			// Refresh cleanup tab when entering it
+			if m.ActiveTab == 0 && oldTab != 0 {
+				if m.CleanupModel == nil {
+					// First time - load everything
+					m.Loading = true
+					listWidth := m.Width - 2
+					listHeight := m.Height - 13
+					return m, tea.Batch(m.CreateSpinner.Tick, LoadCleanupCmd(listWidth, listHeight), RefreshGitHubStatusCmd())
+				} else {
+					// Already loaded - just refresh GitHub status asynchronously
+					return m, RefreshGitHubStatusCmd()
+				}
 			}
 
 			return m, nil

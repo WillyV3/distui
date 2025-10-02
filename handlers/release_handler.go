@@ -386,12 +386,18 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Update changelog input if changelog is enabled and a version is selected (not Configure Project)
+		// Update changelog input if enabled and a version is selected (not Configure Project, not Custom)
 		needsChangelog := false
 		if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
 			needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
 		}
+
+		// DEBUG
+		fmt.Printf("handleKeyPress: ProjectConfig=%v, needsChangelog=%v, SelectedVersion=%d\n",
+			m.ProjectConfig != nil, needsChangelog, m.SelectedVersion)
+
 		if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
+			fmt.Printf("PASSING KEY TO CHANGELOG INPUT\n")
 			var cmd tea.Cmd
 			m.ChangelogInput, cmd = m.ChangelogInput.Update(msg)
 			return m, cmd
