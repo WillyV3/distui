@@ -127,6 +127,16 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 	case distributionDetectedMsg:
 		m.DetectingDistributions = false
 
+		// Apply fallbacks for missing values
+		detectedHomebrewTap := msg.homebrewTap
+		detectedHomebrewFormula := msg.homebrewFormula
+		detectedNPMPackage := msg.npmPackage
+
+		// Fallback: Use binary name for formula if empty
+		if detectedHomebrewFormula == "" && m.DetectedProject != nil && m.DetectedProject.Binary != nil {
+			detectedHomebrewFormula = m.DetectedProject.Binary.Name
+		}
+
 		// Initialize text inputs
 		homebrewTap := textinput.New()
 		homebrewTap.Placeholder = "owner/repo"
@@ -171,9 +181,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.HomebrewTapInput = homebrewTap
 			m.HomebrewFormulaInput = homebrewFormula
 			m.NPMPackageInput = npmPackage
-			homebrewTap.SetValue(msg.homebrewTap)
-			homebrewFormula.SetValue(msg.homebrewFormula)
-			npmPackage.SetValue(msg.npmPackage)
+			homebrewTap.SetValue(detectedHomebrewTap)
+			homebrewFormula.SetValue(detectedHomebrewFormula)
+			npmPackage.SetValue(detectedNPMPackage)
 			if msg.homebrewFromFile {
 				m.HomebrewCheckEnabled = true
 			}
@@ -199,9 +209,9 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			return m, nil
 		} else if msg.homebrewFromFile || msg.npmFromFile {
 			// Files are distui-generated or don't exist - safe to skip setup
-			if msg.homebrewFromFile && msg.homebrewTap != "" && msg.homebrewFormula != "" {
-				homebrewTap.SetValue(msg.homebrewTap)
-				homebrewFormula.SetValue(msg.homebrewFormula)
+			if msg.homebrewFromFile && detectedHomebrewTap != "" && detectedHomebrewFormula != "" {
+				homebrewTap.SetValue(detectedHomebrewTap)
+				homebrewFormula.SetValue(detectedHomebrewFormula)
 				m.HomebrewCheckEnabled = true
 
 				// Save Homebrew config
@@ -209,12 +219,12 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 					m.ProjectConfig.Config.Distributions.Homebrew = &models.HomebrewConfig{}
 				}
 				m.ProjectConfig.Config.Distributions.Homebrew.Enabled = true
-				m.ProjectConfig.Config.Distributions.Homebrew.TapRepo = msg.homebrewTap
-				m.ProjectConfig.Config.Distributions.Homebrew.FormulaName = msg.homebrewFormula
+				m.ProjectConfig.Config.Distributions.Homebrew.TapRepo = detectedHomebrewTap
+				m.ProjectConfig.Config.Distributions.Homebrew.FormulaName = detectedHomebrewFormula
 			}
 
-			if msg.npmFromFile && msg.npmPackage != "" {
-				npmPackage.SetValue(msg.npmPackage)
+			if msg.npmFromFile && detectedNPMPackage != "" {
+				npmPackage.SetValue(detectedNPMPackage)
 				m.NPMCheckEnabled = true
 
 				// Save NPM package name to config
@@ -222,7 +232,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 					m.ProjectConfig.Config.Distributions.NPM = &models.NPMConfig{}
 				}
 				m.ProjectConfig.Config.Distributions.NPM.Enabled = true
-				m.ProjectConfig.Config.Distributions.NPM.PackageName = msg.npmPackage
+				m.ProjectConfig.Config.Distributions.NPM.PackageName = detectedNPMPackage
 			}
 
 			m.HomebrewTapInput = homebrewTap
@@ -243,16 +253,16 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.NPMDetectedFromFile = msg.npmFromFile
 
 			// Enable Homebrew if found in registry
-			if msg.homebrewExists && msg.homebrewTap != "" && msg.homebrewFormula != "" {
+			if msg.homebrewExists && detectedHomebrewTap != "" && detectedHomebrewFormula != "" {
 				m.HomebrewCheckEnabled = true
-				homebrewTap.SetValue(msg.homebrewTap)
-				homebrewFormula.SetValue(msg.homebrewFormula)
+				homebrewTap.SetValue(detectedHomebrewTap)
+				homebrewFormula.SetValue(detectedHomebrewFormula)
 			}
 
 			// Enable NPM if found in registry
-			if msg.npmExists && msg.npmPackage != "" {
+			if msg.npmExists && detectedNPMPackage != "" {
 				m.NPMCheckEnabled = true
-				npmPackage.SetValue(msg.npmPackage)
+				npmPackage.SetValue(detectedNPMPackage)
 			}
 
 			m.HomebrewTapInput = homebrewTap
@@ -266,17 +276,20 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 			m.AutoDetected = false
 
 			// Prefill with defaults from global config and detected project
-			if m.GlobalConfig != nil && m.GlobalConfig.User.DefaultHomebrewTap != "" {
+			if detectedHomebrewTap != "" {
+				homebrewTap.SetValue(detectedHomebrewTap)
+			} else if m.GlobalConfig != nil && m.GlobalConfig.User.DefaultHomebrewTap != "" {
 				homebrewTap.SetValue(m.GlobalConfig.User.DefaultHomebrewTap)
 			}
 
-			if m.DetectedProject != nil {
-				if m.DetectedProject.Binary != nil {
-					homebrewFormula.SetValue(m.DetectedProject.Binary.Name)
-				}
-				if m.DetectedProject.Module != nil {
-					npmPackage.SetValue(m.DetectedProject.Module.Name)
-				}
+			if detectedHomebrewFormula != "" {
+				homebrewFormula.SetValue(detectedHomebrewFormula)
+			}
+
+			if detectedNPMPackage != "" {
+				npmPackage.SetValue(detectedNPMPackage)
+			} else if m.DetectedProject != nil && m.DetectedProject.Module != nil {
+				npmPackage.SetValue(m.DetectedProject.Module.Name)
 			}
 
 			m.HomebrewTapInput = homebrewTap
