@@ -84,11 +84,11 @@ func RenderGlobalContent(projects []models.ProjectConfig, selectedIndex int, det
 		}
 	} else {
 		content.WriteString(projectStyle.Render("  No projects detected yet") + "\n")
-		content.WriteString(projectStyle.Render("  Press [D] to detect & import distributions") + "\n")
+		content.WriteString(projectStyle.Render("  Press [D] to detect & import from NPM and Homebrew") + "\n")
 	}
 
 	if detecting {
-		content.WriteString("\n" + spinnerView + " Detecting distributions...\n")
+		content.WriteString("\n" + spinnerView + " Searching Homebrew & NPM for your distributions...\n")
 	} else if status != "" {
 		statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Padding(0, 1)
 		content.WriteString("\n" + statusStyle.Render(status) + "\n")
