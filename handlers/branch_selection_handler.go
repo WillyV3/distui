@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"sort"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/spinner"
 
@@ -106,7 +108,27 @@ func (m BranchSelectionModel) Update(msg tea.Msg) (BranchSelectionModel, tea.Cmd
 		if msg.err != nil {
 			m.Error = msg.err.Error()
 		} else {
-			m.Branches = msg.branches
+			// Sort branches: main/master first, then alphabetically
+			branches := msg.branches
+			sort.Slice(branches, func(i, j int) bool {
+				// Main always first
+				if branches[i].Name == "main" {
+					return true
+				}
+				if branches[j].Name == "main" {
+					return false
+				}
+				// Master second (if no main)
+				if branches[i].Name == "master" {
+					return true
+				}
+				if branches[j].Name == "master" {
+					return false
+				}
+				// Rest alphabetically
+				return branches[i].Name < branches[j].Name
+			})
+			m.Branches = branches
 			if len(m.Branches) > 0 {
 				m.SelectedIndex = 0
 			}
