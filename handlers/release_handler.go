@@ -339,10 +339,24 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 			progressPercent = float64(len(m.Installed)) / float64(len(m.Packages))
 		}
 		progressCmd := m.Progress.SetPercent(progressPercent)
+		cmds = append(cmds, progressCmd)
 
-		return m, progressCmd
+	default:
+		// Always update textinputs with all messages (needed for cursor blink)
+		var versionCmd, changelogCmd tea.Cmd
+		m.VersionInput, versionCmd = m.VersionInput.Update(msg)
+		m.ChangelogInput, changelogCmd = m.ChangelogInput.Update(msg)
+		if versionCmd != nil {
+			cmds = append(cmds, versionCmd)
+		}
+		if changelogCmd != nil {
+			cmds = append(cmds, changelogCmd)
+		}
 	}
 
+	if len(cmds) > 0 {
+		return m, tea.Batch(cmds...)
+	}
 	return m, nil
 }
 
