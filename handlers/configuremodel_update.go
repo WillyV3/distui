@@ -31,7 +31,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		var cmd tea.Cmd
 		m.CreateSpinner, cmd = m.CreateSpinner.Update(msg)
 		// Only continue ticking if we're showing the spinner
-		if m.IsCreating || m.Loading || m.GeneratingFiles {
+		if m.IsCreating || m.Loading || m.GeneratingFiles || m.NPMNameStatus == "checking" {
 			return m, cmd
 		}
 		return m, nil
@@ -511,7 +511,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 					m.NPMNameStatus = "checking"
 					m.NPMEditMode = false
 					m.NPMNameInput.Blur()
-					return m, checkNPMNameCmd(newName, username)
+					return m, tea.Batch(m.CreateSpinner.Tick, checkNPMNameCmd(newName, username))
 				}
 				m.NPMEditMode = false
 				m.NPMNameInput.Blur()
@@ -639,7 +639,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 					}
 
 					m.NPMNameStatus = "checking"
-					return m, checkNPMNameCmd(packageName, username)
+					return m, tea.Batch(m.CreateSpinner.Tick, checkNPMNameCmd(packageName, username))
 				} else if i.Key == "npm" && !i.Enabled {
 					// NPM was disabled, clear status
 					m.NPMNameStatus = ""
