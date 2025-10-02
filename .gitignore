@@ -56,3 +56,6 @@ go.sum
 *.cover
 coverage.outascii-art-txt
 *.gif
+
+# distui internal backups (auto-managed)
+.distui-backup/

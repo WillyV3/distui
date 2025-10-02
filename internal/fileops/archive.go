@@ -9,6 +9,7 @@ import (
 
 // ArchiveCustomFiles moves specified files to .distui-backup/<timestamp>/ directory.
 // Returns the backup path and any error.
+// Note: .distui-backup/ files are automatically ignored by IsWorkingTreeClean() for releases.
 func ArchiveCustomFiles(projectPath string, files []string) (string, error) {
 	timestamp := time.Now().Format("20060102-150405.000000")
 	backupDir := filepath.Join(projectPath, ".distui-backup", timestamp)

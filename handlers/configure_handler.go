@@ -705,24 +705,22 @@ func (m *ConfigureModel) loadGitStatus() []list.Item {
 	items := []list.Item{}
 
 	// Add GitHub repo creation option if needed
+	// Use CACHED data to avoid expensive git/API calls every 2 seconds
 	if gitcleanup.HasGitRepo() {
-		if !gitcleanup.HasGitHubRemote() {
+		if !m.HasGitRemote {
 			items = append(items, CleanupItem{
 				Path:     "Create GitHub repository",
 				Status:   "+",
 				Category: "github-new",
 				Action:   "skip",
 			})
-		} else if !gitcleanup.CheckGitHubRepoExists() {
-			owner, repo, err := gitcleanup.GetRepoInfo()
-			if err == nil && owner != "" && repo != "" {
-				items = append(items, CleanupItem{
-					Path:     fmt.Sprintf("Push to github.com/%s/%s", owner, repo),
-					Status:   "↑",
-					Category: "github-push",
-					Action:   "skip",
-				})
-			}
+		} else if !m.GitHubRepoExists && m.GitHubOwner != "" && m.GitHubRepo != "" {
+			items = append(items, CleanupItem{
+				Path:     fmt.Sprintf("Push to github.com/%s/%s", m.GitHubOwner, m.GitHubRepo),
+				Status:   "↑",
+				Category: "github-push",
+				Action:   "skip",
+			})
 		}
 	}
 
