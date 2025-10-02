@@ -309,6 +309,8 @@ func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
 		MarginLeft(2)
 
 	subtleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	configureStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")) // Teal/cyan color for configure
+	configureSelectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
 
 	content.WriteString(headerStyle.Render("SELECT RELEASE VERSION") + "\n\n")
 	content.WriteString(fieldStyle.Render(fmt.Sprintf("Current: %s", m.CurrentVersion)) + "\n\n")
@@ -318,15 +320,27 @@ func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
 		"Minor (new features)",
 		"Major (breaking changes)",
 		"Custom version",
+		"Configure Project",
 	}
 
 	for i, ver := range versions {
 		prefix := "  "
 		style := actionStyle
-		if i == m.SelectedVersion {
-			prefix = "> "
-			style = selectedStyle
+
+		// Special styling for Configure Project (item 4)
+		if i == 4 {
+			style = configureStyle
+			if i == m.SelectedVersion {
+				prefix = "> "
+				style = configureSelectedStyle
+			}
+		} else {
+			if i == m.SelectedVersion {
+				prefix = "> "
+				style = selectedStyle
+			}
 		}
+
 		content.WriteString(style.Render(prefix+ver) + "\n")
 	}
 

@@ -330,7 +330,7 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 				m.SelectedVersion--
 			}
 		case "down", "j":
-			if m.SelectedVersion < 3 {
+			if m.SelectedVersion < 4 {
 				m.SelectedVersion++
 			}
 		case "enter":

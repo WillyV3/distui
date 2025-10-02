@@ -65,6 +65,9 @@ func RenderReleaseContent(releaseModel *handlers.ReleaseModel) string {
 func RenderVersionSelection(m *handlers.ReleaseModel) string {
 	var content strings.Builder
 
+	configureStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")) // Teal/cyan color for configure
+	configureSelectedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+
 	content.WriteString(releaseHeaderStyle.Render("SELECT RELEASE VERSION") + "\n\n")
 	content.WriteString(releaseFieldStyle.Render(fmt.Sprintf("Current Version: %s", m.CurrentVersion)) + "\n\n")
 
@@ -73,15 +76,27 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 		"Minor (new features)",
 		"Major (breaking changes)",
 		"Custom version",
+		"Configure Project",
 	}
 
 	for i, ver := range versions {
 		prefix := "  "
 		style := releaseActionStyle
-		if i == m.SelectedVersion {
-			prefix = "> "
-			style = releaseSelectedStyle
+
+		// Special styling for Configure Project (item 4)
+		if i == 4 {
+			style = configureStyle
+			if i == m.SelectedVersion {
+				prefix = "> "
+				style = configureSelectedStyle
+			}
+		} else {
+			if i == m.SelectedVersion {
+				prefix = "> "
+				style = releaseSelectedStyle
+			}
 		}
+
 		content.WriteString(style.Render(prefix+ver) + "\n")
 	}
 
