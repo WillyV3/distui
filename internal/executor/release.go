@@ -27,6 +27,7 @@ type ReleaseConfig struct {
 	RepoOwner      string
 	RepoName       string
 	ProjectName    string
+	Changelog      string
 }
 
 type ExecutionResult struct {
@@ -130,7 +131,7 @@ func (r *ReleaseExecutor) ExecuteReleasePhasesWithOutput(ctx context.Context, ou
 		// Run GoReleaser
 		sendOutput("Running GoReleaser...")
 		phaseStart = time.Now()
-		goreleaserCmd := RunGoReleaserWithOutput(ctx, r.projectPath, r.config.Version, outputChan)
+		goreleaserCmd := RunGoReleaserWithOutput(ctx, r.projectPath, r.config.Version, outputChan, r.config.Changelog)
 		msg := goreleaserCmd()
 		if err, ok := msg.(error); ok {
 			sendOutput("✗ GoReleaser failed: " + err.Error())

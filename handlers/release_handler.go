@@ -469,6 +469,7 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 		RepoOwner:      m.RepoOwner,
 		RepoName:       m.RepoName,
 		ProjectName:    m.ProjectName,
+		Changelog:      m.Changelog,
 	}
 
 	// Start with the progress at 0

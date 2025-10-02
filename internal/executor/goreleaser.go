@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -64,7 +65,7 @@ func RunGoReleaser(ctx context.Context, projectPath string, version string) tea.
 	}
 }
 
-func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version string, outputChan chan<- string) tea.Cmd {
+func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version string, outputChan chan<- string, changelog string) tea.Cmd {
 	return func() tea.Msg {
 		if !CheckGoReleaserInstalled() {
 			return fmt.Errorf("goreleaser not installed - install from https://goreleaser.com")
@@ -110,7 +111,20 @@ func RunGoReleaserWithOutput(ctx context.Context, projectPath string, version st
 		}
 
 		// Create the actual release command
-		cmd := exec.Command(goreleaserCmd, "release", "--clean")
+		args := []string{"release", "--clean"}
+
+		// Add release notes if changelog is provided
+		if changelog != "" {
+			// Write changelog to a temporary file
+			changelogFile := filepath.Join(projectPath, ".release-notes.tmp")
+			if err := os.WriteFile(changelogFile, []byte(changelog), 0644); err == nil {
+				args = append(args, "--release-notes", changelogFile)
+				// Clean up the temp file after goreleaser runs
+				defer os.Remove(changelogFile)
+			}
+		}
+
+		cmd := exec.Command(goreleaserCmd, args...)
 		cmd.Dir = projectPath
 		cmd.Env = append(os.Environ(), "GITHUB_TOKEN="+strings.TrimSpace(token))
 
