@@ -28,8 +28,8 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 				}
 				return currentPage, false, nil, releaseModel
 			case "enter":
-				// Check if "Configure Project" is selected (item 4)
-				if releaseModel.SelectedVersion == 4 {
+				// Check if "Configure Project" is selected (item 0)
+				if releaseModel.SelectedVersion == 0 {
 					return 3, false, tea.ClearScreen, releaseModel // Navigate to configureView
 				}
 				updatedModel, cmd := releaseModel.startRelease()
@@ -40,7 +40,7 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 				return currentPage, false, nil, releaseModel
 			}
 
-			if releaseModel.SelectedVersion == 3 {
+			if releaseModel.SelectedVersion == 4 {
 				var cmd tea.Cmd
 				releaseModel.VersionInput, cmd = releaseModel.VersionInput.Update(msg)
 				return currentPage, false, cmd, releaseModel

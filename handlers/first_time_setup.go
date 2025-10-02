@@ -2,6 +2,7 @@ package handlers
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"distui/internal/detection"
 	"distui/internal/models"
@@ -153,39 +154,42 @@ func VerifyDistributionsCmd(checkHomebrew bool, homebrewTap, homebrewFormula str
 
 // handleFirstTimeSetupKeys handles keyboard input for first-time setup wizard
 func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureModel, tea.Cmd) {
-	// Handle custom file choice dialog first
-	if m.FirstTimeSetupCustomChoice {
-		switch msg.String() {
-		case "k", "K":
-			// Keep custom files - enter custom mode permanently
-			m.FirstTimeSetupCustomChoice = false
-			m.FirstTimeSetup = false
-			m.CurrentView = TabView
-			if m.ProjectConfig != nil {
-				m.ProjectConfig.CustomFilesMode = true
-				m.ProjectConfig.FirstTimeSetupCompleted = true
-				m.saveConfig()
-			}
-			m.CustomFilesDetected = nil
-			return m, nil
-
-		case "o", "O":
-			// Overwrite - switch to managed mode, continue with wizard
-			m.FirstTimeSetupCustomChoice = false
-			m.CustomFilesDetected = nil
-			// Continue to normal first-time setup confirmation
-			m.FirstTimeSetupConfirmation = true
-			return m, nil
-
-		case "esc":
-			// Cancel setup
-			m.FirstTimeSetupCustomChoice = false
-			m.FirstTimeSetup = false
-			m.CurrentView = TabView
-			m.CustomFilesDetected = nil
-			return m, nil
+	// Handle custom file choice dialog with huh form
+	if m.FirstTimeSetupCustomChoice && m.CustomFilesForm != nil {
+		form, cmd := m.CustomFilesForm.Update(msg)
+		if f, ok := form.(*huh.Form); ok {
+			m.CustomFilesForm = f
 		}
-		return m, nil // Consume all other inputs during choice
+
+		// Check if form is complete
+		if m.CustomFilesForm.State == huh.StateCompleted {
+			choice := m.CustomFilesForm.GetString("choice")
+
+			if choice == "custom" {
+				// Keep custom files - enter custom mode permanently
+				m.FirstTimeSetupCustomChoice = false
+				m.FirstTimeSetup = false
+				m.CurrentView = TabView
+				if m.ProjectConfig != nil {
+					m.ProjectConfig.CustomFilesMode = true
+					m.ProjectConfig.FirstTimeSetupCompleted = true
+					m.saveConfig()
+				}
+				m.CustomFilesDetected = nil
+				m.CustomFilesForm = nil
+				return m, nil
+			} else if choice == "distui" {
+				// Overwrite - switch to managed mode, continue with wizard
+				m.FirstTimeSetupCustomChoice = false
+				m.CustomFilesDetected = nil
+				m.CustomFilesForm = nil
+				// Continue to normal first-time setup confirmation
+				m.FirstTimeSetupConfirmation = true
+				return m, nil
+			}
+		}
+
+		return m, cmd
 	}
 
 	// Handle confirmation screen separately

@@ -337,7 +337,7 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			return m.startRelease()
 		}
 
-		if m.SelectedVersion == 3 {
+		if m.SelectedVersion == 4 {
 			var cmd tea.Cmd
 			m.VersionInput, cmd = m.VersionInput.Update(msg)
 			return m, cmd

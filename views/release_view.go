@@ -72,19 +72,19 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 	content.WriteString(releaseFieldStyle.Render(fmt.Sprintf("Current Version: %s", m.CurrentVersion)) + "\n\n")
 
 	versions := []string{
+		"Configure Project",
 		"Patch (bug fixes)",
 		"Minor (new features)",
 		"Major (breaking changes)",
 		"Custom version",
-		"Configure Project",
 	}
 
 	for i, ver := range versions {
 		prefix := "  "
 		style := releaseActionStyle
 
-		// Special styling for Configure Project (item 4)
-		if i == 4 {
+		// Special styling for Configure Project (item 0)
+		if i == 0 {
 			style = configureStyle
 			if i == m.SelectedVersion {
 				prefix = "> "
@@ -100,7 +100,7 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 		content.WriteString(style.Render(prefix+ver) + "\n")
 	}
 
-	if m.SelectedVersion == 3 {
+	if m.SelectedVersion == 4 {
 		content.WriteString("\n" + releaseFieldStyle.Render("Enter version: ") + m.VersionInput.View() + "\n")
 	}
 

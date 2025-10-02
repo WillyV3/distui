@@ -316,19 +316,19 @@ func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
 	content.WriteString(fieldStyle.Render(fmt.Sprintf("Current: %s", m.CurrentVersion)) + "\n\n")
 
 	versions := []string{
+		"Configure Project",
 		"Patch (bug fixes)",
 		"Minor (new features)",
 		"Major (breaking changes)",
 		"Custom version",
-		"Configure Project",
 	}
 
 	for i, ver := range versions {
 		prefix := "  "
 		style := actionStyle
 
-		// Special styling for Configure Project (item 4)
-		if i == 4 {
+		// Special styling for Configure Project (item 0)
+		if i == 0 {
 			style = configureStyle
 			if i == m.SelectedVersion {
 				prefix = "> "
@@ -344,7 +344,7 @@ func renderCompactVersionSelect(m *handlers.ReleaseModel) string {
 		content.WriteString(style.Render(prefix+ver) + "\n")
 	}
 
-	if m.SelectedVersion == 3 {
+	if m.SelectedVersion == 4 {
 		content.WriteString("\n" + fieldStyle.Render("Enter version: ") + m.VersionInput.View() + "\n")
 	}
 

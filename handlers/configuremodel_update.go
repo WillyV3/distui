@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"distui/internal/config"
 	"distui/internal/detection"
@@ -142,47 +143,61 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		npmPackage.CharLimit = 214
 		npmPackage.Width = 40
 
-		// If we found config files (.goreleaser.yaml or package.json), check if they're custom
-		if msg.homebrewFromFile || msg.npmFromFile {
-			customFiles := []string{}
+		// Check if config files exist and are custom (not distui-generated)
+		customFiles := []string{}
 
-			// Check if detected files are custom (not distui-generated)
-			if msg.homebrewFromFile && msg.homebrewTap != "" {
-				goreleaserPath := filepath.Join(m.DetectedProject.Path, ".goreleaser.yaml")
-				goreleaserYmlPath := filepath.Join(m.DetectedProject.Path, ".goreleaser.yml")
-				if detection.IsCustomConfig(goreleaserPath) {
-					customFiles = append(customFiles, ".goreleaser.yaml")
-				} else if detection.IsCustomConfig(goreleaserYmlPath) {
-					customFiles = append(customFiles, ".goreleaser.yml")
-				}
+		// Check .goreleaser.yaml - detect as custom if file exists and not distui-generated
+		// Don't require homebrew config to be present in the file
+		if m.DetectedProject != nil {
+			goreleaserPath := filepath.Join(m.DetectedProject.Path, ".goreleaser.yaml")
+			goreleaserYmlPath := filepath.Join(m.DetectedProject.Path, ".goreleaser.yml")
+			if detection.IsCustomConfig(goreleaserPath) {
+				customFiles = append(customFiles, ".goreleaser.yaml")
+			} else if detection.IsCustomConfig(goreleaserYmlPath) {
+				customFiles = append(customFiles, ".goreleaser.yml")
 			}
 
-			if msg.npmFromFile && msg.npmPackage != "" {
-				packagePath := filepath.Join(m.DetectedProject.Path, "package.json")
-				if detection.IsCustomConfig(packagePath) {
-					customFiles = append(customFiles, "package.json")
-				}
+			// Check package.json - detect as custom if file exists and not distui-generated
+			packagePath := filepath.Join(m.DetectedProject.Path, "package.json")
+			if detection.IsCustomConfig(packagePath) {
+				customFiles = append(customFiles, "package.json")
+			}
+		}
+
+		if len(customFiles) > 0 {
+			// Custom files detected - show choice dialog with huh.Select
+			m.FirstTimeSetupCustomChoice = true
+			m.CustomFilesDetected = customFiles
+			m.HomebrewTapInput = homebrewTap
+			m.HomebrewFormulaInput = homebrewFormula
+			m.NPMPackageInput = npmPackage
+			homebrewTap.SetValue(msg.homebrewTap)
+			homebrewFormula.SetValue(msg.homebrewFormula)
+			npmPackage.SetValue(msg.npmPackage)
+			if msg.homebrewFromFile {
+				m.HomebrewCheckEnabled = true
+			}
+			if msg.npmFromFile {
+				m.NPMCheckEnabled = true
 			}
 
-			if len(customFiles) > 0 {
-				// Custom files detected - show choice dialog
-				m.FirstTimeSetupCustomChoice = true
-				m.CustomFilesDetected = customFiles
-				m.HomebrewTapInput = homebrewTap
-				m.HomebrewFormulaInput = homebrewFormula
-				m.NPMPackageInput = npmPackage
-				homebrewTap.SetValue(msg.homebrewTap)
-				homebrewFormula.SetValue(msg.homebrewFormula)
-				npmPackage.SetValue(msg.npmPackage)
-				if msg.homebrewFromFile {
-					m.HomebrewCheckEnabled = true
-				}
-				if msg.npmFromFile {
-					m.NPMCheckEnabled = true
-				}
-				return m, nil
-			}
+			// Create huh.Select for custom file choice
+			var choice string
+			m.CustomFilesForm = huh.NewForm(
+				huh.NewGroup(
+					huh.NewSelect[string]().
+						Key("choice").
+						Title("What would you like to do?").
+						Options(
+							huh.NewOption("Use distui-managed files", "distui"),
+							huh.NewOption("Keep my custom files", "custom"),
+						).
+						Value(&choice),
+				),
+			)
 
+			return m, nil
+		} else if msg.homebrewFromFile || msg.npmFromFile {
 			// Files are distui-generated or don't exist - safe to skip setup
 			if msg.homebrewFromFile && msg.homebrewTap != "" && msg.homebrewFormula != "" {
 				homebrewTap.SetValue(msg.homebrewTap)
@@ -361,16 +376,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		// Update list sizes with same calculation as NewConfigureModel
-		// Total UI chrome: 13 lines, +1 if warning, +3 to 10 for NPM
+		// Total UI chrome: 13 lines, +1 if warning
+		// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
 		chromeLines := 13
 		if m.NeedsRegeneration {
 			chromeLines = 14
-		}
-		// Add NPM status lines when on Distributions tab and status exists
-		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
-			chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
-		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
-			chromeLines += 3 // 2 blanks + status line
 		}
 		listHeight := height - chromeLines
 		if listHeight < 5 {

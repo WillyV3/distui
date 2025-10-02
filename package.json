@@ -1,5 +1,5 @@
 {
-  "name": "distui-cli-go-willy",
+  "name": "distui",
   "version": "0.1.0",
   "description": "distui - distributed via distui",
   "bin": {

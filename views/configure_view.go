@@ -185,15 +185,10 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 	// Calculate box height: handler already subtracted chrome based on warning state
 	// Use the same calculation as the handler
+	// NOTE: NPM UI is rendered INSIDE list content, NOT as separate chrome
 	chromeLines := 13
 	if configModel.NeedsRegeneration {
 		chromeLines = 14
-	}
-	// Add NPM status lines when on Distributions tab and status exists
-	if configModel.ActiveTab == 1 && configModel.NPMNameStatus == "unavailable" && len(configModel.NPMNameSuggestions) > 0 {
-		chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
-	} else if configModel.ActiveTab == 1 && configModel.NPMNameStatus != "" {
-		chromeLines += 3 // 2 blanks + status line
 	}
 	boxHeight := configModel.Height - chromeLines
 	if boxHeight < 5 {
@@ -350,6 +345,15 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	} else if configModel.Initialized {
 		// Wrap list content in the content box
 		listContent := configModel.Lists[configModel.ActiveTab].View()
+
+		// If on distributions tab, append NPM status/edit UI to list content
+		if configModel.ActiveTab == 1 {
+			npmUIContent := renderNPMStatusUI(configModel)
+			if npmUIContent != "" {
+				listContent = listContent + "\n\n" + npmUIContent
+			}
+		}
+
 		baseContent = listContent
 	} else {
 		baseContent = "Initializing..."
@@ -392,61 +396,6 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 		renderedContent = contentBox.Render(baseContent)
 	}
 	content.WriteString(renderedContent)
-
-	// Show NPM name edit UI if in edit mode
-	if configModel.NPMEditMode {
-		content.WriteString("\n\n")
-		editStyle := lipgloss.NewStyle().Padding(0, 2).Foreground(lipgloss.Color("117"))
-		content.WriteString(editStyle.Render("Edit NPM Package Name:"))
-		content.WriteString("\n" + editStyle.Render(configModel.NPMNameInput.View()))
-		content.WriteString("\n" + statusStyle.Render(
-			lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("[Enter] Save  [ESC] Cancel")))
-	} else if configModel.ActiveTab == 1 && configModel.NPMNameStatus != "" {
-		// Show NPM name validation status (only on Distributions tab when not editing)
-		content.WriteString("\n\n")
-
-		statusStyle := lipgloss.NewStyle().Padding(0, 2)
-
-		switch configModel.NPMNameStatus {
-		case "checking":
-			spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View())
-			content.WriteString(statusStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Render(spinnerView + " Checking package name availability...")))
-		case "available":
-			message := "✓ Package name is available"
-			if configModel.NPMNameError != "" {
-				// Show ownership info if present
-				message = "✓ " + configModel.NPMNameError
-			}
-			content.WriteString(statusStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color("82")).Render(message)))
-		case "unavailable":
-			// Show the reason (e.g., "similar package exists: dist-ui")
-			reason := "Package name unavailable"
-			if configModel.NPMNameError != "" {
-				reason = configModel.NPMNameError
-			}
-			warningMsg := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true).Render("✗ " + reason)
-			content.WriteString(statusStyle.Render(warningMsg))
-
-			if len(configModel.NPMNameSuggestions) > 0 {
-				content.WriteString("\n\n" + statusStyle.Render(
-					lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("Try one of these alternatives:")))
-				for i, suggestion := range configModel.NPMNameSuggestions {
-					if i >= 3 {
-						break // Show max 3 suggestions
-					}
-					suggestionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
-					content.WriteString("\n" + statusStyle.Render("  → "+suggestionStyle.Render(suggestion)))
-				}
-				content.WriteString("\n" + statusStyle.Render(
-					lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render("To change: ESC > s > e")))
-			}
-		case "error":
-			content.WriteString(statusStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("✗ Error checking name: "+configModel.NPMNameError)))
-		}
-	}
 
 	// Controls
 	if configModel.Width > 0 {
@@ -504,6 +453,69 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 
 	return content.String()
+}
+
+// renderNPMStatusUI renders the NPM package name status UI (checking, available, unavailable with suggestions, edit mode)
+func renderNPMStatusUI(configModel *handlers.ConfigureModel) string {
+	if configModel == nil {
+		return ""
+	}
+
+	var npmUI strings.Builder
+	spinnerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+
+	// Show NPM name edit UI if in edit mode
+	if configModel.NPMEditMode {
+		editStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+		dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+		npmUI.WriteString("  " + editStyle.Render("Edit NPM Package Name:"))
+		npmUI.WriteString("\n  " + editStyle.Render(configModel.NPMNameInput.View()))
+		npmUI.WriteString("\n  " + dimStyle.Render("[Enter] Save  [ESC] Cancel"))
+		return npmUI.String()
+	}
+
+	// Show NPM name validation status (only when not editing)
+	if configModel.NPMNameStatus != "" {
+		switch configModel.NPMNameStatus {
+		case "checking":
+			spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View())
+			checkingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
+			npmUI.WriteString("  " + checkingStyle.Render(spinnerView+" Checking package name availability..."))
+		case "available":
+			message := "✓ Package name is available"
+			if configModel.NPMNameError != "" {
+				message = "✓ " + configModel.NPMNameError
+			}
+			availableStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
+			npmUI.WriteString("  " + availableStyle.Render(message))
+		case "unavailable":
+			reason := "Package name unavailable"
+			if configModel.NPMNameError != "" {
+				reason = configModel.NPMNameError
+			}
+			warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
+			npmUI.WriteString("  " + warningStyle.Render("✗ "+reason))
+
+			if len(configModel.NPMNameSuggestions) > 0 {
+				dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+				suggestionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+				npmUI.WriteString("\n")
+				npmUI.WriteString("\n  " + dimStyle.Render("Try one of these alternatives:"))
+				for i, suggestion := range configModel.NPMNameSuggestions {
+					if i >= 3 {
+						break
+					}
+					npmUI.WriteString("\n    → " + suggestionStyle.Render(suggestion))
+				}
+				npmUI.WriteString("\n  " + dimStyle.Render("To change: ESC > s > e"))
+			}
+		case "error":
+			errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+			npmUI.WriteString("  " + errorStyle.Render("✗ Error checking name: "+configModel.NPMNameError))
+		}
+	}
+
+	return npmUI.String()
 }
 
 func RenderOverwriteWarning(filesToOverwrite []string) string {

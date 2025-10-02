@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"distui/internal/config"
 	"distui/internal/detection"
@@ -184,6 +185,7 @@ type ConfigureModel struct {
 	// First-time setup custom file detection
 	FirstTimeSetupCustomChoice bool
 	CustomFilesDetected        []string
+	CustomFilesForm            *huh.Form
 	FilesToOverwrite     []string
 	PendingSaveConfig    *models.ProjectConfig
 }
@@ -475,18 +477,11 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	// - Content box border: 2 lines (top + bottom)
 	// - Content padding: 2 lines (vertical padding restored)
 	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome, +1 if warning shown, +3 to 7 for NPM status
+	// Total: 13 lines of chrome, +1 if warning shown
+	// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
 	chromeLines := 13
 	if m.NeedsRegeneration {
 		chromeLines = 14
-	}
-	// Add NPM status lines when on Distributions tab and status exists
-	// NPM status: 2 blank lines + status line = 3 lines minimum
-	// With suggestions: 2 blanks + status + 2 blanks + header + 3 suggestions + help = 10 lines
-	if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
-		chromeLines += 10 // 2 blanks + status + 2 blanks + header + 3 suggestions + help text
-	} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
-		chromeLines += 3 // 2 blanks + status line
 	}
 	listHeight := m.Height - chromeLines
 	if listHeight < 5 {
