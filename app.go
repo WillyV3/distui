@@ -327,7 +327,13 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "")
+	// Generate ASCII art for first-time users
+	ascii := ""
+	if m.globalConfig == nil || m.globalConfig.User.GitHubUsername == "" {
+		ascii = renderASCIIArt(m.width)
+	}
+
+	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "", ascii)
 	if m.notification != nil {
 		return views.RenderNotification(m.notification) + "\n" + content
 	}

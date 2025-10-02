@@ -481,7 +481,7 @@ func renderNPMStatusUI(configModel *handlers.ConfigureModel) string {
 		case "checking":
 			spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View())
 			checkingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("69"))
-			npmUI.WriteString("  " + checkingStyle.Render(spinnerView+" Checking package name availability..."))
+			npmUI.WriteString("  " + checkingStyle.Render(spinnerView+" Please wait... Checking package name availability..."))
 		case "available":
 			message := "✓ Package name is available"
 			if configModel.NPMNameError != "" {

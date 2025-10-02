@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel, switchedToPath string) string {
+func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel, switchedToPath string, asciiArt string) string {
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true).
@@ -33,11 +33,10 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 
 	var content strings.Builder
 
-	// GitHub status
-	if globalConfig != nil && globalConfig.User.GitHubUsername != "" {
+	// GitHub status (skip for first-time users - shown in welcome screen instead)
+	isFirstTimeUser := globalConfig == nil || globalConfig.User.GitHubUsername == ""
+	if !isFirstTimeUser && globalConfig.User.GitHubUsername != "" {
 		content.WriteString(successStyle.Render(fmt.Sprintf("✓ GitHub: %s", globalConfig.User.GitHubUsername)) + "\n\n")
-	} else {
-		content.WriteString(warningStyle.Render("⚠ GitHub not configured") + "\n\n")
 	}
 
 	// Custom mode indicator
@@ -82,15 +81,25 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 
 		if isFirstTimeUser {
 			// First-time user flow - guide to settings first
-			content.WriteString(headerStyle.Render("WELCOME TO DISTUI") + "\n\n")
-			content.WriteString(infoStyle.Render("Get started in 3 steps:") + "\n\n")
-			content.WriteString(infoStyle.Render("1. Press [s] to configure global settings") + "\n")
-			content.WriteString(infoStyle.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
-			content.WriteString(infoStyle.Render("2. Press [g] to discover and manage projects") + "\n")
-			content.WriteString(infoStyle.Render("   → distui will scan for your Go projects") + "\n\n")
-			content.WriteString(infoStyle.Render("3. Return here and press [c] to configure this project") + "\n")
-			content.WriteString(infoStyle.Render("   → Set up distributions and release settings") + "\n\n")
-			content.WriteString(subtleStyle.Render("s: settings • g: global • q: quit"))
+			// Left-aligned styles for welcome screen
+			welcomeHeader := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+			welcomeInfo := lipgloss.NewStyle()
+			welcomeSubtle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+			welcomeWarning := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+
+			if asciiArt != "" {
+				content.WriteString(asciiArt)
+			}
+			content.WriteString(welcomeHeader.Render("WELCOME TO DISTUI") + "\n\n")
+			content.WriteString(welcomeWarning.Render("⚠ GitHub not configured") + "\n\n")
+			content.WriteString(welcomeInfo.Render("Get started in 3 steps:") + "\n\n")
+			content.WriteString(welcomeInfo.Render("1. Press [s] to configure global settings") + "\n")
+			content.WriteString(welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
+			content.WriteString(welcomeInfo.Render("2. Press [g] to discover and manage projects") + "\n")
+			content.WriteString(welcomeInfo.Render("   → distui will scan for your Go projects") + "\n\n")
+			content.WriteString(welcomeInfo.Render("3. Return here and press [c] to configure this project") + "\n")
+			content.WriteString(welcomeInfo.Render("   → Set up distributions and release settings") + "\n\n")
+			content.WriteString(welcomeSubtle.Render("s: settings • g: global • q: quit"))
 		} else {
 			// Show project info
 			content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
@@ -155,13 +164,23 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		isFirstTimeUser := globalConfig == nil || globalConfig.User.GitHubUsername == ""
 
 		if isFirstTimeUser {
-			content.WriteString(headerStyle.Render("WELCOME TO DISTUI") + "\n\n")
-			content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")
-			content.WriteString(infoStyle.Render("Get started:") + "\n\n")
-			content.WriteString(infoStyle.Render("1. Press [s] to configure global settings") + "\n")
-			content.WriteString(infoStyle.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
-			content.WriteString(infoStyle.Render("2. Press [g] to discover and manage your Go projects") + "\n\n")
-			content.WriteString(subtleStyle.Render("s: settings • g: global • q: quit"))
+			// Left-aligned styles for welcome screen
+			welcomeHeader := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+			welcomeInfo := lipgloss.NewStyle()
+			welcomeSubtle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+			welcomeWarning := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+
+			if asciiArt != "" {
+				content.WriteString(asciiArt)
+			}
+			content.WriteString(welcomeHeader.Render("WELCOME TO DISTUI") + "\n\n")
+			content.WriteString(welcomeWarning.Render("⚠ GitHub not configured") + "\n\n")
+			content.WriteString(welcomeInfo.Render("No Go project detected in current directory") + "\n\n")
+			content.WriteString(welcomeInfo.Render("Get started:") + "\n\n")
+			content.WriteString(welcomeInfo.Render("1. Press [s] to configure global settings") + "\n")
+			content.WriteString(welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
+			content.WriteString(welcomeInfo.Render("2. Press [g] to discover and manage your Go projects") + "\n\n")
+			content.WriteString(welcomeSubtle.Render("s: settings • g: global • q: quit"))
 		} else {
 			content.WriteString(headerStyle.Render("NO PROJECT") + "\n\n")
 			content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")

@@ -30,6 +30,7 @@ func RenderSettingsContent(model *handlers.SettingsModel) string {
 	}
 
 	if model.Editing {
+		content.WriteString("Config file:  ~/.distui/config.yaml:\n\n")
 		content.WriteString("Configure distui settings:\n\n")
 
 		// Render input fields
