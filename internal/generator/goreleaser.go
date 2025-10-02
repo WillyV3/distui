@@ -66,7 +66,7 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 		b.WriteString("      - '^docs:'\n")
 		b.WriteString("      - '^test:'\n\n")
 	} else {
-		b.WriteString("  skip: true\n\n")
+		b.WriteString("  disable: true\n\n")
 	}
 
 	if config.Config != nil && config.Config.Distributions.Homebrew != nil && config.Config.Distributions.Homebrew.Enabled {
