@@ -342,10 +342,14 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			if m.SelectedVersion > 0 {
 				m.SelectedVersion--
 			}
+			// Manage input focus based on selection
+			m.updateInputFocus()
 		case "down", "j":
 			if m.SelectedVersion < 4 {
 				m.SelectedVersion++
 			}
+			// Manage input focus based on selection
+			m.updateInputFocus()
 		case "enter":
 			return m.startRelease()
 		}
@@ -362,7 +366,7 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 		if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
 			needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
 		}
-		if needsChangelog && m.SelectedVersion > 0 {
+		if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
 			var cmd tea.Cmd
 			m.ChangelogInput, cmd = m.ChangelogInput.Update(msg)
 			return m, cmd
@@ -418,6 +422,28 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// updateInputFocus manages focus for version input and changelog input based on current selection
+func (m *ReleaseModel) updateInputFocus() {
+	// Check if changelog is enabled
+	needsChangelog := false
+	if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
+		needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
+	}
+
+	// Blur all inputs first
+	m.VersionInput.Blur()
+	m.ChangelogInput.Blur()
+
+	// Focus appropriate input based on selection
+	if m.SelectedVersion == 4 {
+		// Custom version selected - focus version input
+		m.VersionInput.Focus()
+	} else if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
+		// Release option selected (not Configure Project, not Custom) and changelog enabled
+		m.ChangelogInput.Focus()
+	}
 }
 
 func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
