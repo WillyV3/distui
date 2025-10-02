@@ -136,9 +136,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Update configure model dimensions ONLY on window resize
+		// Pass full dimensions - configure view handles its own chrome calculation
 		if m.configureModel != nil && m.currentPage == configureView {
-			m.configureModel.Width = m.width - 4
-			m.configureModel.Height = m.height - 4
+			m.configureModel.Width = m.width
+			m.configureModel.Height = m.height
 		}
 		// Don't return early - let the message pass through to handlers
 

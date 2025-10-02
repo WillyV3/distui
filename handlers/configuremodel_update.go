@@ -376,11 +376,11 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		}
 
 		// Update list sizes with same calculation as NewConfigureModel
-		// Total UI chrome: 13 lines, +1 if warning
+		// Total UI chrome: 4 (app wrapper) + 11 (view) = 15 lines, +1 if warning
 		// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
-		chromeLines := 13
+		chromeLines := 15
 		if m.NeedsRegeneration {
-			chromeLines = 14
+			chromeLines = 16
 		}
 		listHeight := height - chromeLines
 		if listHeight < 5 {

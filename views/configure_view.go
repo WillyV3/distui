@@ -185,10 +185,11 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 	}
 	// Calculate box height: handler already subtracted chrome based on warning state
 	// Use the same calculation as the handler
+	// Total: 4 (app wrapper) + 11 (view chrome) = 15 lines, +1 if warning
 	// NOTE: NPM UI is rendered INSIDE list content, NOT as separate chrome
-	chromeLines := 13
+	chromeLines := 15
 	if configModel.NeedsRegeneration {
-		chromeLines = 14
+		chromeLines = 16
 	}
 	boxHeight := configModel.Height - chromeLines
 	if boxHeight < 5 {

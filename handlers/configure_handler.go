@@ -471,17 +471,21 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 
 	// Calculate list height more precisely
 	// Account for UI elements:
+	// App wrapper (app.go):
+	// - Border: 2 lines (top + bottom)
+	// - Padding: 2 lines (top + bottom)
+	// Configure view chrome:
 	// - Header: 1 line
-	// - Status: 2 lines (status + blank)
-	// - Tabs: 3 lines (tabs + 2 blanks)
+	// - Status: 1 line (no blank after)
+	// - Tabs: 2 lines (tabs + 1 blank after)
 	// - Content box border: 2 lines (top + bottom)
 	// - Content padding: 2 lines (vertical padding restored)
-	// - Controls: 3 lines (2 blanks + control line)
-	// Total: 13 lines of chrome, +1 if warning shown
+	// - Controls: 3 lines (divider + control line + hint)
+	// Total: 4 (app) + 11 (view) = 15 lines, +1 if warning shown
 	// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
-	chromeLines := 13
+	chromeLines := 15
 	if m.NeedsRegeneration {
-		chromeLines = 14
+		chromeLines = 16
 	}
 	listHeight := m.Height - chromeLines
 	if listHeight < 5 {

@@ -27,9 +27,10 @@ func (m *ConfigureModel) HandleGitWatchTick() (*ConfigureModel, tea.Cmd) {
 		m.Lists[0].SetItems(m.loadGitStatus())
 
 		// Update dimensions in case terminal was resized
-		chromeLines := 13
+		// Total: 4 (app wrapper) + 11 (view chrome) = 15
+		chromeLines := 15
 		if m.NeedsRegeneration {
-			chromeLines = 14
+			chromeLines = 16
 		}
 		listHeight := m.Height - chromeLines
 		if listHeight < 5 {
