@@ -121,7 +121,9 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 	// Show changelog input if a release version is selected (not Configure Project, not Custom)
 	// TEMPORARY: Always show to debug the issue
 	if m.SelectedVersion > 0 && m.SelectedVersion < 4 {
-		content.WriteString("\n" + releaseFieldStyle.Render("Changelog: ") + m.ChangelogInput.View() + "\n")
+		content.WriteString("\n>>> BEFORE CHANGELOG INPUT <<<\n")
+		content.WriteString(releaseFieldStyle.Render("Changelog: ") + m.ChangelogInput.View())
+		content.WriteString("\n>>> AFTER CHANGELOG INPUT <<<\n")
 	}
 
 	content.WriteString("\n" + releaseSubtleStyle.Render("↑/↓: navigate • enter: start release • esc: back"))
