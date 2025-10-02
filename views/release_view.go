@@ -189,6 +189,14 @@ func RenderSuccess(m *handlers.ReleaseModel) string {
 			fmt.Sprintf("Successfully completed %d/%d steps", successCount, len(m.Packages))))
 	}
 
+	// GitHub release reminder
+	if m.RepoOwner != "" && m.RepoName != "" && m.Version != "" {
+		githubURL := fmt.Sprintf("https://github.com/%s/%s/releases/tag/%s", m.RepoOwner, m.RepoName, m.Version)
+		reminderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+		content.WriteString("\n\n" + reminderStyle.Render("→ Head over to " + githubURL))
+		content.WriteString("\n" + reminderStyle.Render("  to edit the release and tell your users what changed!"))
+	}
+
 	content.WriteString("\n\n" + releaseSubtleStyle.Render("Press ESC to return"))
 
 	return content.String()
