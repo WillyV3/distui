@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,6 +46,7 @@ type model struct {
 	spinner        spinner.Model
 	quitting       bool
 	asciiArt       string
+	asciiAnimFrame int  // Current line to show (0 = not started, -1 = complete)
 
 	// Real data
 	globalConfig   *models.GlobalConfig
@@ -62,16 +64,21 @@ type model struct {
 	notificationModel   handlers.NotificationModel
 }
 
+type asciiAnimTickMsg time.Time
+
+func animateAscii() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return asciiAnimTickMsg(t)
+	})
+}
+
 func initialModel() model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
 
-	// Load ASCII art
-	asciiArt := ""
-	if data, err := os.ReadFile("ascii-art-txt"); err == nil {
-		asciiArt = string(data)
-	}
+	// ASCII art is embedded in ascii.go, just set flag for animation trigger
+	asciiArtLoaded := "enabled"
 
 	// Load global config
 	globalConfig, err := config.LoadGlobalConfig()
@@ -101,7 +108,7 @@ func initialModel() model {
 	return model{
 		currentPage:     initialPage,
 		spinner:         s,
-		asciiArt:        asciiArt,
+		asciiArt:        asciiArtLoaded,
 		globalConfig:    globalConfig,
 		currentProject:  currentProject,
 		allProjects:     allProjects,
@@ -112,6 +119,17 @@ func initialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
+	// Start ASCII animation if first-time user
+	isFirstTime := m.globalConfig == nil || m.globalConfig.User.GitHubUsername == ""
+	fmt.Printf("DEBUG: Init - isFirstTime=%v, asciiArt=%q\n", isFirstTime, m.asciiArt)
+	if isFirstTime && m.asciiArt != "" {
+		fmt.Printf("DEBUG: Starting ASCII animation\n")
+		return tea.Batch(
+			m.spinner.Tick,
+			tea.SetWindowTitle("distui - Go Release Manager"),
+			animateAscii(),
+		)
+	}
 	return tea.Batch(
 		m.spinner.Tick,
 		tea.SetWindowTitle("distui - Go Release Manager"),
@@ -142,6 +160,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.configureModel.Height = m.height
 		}
 		// Don't return early - let the message pass through to handlers
+
+	case asciiAnimTickMsg:
+		// Advance ASCII art animation (line-by-line reveal)
+		// Embedded ASCII has ~10 lines, so animate up to 15 to be safe
+		totalLines := 15
+		if m.asciiAnimFrame < totalLines {
+			m.asciiAnimFrame++
+			fmt.Printf("DEBUG: asciiAnimFrame=%d\n", m.asciiAnimFrame)
+			return m, animateAscii()
+		}
+		// Animation complete
+		fmt.Printf("DEBUG: Animation complete\n")
+		m.asciiAnimFrame = -1
+		return m, nil
 
 	case handlers.ProjectsReloadedMsg:
 		m.allProjects = msg.Projects
@@ -331,10 +363,10 @@ func (m model) View() string {
 }
 
 func (m model) renderProjectView() string {
-	// Generate ASCII art for first-time users
+	// Generate ASCII art for first-time users with animation
 	ascii := ""
 	if m.globalConfig == nil || m.globalConfig.User.GitHubUsername == "" {
-		ascii = renderASCIIArt(m.width)
+		ascii = renderASCIIArt(m.width, m.asciiAnimFrame)
 	}
 
 	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "", ascii)

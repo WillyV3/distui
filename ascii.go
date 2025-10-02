@@ -11,9 +11,26 @@ import (
 var asciiArt string
 
 // renderASCIIArt renders the distui ASCII art left-aligned and styled
-func renderASCIIArt(terminalWidth int) string {
+// maxLines controls animation: 0 = not started (show nothing), -1 = complete (show all), >0 = show that many lines
+func renderASCIIArt(terminalWidth int, maxLines int) string {
 	// Clean the ASCII art (trim trailing spaces from each line)
 	lines := strings.Split(strings.TrimSpace(asciiArt), "\n")
+
+	// Determine how many lines to show
+	linesToShow := 0
+	if maxLines == -1 || maxLines >= len(lines) {
+		// Animation complete or not animated - show all
+		linesToShow = len(lines)
+	} else if maxLines > 0 {
+		// Animation in progress - show partial
+		linesToShow = maxLines
+	}
+	// maxLines == 0 means not started, show nothing
+
+	// If nothing to show, return empty
+	if linesToShow == 0 {
+		return ""
+	}
 
 	// Style for the ASCII art - vibrant cyan/blue gradient
 	artStyle := lipgloss.NewStyle().
@@ -24,8 +41,8 @@ func renderASCIIArt(terminalWidth int) string {
 	var output strings.Builder
 	output.WriteString("\n")
 
-	for _, line := range lines {
-		output.WriteString(artStyle.Render(line))
+	for i := 0; i < linesToShow; i++ {
+		output.WriteString(artStyle.Render(lines[i]))
 		output.WriteString("\n")
 	}
 
