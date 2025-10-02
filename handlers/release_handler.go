@@ -125,13 +125,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		}
 	}
 
-	// Initialize changelog textarea with a pointer to track the value
-	changelogTextarea := huh.NewText().
-		Title("What's changed in this release?").
-		Description("Enter changelog details (Ctrl+D or Ctrl+S to finish)").
-		CharLimit(5000)
-
-	return &ReleaseModel{
+	m := &ReleaseModel{
 		Phase:           models.PhaseVersionSelect,
 		Packages:        packages,
 		Installing:      -1,
@@ -153,9 +147,17 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		HomebrewTap:       homebrewTap,
 		SkipTests:         skipTests,
 		GenerateChangelog: generateChangelog,
-		ChangelogTextarea: changelogTextarea,
 		Changelog:         "",
 	}
+
+	// Initialize changelog textarea with Value pointing to model's Changelog field
+	m.ChangelogTextarea = huh.NewText().
+		Title("What's changed in this release?").
+		Description("Enter changelog details (Ctrl+D or Ctrl+S to finish)").
+		CharLimit(5000).
+		Value(&m.Changelog)
+
+	return m
 }
 
 func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
