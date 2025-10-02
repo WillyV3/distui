@@ -47,13 +47,13 @@ type HelpModel struct {
 
 func NewHelpModel(width, height int) (*HelpModel, error) {
 	tabs := []HelpTab{
-		{Name: "Overview", File: "help-docs/overview.md"},
-		{Name: "Registering", File: "help-docs/registering.md"},
-		{Name: "Syncing", File: "help-docs/Syncing.md"},
-		{Name: "Inter-Agent Messaging", File: "help-docs/messaging.md"},
-		{Name: "SSH Stuff", File: "help-docs/ssh-stuff.md"},
-		{Name: "Messages", File: "help-docs/stored-convos.md"},
-		{Name: "About", File: "help-docs/about.md"},
+		{Name: "Setup", File: "help-docs/setup.md"},
+		{Name: "Projects", File: "help-docs/projects.md"},
+		{Name: "Release Files", File: "help-docs/release-files.md"},
+		{Name: "GitHub Cleanup", File: "help-docs/github-cleanup.md"},
+		{Name: "Smart Commits", File: "help-docs/smart-commits.md"},
+		{Name: "Limitations", File: "help-docs/limitations.md"},
+		{Name: "Why distui", File: "help-docs/why-distui.md"},
 	}
 
 	const glamourGutter = 2
