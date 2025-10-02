@@ -50,7 +50,9 @@ type ReleaseModel struct {
 	// Changelog
 	Changelog         string
 	ChangelogTextarea *huh.Text
-	GenerateChangelog bool
+
+	// Project config to check settings at runtime
+	ProjectConfig *models.ProjectConfig
 
 	// Channel for receiving output
 	outputChan chan string
@@ -109,7 +111,6 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 	enableNPM := false
 	homebrewTap := ""
 	skipTests := false  // Default: run tests
-	generateChangelog := false
 
 	if projectConfig != nil && projectConfig.Config != nil {
 		if projectConfig.Config.Distributions.Homebrew != nil {
@@ -121,7 +122,6 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		}
 		if projectConfig.Config.Release != nil {
 			skipTests = projectConfig.Config.Release.SkipTests
-			generateChangelog = projectConfig.Config.Release.GenerateChangelog
 		}
 	}
 
@@ -146,7 +146,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		EnableNPM:         enableNPM,
 		HomebrewTap:       homebrewTap,
 		SkipTests:         skipTests,
-		GenerateChangelog: generateChangelog,
+		ProjectConfig:     projectConfig,
 		Changelog:         "",
 	}
 
@@ -353,6 +353,24 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 				m.SelectedVersion++
 			}
 		case "enter":
+			// Check if changelog is needed from current config
+			needsChangelog := false
+			if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
+				needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
+			}
+
+			if needsChangelog {
+				// Get version first
+				version := m.getSelectedVersion()
+				if version == "" {
+					return m, nil
+				}
+				m.Version = version
+				m.Phase = models.PhaseChangelogEntry
+				return m, nil
+			}
+
+			// No changelog needed, start release immediately
 			return m.startRelease()
 		}
 
