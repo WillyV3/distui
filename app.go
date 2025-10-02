@@ -268,6 +268,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Sync currentProject with configureModel's updated ProjectConfig
 		if m.configureModel != nil && m.configureModel.ProjectConfig != nil {
 			m.currentProject = m.configureModel.ProjectConfig
+			// CRITICAL: Update release model's ProjectConfig reference
+			if m.releaseModel != nil {
+				m.releaseModel.ProjectConfig = m.configureModel.ProjectConfig
+			}
 		}
 
 		return m, tea.Batch(cmd, pageCmd)
