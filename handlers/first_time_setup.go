@@ -153,6 +153,41 @@ func VerifyDistributionsCmd(checkHomebrew bool, homebrewTap, homebrewFormula str
 
 // handleFirstTimeSetupKeys handles keyboard input for first-time setup wizard
 func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureModel, tea.Cmd) {
+	// Handle custom file choice dialog first
+	if m.FirstTimeSetupCustomChoice {
+		switch msg.String() {
+		case "k", "K":
+			// Keep custom files - enter custom mode permanently
+			m.FirstTimeSetupCustomChoice = false
+			m.FirstTimeSetup = false
+			m.CurrentView = TabView
+			if m.ProjectConfig != nil {
+				m.ProjectConfig.CustomFilesMode = true
+				m.ProjectConfig.FirstTimeSetupCompleted = true
+				m.saveConfig()
+			}
+			m.CustomFilesDetected = nil
+			return m, nil
+
+		case "o", "O":
+			// Overwrite - switch to managed mode, continue with wizard
+			m.FirstTimeSetupCustomChoice = false
+			m.CustomFilesDetected = nil
+			// Continue to normal first-time setup confirmation
+			m.FirstTimeSetupConfirmation = true
+			return m, nil
+
+		case "esc":
+			// Cancel setup
+			m.FirstTimeSetupCustomChoice = false
+			m.FirstTimeSetup = false
+			m.CurrentView = TabView
+			m.CustomFilesDetected = nil
+			return m, nil
+		}
+		return m, nil // Consume all other inputs during choice
+	}
+
 	// Handle confirmation screen separately
 	if m.FirstTimeSetupConfirmation {
 		switch msg.String() {
@@ -188,6 +223,21 @@ func (m *ConfigureModel) handleFirstTimeSetupKeys(msg tea.KeyMsg) (*ConfigureMod
 		if m.ProjectConfig != nil {
 			m.ProjectConfig.FirstTimeSetupCompleted = true
 			m.saveConfig()
+		}
+		return m, nil
+
+	case "i", "I":
+		// Import custom config (only if custom files detected)
+		if m.ProjectConfig != nil && m.ProjectConfig.CustomFilesMode {
+			// Set flags for custom mode
+			m.ProjectConfig.CustomFilesMode = true
+			m.ProjectConfig.FirstTimeSetupCompleted = true
+			m.saveConfig()
+
+			// Exit wizard, go to normal configure view
+			m.CurrentView = TabView
+			m.FirstTimeSetup = false
+			return m, nil
 		}
 		return m, nil
 

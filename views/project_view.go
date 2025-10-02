@@ -40,6 +40,14 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(warningStyle.Render("⚠ GitHub not configured") + "\n\n")
 	}
 
+	// Custom mode indicator
+	if config != nil && config.CustomFilesMode {
+		customIndicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Render("[Custom Config]")
+		content.WriteString(customIndicator + " Using your own .goreleaser.yaml/package.json\n\n")
+	}
+
 	// Project switch notification
 	if switchedToPath != "" {
 		content.WriteString(successStyle.Render(fmt.Sprintf("→ Switched to: %s", switchedToPath)) + "\n\n")
@@ -84,24 +92,59 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 			content.WriteString(infoStyle.Render("   → Set up distributions and release settings") + "\n\n")
 			content.WriteString(subtleStyle.Render("s: settings • g: global • q: quit"))
 		} else {
-			// Existing user with unconfigured project
-			content.WriteString(headerStyle.Render("PROJECT NOT CONFIGURED") + "\n\n")
+			// Show project info
 			content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
 			content.WriteString(subtleStyle.Render(fmt.Sprintf("%s", project.Path)) + "\n\n")
 
-			if config == nil {
+			// Status indicators
+			if config != nil {
+				// Config exists in distui
+				content.WriteString(successStyle.Render("✓ Project configured in distui") + "\n")
+
+				// Show what's enabled
+				enabledDists := []string{}
+				if config.Config != nil && config.Config.Distributions.GitHubRelease != nil && config.Config.Distributions.GitHubRelease.Enabled {
+					enabledDists = append(enabledDists, "GitHub")
+				}
+				if config.Config != nil && config.Config.Distributions.Homebrew != nil && config.Config.Distributions.Homebrew.Enabled {
+					enabledDists = append(enabledDists, "Homebrew")
+				}
+				if config.Config != nil && config.Config.Distributions.NPM != nil && config.Config.Distributions.NPM.Enabled {
+					enabledDists = append(enabledDists, "NPM")
+				}
+				if len(enabledDists) > 0 {
+					content.WriteString(subtleStyle.Render(fmt.Sprintf("  Distributions: %s", strings.Join(enabledDists, ", "))) + "\n")
+				}
+			} else {
 				content.WriteString(warningStyle.Render("⚠ No distui configuration found") + "\n")
 			}
+
+			// Check for release files
 			if !hasGoReleaserConfig {
-				content.WriteString(warningStyle.Render("⚠ No .goreleaser.yaml found in project") + "\n")
+				content.WriteString(warningStyle.Render("⚠ Release files not generated yet") + "\n")
 			}
 
 			content.WriteString("\n")
-			content.WriteString(infoStyle.Render("Configure this project:") + "\n\n")
-			content.WriteString(infoStyle.Render("1. Press [c] to configure distributions (Homebrew, NPM, etc.)") + "\n")
-			content.WriteString(infoStyle.Render("2. distui will generate .goreleaser.yaml in your repo") + "\n")
-			content.WriteString(infoStyle.Render("3. Commit the config file to your repository") + "\n")
-			content.WriteString(infoStyle.Render("4. Return here and press [r] to release") + "\n\n")
+
+			// Next steps based on state
+			if config != nil && !hasGoReleaserConfig {
+				// Config exists but no release files
+				content.WriteString(infoStyle.Render("Generate release files:") + "\n\n")
+				content.WriteString(infoStyle.Render("1. Press [c] to open configure view") + "\n")
+				content.WriteString(infoStyle.Render("1. Press [TAB] to navigate to Distribution Tab") + "\n")
+
+				content.WriteString(infoStyle.Render("2. Press [R] to generate .goreleaser.yaml in your repo") + "\n")
+				content.WriteString(infoStyle.Render("3. Commit the generated file to your repository") + "\n")
+				content.WriteString(infoStyle.Render("4. Return here and press [r] to release") + "\n\n")
+			} else {
+				// No config at all
+				content.WriteString(infoStyle.Render("Configure this project:") + "\n\n")
+				content.WriteString(infoStyle.Render("1. Press [c] to configure distributions (Homebrew, NPM, etc.)") + "\n")
+				content.WriteString(infoStyle.Render("2. Save your configuration") + "\n")
+				content.WriteString(infoStyle.Render("3. Press [R] to generate .goreleaser.yaml in your repo") + "\n")
+				content.WriteString(infoStyle.Render("4. Commit the config file and return here to release") + "\n\n")
+			}
+
 			content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
 		}
 		return content.String()

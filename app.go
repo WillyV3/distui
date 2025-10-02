@@ -134,6 +134,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		// Update configure model dimensions ONLY on window resize
+		if m.configureModel != nil && m.currentPage == configureView {
+			m.configureModel.Width = m.width - 4
+			m.configureModel.Height = m.height - 4
+		}
 		// Don't return early - let the message pass through to handlers
 
 	case handlers.ProjectsReloadedMsg:
@@ -251,11 +257,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, tea.Batch(cmd, pageCmd)
 	case configureView:
-		// Update dimensions on every frame if model exists
-		if m.configureModel != nil && m.width > 0 && m.height > 0 {
-			m.configureModel.Width = m.width - 4   // border (2) + padding (2)
-			m.configureModel.Height = m.height - 4 // border (2) + padding (2)
-		}
+		// Dimensions are updated on WindowSizeMsg only (not on every keystroke)
 		newPage, quitting, pageCmd, newConfigModel := handlers.UpdateConfigureView(
 			int(m.currentPage), int(projectView), msg, m.configureModel)
 		m.currentPage = pageState(newPage)

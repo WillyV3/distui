@@ -46,6 +46,7 @@ type ProjectConfig struct {
 	Config                  *ProjectSettings `yaml:"config"`
 	History                 *ReleaseHistory  `yaml:"history,omitempty"`
 	FirstTimeSetupCompleted bool             `yaml:"first_time_setup_completed,omitempty"`
+	CustomFilesMode         bool             `yaml:"custom_files_mode,omitempty"`
 }
 
 type ProjectInfo struct {

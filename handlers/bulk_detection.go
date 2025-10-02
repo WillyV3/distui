@@ -153,9 +153,22 @@ func SwitchProjectCmd(projectConfig *models.ProjectConfig) tea.Cmd {
 			detectedProject = projectConfig.Project
 		}
 
+		// CRITICAL FIX: Reload config from disk to get fresh state
+		// The projectConfig passed in might be stale from the global list
+		freshConfig, err := config.LoadProject(projectConfig.Project.Identifier)
+		if err != nil {
+			// If no saved config exists, use the in-memory version
+			freshConfig = projectConfig
+		}
+
+		// Ensure DetectedProject is synced with fresh config
+		if freshConfig.Project == nil {
+			freshConfig.Project = detectedProject
+		}
+
 		return ProjectSwitchedMsg{
 			DetectedProject: detectedProject,
-			ProjectConfig:   projectConfig,
+			ProjectConfig:   freshConfig,
 		}
 	}
 }

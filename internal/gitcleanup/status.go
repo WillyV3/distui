@@ -22,12 +22,22 @@ type FileChange struct {
 }
 
 // IsWorkingTreeClean returns true if there are no uncommitted changes
+// Ignores .gitignore changes - safe to leave uncommitted
 func IsWorkingTreeClean() bool {
 	files, err := GetGitStatus()
 	if err != nil {
 		return false
 	}
-	return len(files) == 0
+
+	// Filter out .gitignore - safe to leave uncommitted and proceed with release
+	significantChanges := 0
+	for _, f := range files {
+		if f.Path != ".gitignore" {
+			significantChanges++
+		}
+	}
+
+	return significantChanges == 0
 }
 
 // GetGitStatus returns all modified and untracked files

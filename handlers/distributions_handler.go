@@ -11,6 +11,16 @@ func BuildDistributionsList(projectConfig *models.ProjectConfig, detectedProject
 		return items
 	}
 
+	// If custom mode, show distui defaults (all disabled)
+	if projectConfig.CustomFilesMode {
+		return []DistributionItem{
+			{Name: "GitHub Releases", Desc: "Create GitHub releases with GoReleaser", Enabled: false, Key: "github"},
+			{Name: "Homebrew", Desc: "Publish to Homebrew tap", Enabled: false, Key: "homebrew"},
+			{Name: "NPM", Desc: "Publish to NPM registry", Enabled: false, Key: "npm"},
+			{Name: "Go Install", Desc: "Installable via go install", Enabled: false, Key: "go_install"},
+		}
+	}
+
 	// GitHub Releases
 	githubEnabled := false
 	githubDesc := "Upload binaries to GitHub releases"

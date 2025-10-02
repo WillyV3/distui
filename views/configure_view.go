@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"distui/handlers"
-	"distui/internal/gitcleanup"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -75,6 +74,8 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 			return RenderRepoCleanup(*configModel.RepoCleanupModel)
 		}
 		return "Loading cleanup view..."
+	case handlers.ModeSwitchWarning:
+		return RenderModeSwitchWarning(configModel.FilesToOverwrite)
 	}
 
 	headerStyle := lipgloss.NewStyle().
@@ -92,31 +93,30 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 	content.WriteString(headerStyle.Render(fmt.Sprintf("CONFIGURE PROJECT: %s", project)) + "\n")
 
-	// Show GitHub remote status (using cached values for performance)
+	// Show GitHub remote status from CACHED data (no expensive git/API calls)
 	statusText := ""
-	if gitcleanup.HasGitRepo() {
-		if configModel.HasGitRemote && configModel.GitHubOwner != "" && configModel.GitHubRepo != "" {
-			remoteURL := fmt.Sprintf("github.com/%s/%s", configModel.GitHubOwner, configModel.GitHubRepo)
-			// Truncate if too long for terminal width
-			if configModel.Width > 0 && len(remoteURL) > configModel.Width-20 {
-				remoteURL = remoteURL[:configModel.Width-23] + "..."
-			}
-			if configModel.GitHubRepoExists {
-				statusText = fmt.Sprintf("✓ Remote: %s", remoteURL)
-				content.WriteString(successStyle.Render(statusText) + "\n")
-			} else {
-				statusText = fmt.Sprintf("⚠ Remote not found: %s", remoteURL)
-				content.WriteString(statusStyle.Render(statusText) + "\n")
-			}
-		} else {
-			statusText = "📦 No GitHub remote configured"
-			content.WriteString(statusStyle.Render(statusText) + "\n")
+	if configModel.HasGitRemote {
+		remoteURL := configModel.GitHubRepo
+		// Truncate if too long for terminal width
+		if configModel.Width > 0 && len(remoteURL) > configModel.Width-20 {
+			remoteURL = remoteURL[:configModel.Width-23] + "..."
 		}
+		statusText = fmt.Sprintf("✓ Remote: %s", remoteURL)
+		content.WriteString(successStyle.Render(statusText) + "\n")
 	} else {
-		statusText = "Not a git repository"
-		content.WriteString(controlStyle.Render(statusText) + "\n")
+		statusText = "📦 No GitHub remote configured"
+		content.WriteString(statusStyle.Render(statusText) + "\n")
 	}
 	content.WriteString("\n")
+
+	// Custom mode banner
+	if configModel.ProjectConfig != nil && configModel.ProjectConfig.CustomFilesMode {
+		customBanner := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("117")).
+			Render("Using custom files - Press [C] to switch to distui-managed mode")
+		content.WriteString(customBanner)
+		content.WriteString("\n\n")
+	}
 
 	// Render tabs as flexbox-style boxes
 	tabs := []string{"Cleanup", "Distributions", "Build", "Advanced"}
@@ -409,8 +409,9 @@ func RenderConfigureContent(project string, configModel *handlers.ConfigureModel
 
 		switch configModel.NPMNameStatus {
 		case "checking":
+			spinnerView := spinnerStyle.Render(configModel.CreateSpinner.View())
 			content.WriteString(statusStyle.Render(
-				lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Render("⏳ Checking package name availability...")))
+				lipgloss.NewStyle().Foreground(lipgloss.Color("69")).Render(spinnerView + " Checking package name availability...")))
 		case "available":
 			message := "✓ Package name is available"
 			if configModel.NPMNameError != "" {
@@ -527,6 +528,33 @@ func RenderOverwriteWarning(filesToOverwrite []string) string {
 	b.WriteString("\n\n")
 
 	b.WriteString("[Y] Continue (overwrite files)\n")
+	b.WriteString("[N/Esc] Cancel (keep custom files)\n")
+
+	return b.String()
+}
+
+func RenderModeSwitchWarning(filesToReplace []string) string {
+	var b strings.Builder
+
+	warningStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("214")).
+		Bold(true)
+
+	b.WriteString("\n")
+	b.WriteString(warningStyle.Render("⚠ SWITCH TO DISTUI-MANAGED MODE"))
+	b.WriteString("\n\n")
+
+	b.WriteString("The following files will be replaced:\n")
+	for _, file := range filesToReplace {
+		b.WriteString(fmt.Sprintf("  - %s\n", file))
+	}
+
+	b.WriteString("\n")
+	b.WriteString("Your files will be moved to .distui-backup/ directory.\n")
+	b.WriteString("distui will generate new managed files.\n")
+	b.WriteString("\n\n")
+
+	b.WriteString("[Y] Continue (switch to managed mode)\n")
 	b.WriteString("[N/Esc] Cancel (keep custom files)\n")
 
 	return b.String()
