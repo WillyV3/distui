@@ -327,7 +327,7 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		config.SaveProject(m.ProjectConfig)
 
 		// Rebuild distributions list with updated config
-		distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject)
+		distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject, m.NPMNameStatus)
 		distributions := make([]list.Item, len(distItems))
 		for i, item := range distItems {
 			distributions[i] = item
@@ -340,8 +340,30 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 		m.NPMNameError = msg.result.Error
 		m.NPMNameSuggestions = msg.result.Suggestions
 
-		// No need to rebuild list - status shows below content box
-		// List items stay clean, status displayed separately like cleanup tab
+		// CRITICAL: Rebuild distributions list to show status indicator in NPM item
+		distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject, m.NPMNameStatus)
+		distributions := make([]list.Item, len(distItems))
+		for i, item := range distItems {
+			distributions[i] = item
+		}
+		m.Lists[1].SetItems(distributions)
+
+		// CRITICAL: Recalculate list height when NPM status changes
+		// The NPM UI is appended to list content, so list must shrink to make room
+		chromeLines := 15
+		if m.NeedsRegeneration {
+			chromeLines = 16
+		}
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 9
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3
+		}
+		listHeight := m.Height - chromeLines
+		if listHeight < 5 {
+			listHeight = 5
+		}
+		m.Lists[1].SetHeight(listHeight)
 
 		return m, nil
 	case commitCompleteMsg:
@@ -377,10 +399,16 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 
 		// Update list sizes with same calculation as NewConfigureModel
 		// Total UI chrome: 4 (app wrapper) + 11 (view) = 15 lines, +1 if warning
-		// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
 		chromeLines := 15
 		if m.NeedsRegeneration {
 			chromeLines = 16
+		}
+		// NPM UI is appended to list content with "\n\n" prefix (2 blank lines)
+		// NPM unavailable: 2 (blanks) + 7 (content) = 9, Other status: 2 (blanks) + 1 (status) = 3
+		if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+			chromeLines += 9
+		} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+			chromeLines += 3
 		}
 		listHeight := height - chromeLines
 		if listHeight < 5 {
@@ -505,20 +533,20 @@ func (m *ConfigureModel) Update(msg tea.Msg) (*ConfigureModel, tea.Cmd) {
 					m.ProjectConfig.Config.Distributions.NPM.PackageName = newName
 					m.saveConfig()
 
-					// Rebuild distributions list with new package name
-					distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject)
-					listItems := make([]list.Item, len(distItems))
-					for i, item := range distItems {
-						listItems[i] = item
-					}
-					m.Lists[1].SetItems(listItems)
-
-					// Trigger name check
+					// Trigger name check first (before rebuilding list)
 					username := ""
 					if m.DetectedProject != nil && m.DetectedProject.Repository != nil {
 						username = m.DetectedProject.Repository.Owner
 					}
 					m.NPMNameStatus = "checking"
+
+					// Rebuild distributions list with new package name and checking status
+					distItems := BuildDistributionsList(m.ProjectConfig, m.DetectedProject, m.NPMNameStatus)
+					listItems := make([]list.Item, len(distItems))
+					for i, item := range distItems {
+						listItems[i] = item
+					}
+					m.Lists[1].SetItems(listItems)
 					m.NPMEditMode = false
 					m.NPMNameInput.Blur()
 					return m, tea.Batch(m.CreateSpinner.Tick, checkNPMNameCmd(newName, username))

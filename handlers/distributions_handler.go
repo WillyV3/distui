@@ -4,7 +4,7 @@ import (
 	"distui/internal/models"
 )
 
-func BuildDistributionsList(projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo) []DistributionItem {
+func BuildDistributionsList(projectConfig *models.ProjectConfig, detectedProject *models.ProjectInfo, npmStatus string) []DistributionItem {
 	items := []DistributionItem{}
 
 	if projectConfig == nil || projectConfig.Config == nil {
@@ -16,7 +16,7 @@ func BuildDistributionsList(projectConfig *models.ProjectConfig, detectedProject
 		return []DistributionItem{
 			{Name: "GitHub Releases", Desc: "Create GitHub releases with GoReleaser", Enabled: false, Key: "github"},
 			{Name: "Homebrew", Desc: "Publish to Homebrew tap", Enabled: false, Key: "homebrew"},
-			{Name: "NPM", Desc: "Publish to NPM registry", Enabled: false, Key: "npm"},
+			{Name: "NPM", Desc: "Publish to NPM registry", Enabled: false, Key: "npm", Status: npmStatus},
 			{Name: "Go Install", Desc: "Installable via go install", Enabled: false, Key: "go_install"},
 		}
 	}
@@ -66,6 +66,7 @@ func BuildDistributionsList(projectConfig *models.ProjectConfig, detectedProject
 		Desc:    npmDesc,
 		Enabled: npmEnabled,
 		Key:     "npm",
+		Status:  npmStatus,
 	})
 
 	// Go Module

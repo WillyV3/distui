@@ -28,14 +28,14 @@ func NewFileSelectionModel(changes []gitcleanup.FileChange, customRules bool, pr
 	for _, change := range changes {
 		category := gitcleanup.CategorizeFile(change.Path)
 
-		isAuto := category == gitcleanup.CategoryAuto
+		isAuto := category == gitcleanup.CategoryAuto || change.Path == "package.json"
 		shouldSelect := false
 
 		if customRules {
 			// Custom rules: select everything except ignore
 			shouldSelect = category != gitcleanup.CategoryIgnore
 		} else {
-			// Default: only auto files are selected
+			// Default: auto files + package.json are selected
 			shouldSelect = isAuto
 		}
 

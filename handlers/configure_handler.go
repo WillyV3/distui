@@ -196,16 +196,40 @@ type DistributionItem struct {
 	Desc    string
 	Enabled bool
 	Key     string
+	Status  string
 }
 
-func (i DistributionItem) Title() string       {
+func (i DistributionItem) Title() string {
 	checkbox := "[ ]"
 	if i.Enabled {
 		checkbox = "[✓]"
 	}
-	return checkbox + " " + i.Name
+
+	title := checkbox + " " + i.Name
+
+	if i.Key == "npm" && i.Status != "" {
+		switch i.Status {
+		case "checking":
+			title += " ⟳"
+		case "available":
+			title += " ✓"
+		case "unavailable":
+			title += " ✗"
+		case "error":
+			title += " ⚠"
+		}
+	}
+
+	return title
 }
-func (i DistributionItem) Description() string { return i.Desc }
+
+func (i DistributionItem) Description() string {
+	if i.Key == "npm" && i.Status == "unavailable" {
+		return i.Desc + " • Press 'e' to search for another name"
+	}
+	return i.Desc
+}
+
 func (i DistributionItem) FilterValue() string { return i.Name }
 
 // Build setting item
@@ -469,23 +493,24 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	npmInput.Width = width - 8
 	m.NPMNameInput = npmInput
 
-	// Calculate list height more precisely
-	// Account for UI elements:
-	// App wrapper (app.go):
-	// - Border: 2 lines (top + bottom)
-	// - Padding: 2 lines (top + bottom)
-	// Configure view chrome:
-	// - Header: 1 line
-	// - Status: 1 line (no blank after)
-	// - Tabs: 2 lines (tabs + 1 blank after)
-	// - Content box border: 2 lines (top + bottom)
-	// - Content padding: 2 lines (vertical padding restored)
-	// - Controls: 3 lines (divider + control line + hint)
-	// Total: 4 (app) + 11 (view) = 15 lines, +1 if warning shown
-	// NOTE: NPM UI is rendered INSIDE the list content, not as separate chrome
+	// Calculate list height - account for ALL chrome that's NOT part of the list
+	// The list will be rendered INSIDE a content box, so we need to account for:
+	// App wrapper (app.go): 4 lines (border 2 + padding 2)
+	// View chrome OUTSIDE content box: 4 lines (header 1 + status 1 + tabs 2)
+	// Content box chrome: 4 lines (border 2 + padding 2)
+	// Controls OUTSIDE content box: 3 lines
+	// Total chrome OUTSIDE list: 4 + 4 + 4 + 3 = 15, +1 if warning
 	chromeLines := 15
 	if m.NeedsRegeneration {
 		chromeLines = 16
+	}
+	// NPM UI is appended to list content with "\n\n" prefix (2 blank lines)
+	// NPM unavailable with suggestions: 2 (blanks) + 7 (1 error + 1 blank + 1 header + 3 suggestions + 1 help) = 9 lines
+	// NPM other status: 2 (blanks) + 1 (status line) = 3 lines
+	if m.ActiveTab == 1 && m.NPMNameStatus == "unavailable" && len(m.NPMNameSuggestions) > 0 {
+		chromeLines += 9
+	} else if m.ActiveTab == 1 && m.NPMNameStatus != "" {
+		chromeLines += 3
 	}
 	listHeight := m.Height - chromeLines
 	if listHeight < 5 {
@@ -512,7 +537,7 @@ func NewConfigureModel(width, height int, githubAccounts []models.GitHubAccount,
 	m.Lists[0] = cleanupList
 
 	// Initialize distributions list (tab 1) - using centralized builder
-	distItems := BuildDistributionsList(projectConfig, detectedProject)
+	distItems := BuildDistributionsList(projectConfig, detectedProject, m.NPMNameStatus)
 	distributions := make([]list.Item, len(distItems))
 	for i, item := range distItems {
 		distributions[i] = item
