@@ -53,6 +53,8 @@ func RenderReleaseContent(releaseModel *handlers.ReleaseModel) string {
 	switch releaseModel.Phase {
 	case models.PhaseVersionSelect:
 		return RenderVersionSelection(releaseModel)
+	case models.PhaseChangelogEntry:
+		return RenderChangelogEntry(releaseModel)
 	case models.PhaseComplete:
 		return RenderSuccess(releaseModel)
 	case models.PhaseFailed:
@@ -198,6 +200,27 @@ func RenderSuccess(m *handlers.ReleaseModel) string {
 	}
 
 	content.WriteString("\n\n" + releaseSubtleStyle.Render("Press ESC to return"))
+
+	return content.String()
+}
+
+func RenderChangelogEntry(m *handlers.ReleaseModel) string {
+	var content strings.Builder
+
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	subtleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+
+	content.WriteString(headerStyle.Render("CHANGELOG ENTRY") + "\n\n")
+	content.WriteString(infoStyle.Render(fmt.Sprintf("Release version: %s", m.Version)) + "\n\n")
+
+	// Render the textarea
+	if m.ChangelogTextarea != nil {
+		content.WriteString(m.ChangelogTextarea.View())
+	}
+
+	content.WriteString("\n\n")
+	content.WriteString(subtleStyle.Render("Ctrl+D or Ctrl+S to continue • ESC to cancel"))
 
 	return content.String()
 }
