@@ -249,27 +249,6 @@ func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
 		}
 		return m, tea.Batch(m.Spinner.Tick, tickProgress())
 
-	default:
-		// Always update textinputs with all messages (needed for cursor blink)
-		var versionCmd, changelogCmd tea.Cmd
-		m.VersionInput, versionCmd = m.VersionInput.Update(msg)
-		m.ChangelogInput, changelogCmd = m.ChangelogInput.Update(msg)
-		if versionCmd != nil {
-			cmds = append(cmds, versionCmd)
-		}
-		if changelogCmd != nil {
-			cmds = append(cmds, changelogCmd)
-		}
-	}
-
-	if len(cmds) > 0 {
-		return m, tea.Batch(cmds...)
-	}
-	return m, nil
-}
-
-func (m *ReleaseModel) regularUpdate(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
-	switch msg := msg.(type) {
 	case models.ReleasePhaseCompleteMsg:
 		// Map phase to package index
 		var pkgIdx int
