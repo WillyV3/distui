@@ -32,6 +32,20 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 				if releaseModel.SelectedVersion == 0 {
 					return 3, false, tea.ClearScreen, releaseModel // Navigate to configureView
 				}
+
+				// Check if changelog entry is needed
+				if releaseModel.GenerateChangelog {
+					// Get version first
+					version := releaseModel.getSelectedVersion()
+					if version == "" {
+						return currentPage, false, nil, releaseModel
+					}
+					releaseModel.Version = version
+					releaseModel.Phase = models.PhaseChangelogEntry
+					return currentPage, false, nil, releaseModel
+				}
+
+				// No changelog needed, start release immediately
 				updatedModel, cmd := releaseModel.startRelease()
 				return currentPage, false, cmd, updatedModel
 			case "esc":

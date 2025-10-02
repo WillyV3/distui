@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"distui/internal/executor"
@@ -45,6 +46,11 @@ type ReleaseModel struct {
 	EnableNPM      bool
 	HomebrewTap    string
 	SkipTests      bool  // From config: Run tests before release
+
+	// Changelog
+	Changelog         string
+	ChangelogTextarea *huh.Text
+	GenerateChangelog bool
 
 	// Channel for receiving output
 	outputChan chan string
@@ -103,6 +109,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 	enableNPM := false
 	homebrewTap := ""
 	skipTests := false  // Default: run tests
+	generateChangelog := false
 
 	if projectConfig != nil && projectConfig.Config != nil {
 		if projectConfig.Config.Distributions.Homebrew != nil {
@@ -114,8 +121,15 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		}
 		if projectConfig.Config.Release != nil {
 			skipTests = projectConfig.Config.Release.SkipTests
+			generateChangelog = projectConfig.Config.Release.GenerateChangelog
 		}
 	}
+
+	// Initialize changelog textarea with a pointer to track the value
+	changelogTextarea := huh.NewText().
+		Title("What's changed in this release?").
+		Description("Enter changelog details (Ctrl+D or Ctrl+S to finish)").
+		CharLimit(5000)
 
 	return &ReleaseModel{
 		Phase:           models.PhaseVersionSelect,
@@ -134,10 +148,13 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		ProjectName:     projectName,
 		RepoOwner:       repoOwner,
 		RepoName:        repoName,
-		EnableHomebrew:  enableHomebrew,
-		EnableNPM:       enableNPM,
-		HomebrewTap:     homebrewTap,
-		SkipTests:       skipTests,
+		EnableHomebrew:    enableHomebrew,
+		EnableNPM:         enableNPM,
+		HomebrewTap:       homebrewTap,
+		SkipTests:         skipTests,
+		GenerateChangelog: generateChangelog,
+		ChangelogTextarea: changelogTextarea,
+		Changelog:         "",
 	}
 }
 
@@ -344,6 +361,32 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 		}
 	}
 
+	// Handle changelog entry
+	if m.Phase == models.PhaseChangelogEntry {
+		if m.ChangelogTextarea != nil {
+			form, cmd := m.ChangelogTextarea.Update(msg)
+			if f, ok := form.(*huh.Text); ok {
+				m.ChangelogTextarea = f
+			}
+
+			// Check if form is complete
+			if msg.String() == "ctrl+d" || msg.String() == "ctrl+s" {
+				// Changelog is already stored in m.Changelog via the Value pointer
+				// Start the release
+				return m.startRelease()
+			}
+
+			if msg.String() == "esc" {
+				// Cancel and go back to version selection
+				m.Phase = models.PhaseVersionSelect
+				m.Changelog = ""
+				return m, nil
+			}
+
+			return m, cmd
+		}
+	}
+
 	// Handle completion - ESC to dismiss
 	if m.Phase == models.PhaseComplete {
 		switch msg.String() {
@@ -373,6 +416,18 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			m.Installing = -1
 			m.Installed = []int{}
 			// Reset packages status
+			for i := range m.Packages {
+				m.Packages[i].Status = "pending"
+			}
+			return m, nil
+		case "esc", "enter", " ":
+			// Return to version selection on ESC/Enter/Space
+			m.Phase = models.PhaseVersionSelect
+			m.Output = []string{}
+			m.Error = nil
+			m.Installing = -1
+			m.Installed = []int{}
+			m.SelectedVersion = 0
 			for i := range m.Packages {
 				m.Packages[i].Status = "pending"
 			}

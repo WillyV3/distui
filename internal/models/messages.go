@@ -6,6 +6,7 @@ type ReleasePhase int
 
 const (
 	PhaseVersionSelect ReleasePhase = iota
+	PhaseChangelogEntry
 	PhasePreFlight
 	PhaseTests
 	PhaseTag
@@ -20,6 +21,8 @@ func (p ReleasePhase) String() string {
 	switch p {
 	case PhaseVersionSelect:
 		return "Select Version"
+	case PhaseChangelogEntry:
+		return "Changelog Entry"
 	case PhasePreFlight:
 		return "Pre-flight Checks"
 	case PhaseTests:
