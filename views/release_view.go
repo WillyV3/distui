@@ -104,26 +104,13 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 		content.WriteString("\n" + releaseFieldStyle.Render("Enter version: ") + m.VersionInput.View() + "\n")
 	}
 
-	// DEBUG: Show config state
-	debugInfo := "DEBUG: "
-	if m.ProjectConfig == nil {
-		debugInfo += "ProjectConfig=nil "
-	} else if m.ProjectConfig.Config == nil {
-		debugInfo += "Config=nil "
-	} else if m.ProjectConfig.Config.Release == nil {
-		debugInfo += "Release=nil "
-	} else {
-		debugInfo += fmt.Sprintf("GenerateChangelog=%v ", m.ProjectConfig.Config.Release.GenerateChangelog)
+	// Show changelog input if enabled and a release version is selected (not Configure Project, not Custom)
+	needsChangelog := false
+	if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
+		needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
 	}
-	debugInfo += fmt.Sprintf("SelectedVersion=%d", m.SelectedVersion)
-	content.WriteString("\n" + releaseSubtleStyle.Render(debugInfo) + "\n")
-
-	// Show changelog input if a release version is selected (not Configure Project, not Custom)
-	// TEMPORARY: Always show to debug the issue
-	if m.SelectedVersion > 0 && m.SelectedVersion < 4 {
-		content.WriteString("\n>>> BEFORE CHANGELOG INPUT <<<\n")
-		content.WriteString(releaseFieldStyle.Render("Changelog: ") + m.ChangelogInput.View())
-		content.WriteString("\n>>> AFTER CHANGELOG INPUT <<<\n")
+	if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
+		content.WriteString("\n" + releaseFieldStyle.Render("Changelog: ") + m.ChangelogInput.View() + "\n")
 	}
 
 	content.WriteString("\n" + releaseSubtleStyle.Render("↑/↓: navigate • enter: start release • esc: back"))
