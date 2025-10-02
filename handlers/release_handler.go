@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"distui/internal/executor"
@@ -48,8 +47,7 @@ type ReleaseModel struct {
 	SkipTests      bool  // From config: Run tests before release
 
 	// Changelog
-	Changelog         string
-	ChangelogTextarea *huh.Text
+	ChangelogInput textinput.Model
 
 	// Project config to check settings at runtime
 	ProjectConfig *models.ProjectConfig
@@ -125,7 +123,12 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		}
 	}
 
-	m := &ReleaseModel{
+	// Initialize changelog input
+	changelogInput := textinput.New()
+	changelogInput.Placeholder = "What's changed in this release?"
+	changelogInput.CharLimit = 500
+
+	return &ReleaseModel{
 		Phase:           models.PhaseVersionSelect,
 		Packages:        packages,
 		Installing:      -1,
@@ -136,6 +139,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		Width:           width,
 		Height:          height,
 		VersionInput:    ti,
+		ChangelogInput:  changelogInput,
 		SelectedVersion: 0,
 		CurrentVersion:  currentVersion,
 		ProjectPath:     projectPath,
@@ -147,17 +151,7 @@ func NewReleaseModel(width, height int, projectPath, projectName, currentVersion
 		HomebrewTap:       homebrewTap,
 		SkipTests:         skipTests,
 		ProjectConfig:     projectConfig,
-		Changelog:         "",
 	}
-
-	// Initialize changelog textarea with Value pointing to model's Changelog field
-	m.ChangelogTextarea = huh.NewText().
-		Title("What's changed in this release?").
-		Description("Enter changelog details (Ctrl+D or Ctrl+S to finish)").
-		CharLimit(5000).
-		Value(&m.Changelog)
-
-	return m
 }
 
 func (m *ReleaseModel) Update(msg tea.Msg) (*ReleaseModel, tea.Cmd) {
@@ -353,56 +347,24 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 				m.SelectedVersion++
 			}
 		case "enter":
-			// Check if changelog is needed from current config
-			needsChangelog := false
-			if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
-				needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
-			}
-
-			if needsChangelog {
-				// Get version first
-				version := m.getSelectedVersion()
-				if version == "" {
-					return m, nil
-				}
-				m.Version = version
-				m.Phase = models.PhaseChangelogEntry
-				return m, nil
-			}
-
-			// No changelog needed, start release immediately
 			return m.startRelease()
 		}
 
+		// Update custom version input if selected
 		if m.SelectedVersion == 4 {
 			var cmd tea.Cmd
 			m.VersionInput, cmd = m.VersionInput.Update(msg)
 			return m, cmd
 		}
-	}
 
-	// Handle changelog entry
-	if m.Phase == models.PhaseChangelogEntry {
-		if m.ChangelogTextarea != nil {
-			form, cmd := m.ChangelogTextarea.Update(msg)
-			if f, ok := form.(*huh.Text); ok {
-				m.ChangelogTextarea = f
-			}
-
-			// Check if form is complete
-			if msg.String() == "ctrl+d" || msg.String() == "ctrl+s" {
-				// Changelog is already stored in m.Changelog via the Value pointer
-				// Start the release
-				return m.startRelease()
-			}
-
-			if msg.String() == "esc" {
-				// Cancel and go back to version selection
-				m.Phase = models.PhaseVersionSelect
-				m.Changelog = ""
-				return m, nil
-			}
-
+		// Update changelog input if changelog is enabled and a version is selected (not Configure Project)
+		needsChangelog := false
+		if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
+			needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
+		}
+		if needsChangelog && m.SelectedVersion > 0 {
+			var cmd tea.Cmd
+			m.ChangelogInput, cmd = m.ChangelogInput.Update(msg)
 			return m, cmd
 		}
 	}
@@ -487,7 +449,7 @@ func (m *ReleaseModel) startRelease() (*ReleaseModel, tea.Cmd) {
 		RepoOwner:      m.RepoOwner,
 		RepoName:       m.RepoName,
 		ProjectName:    m.ProjectName,
-		Changelog:      m.Changelog,
+		Changelog:      m.ChangelogInput.Value(),
 	}
 
 	// Start with the progress at 0
