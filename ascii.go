@@ -12,7 +12,8 @@ var asciiArt string
 
 // renderASCIIArt renders the distui ASCII art left-aligned and styled
 // maxLines controls animation: 0 = not started (show nothing), -1 = complete (show all), >0 = show that many lines
-func renderASCIIArt(terminalWidth int, maxLines int) string {
+// flashCount controls color flash: 0-8 cycles through teal/orange/purple
+func renderASCIIArt(terminalWidth int, maxLines int, flashCount int) string {
 	// Clean the ASCII art (trim trailing spaces from each line)
 	lines := strings.Split(strings.TrimSpace(asciiArt), "\n")
 
@@ -32,9 +33,25 @@ func renderASCIIArt(terminalWidth int, maxLines int) string {
 		return ""
 	}
 
-	// Style for the ASCII art - vibrant cyan/blue gradient
+	// Determine color based on flash count (teal -> orange -> purple cycle)
+	var artColor string
+	if flashCount > 0 {
+		colorIndex := flashCount % 3
+		switch colorIndex {
+		case 1:
+			artColor = "51"  // Bright teal/cyan
+		case 2:
+			artColor = "208" // Bright orange
+		case 0:
+			artColor = "141" // Purple
+		}
+	} else {
+		artColor = "117" // Default cyan
+	}
+
+	// Style for the ASCII art with color cycling
 	artStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("117")).
+		Foreground(lipgloss.Color(artColor)).
 		Bold(true)
 
 	// Build left-aligned output

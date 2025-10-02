@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel, switchedToPath string, asciiArt string) string {
+func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectConfig, globalConfig *models.GlobalConfig, releaseModel *handlers.ReleaseModel, configureModel *handlers.ConfigureModel, switchedToPath string, asciiArt string, animFrame int) string {
 	headerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("117")).
 		Bold(true).
@@ -87,19 +87,42 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 			welcomeSubtle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 			welcomeWarning := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 
+			// Build all lines for animation
+			var allLines []string
 			if asciiArt != "" {
-				content.WriteString(asciiArt)
+				asciiLines := strings.Split(strings.TrimSpace(asciiArt), "\n")
+				allLines = append(allLines, asciiLines...)
 			}
-			content.WriteString(welcomeHeader.Render("WELCOME TO DISTUI") + "\n\n")
-			content.WriteString(welcomeWarning.Render("⚠ GitHub not configured") + "\n\n")
-			content.WriteString(welcomeInfo.Render("Get started in 3 steps:") + "\n\n")
-			content.WriteString(welcomeInfo.Render("1. Press [s] to configure global settings") + "\n")
-			content.WriteString(welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
-			content.WriteString(welcomeInfo.Render("2. Press [g] to discover and manage projects") + "\n")
-			content.WriteString(welcomeInfo.Render("   → distui will scan for your Go projects") + "\n\n")
-			content.WriteString(welcomeInfo.Render("3. Return here and press [c] to configure this project") + "\n")
-			content.WriteString(welcomeInfo.Render("   → Set up distributions and release settings") + "\n\n")
-			content.WriteString(welcomeSubtle.Render("s: settings • g: global • q: quit"))
+			allLines = append(allLines,
+				"",
+				welcomeHeader.Render("WELCOME TO DISTUI"),
+				"",
+				welcomeWarning.Render("⚠ GitHub not configured"),
+				"",
+				welcomeInfo.Render("Get started in 3 steps:"),
+				"",
+				welcomeInfo.Render("1. Press [s] to configure global settings"),
+				welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope"),
+				"",
+				welcomeInfo.Render("2. Press [g] to discover and manage projects"),
+				welcomeInfo.Render("   → distui will scan for your Go projects"),
+				"",
+				welcomeInfo.Render("3. You can always press Escape to return here. Press [c] to configure  this project"),
+				welcomeInfo.Render("You can always Press [c] from this page for Git and Release Management on your project"),
+				welcomeInfo.Render("   → Set up distributions and release settings"),
+				"",
+				welcomeSubtle.Render("s: settings • g: global • ?: help • q: quit"),
+			)
+
+			// Show lines up to animation frame (0 = none, -1 = all)
+			linesToShow := len(allLines)
+			if animFrame >= 0 && animFrame < len(allLines) {
+				linesToShow = animFrame
+			}
+
+			for i := 0; i < linesToShow; i++ {
+				content.WriteString(allLines[i] + "\n")
+			}
 		} else {
 			// Show project info
 			content.WriteString(infoStyle.Render(fmt.Sprintf("%s", project.Module.Name)) + "\n")
@@ -154,7 +177,7 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 				content.WriteString(infoStyle.Render("4. Commit the config file and return here to release") + "\n\n")
 			}
 
-			content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
+			content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • ?: help • q: quit"))
 		}
 		return content.String()
 	}
@@ -170,22 +193,44 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 			welcomeSubtle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 			welcomeWarning := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 
+			// Build all lines for animation
+			var allLines []string
 			if asciiArt != "" {
-				content.WriteString(asciiArt)
+				asciiLines := strings.Split(strings.TrimSpace(asciiArt), "\n")
+				allLines = append(allLines, asciiLines...)
 			}
-			content.WriteString(welcomeHeader.Render("WELCOME TO DISTUI") + "\n\n")
-			content.WriteString(welcomeWarning.Render("⚠ GitHub not configured") + "\n\n")
-			content.WriteString(welcomeInfo.Render("No Go project detected in current directory") + "\n\n")
-			content.WriteString(welcomeInfo.Render("Get started:") + "\n\n")
-			content.WriteString(welcomeInfo.Render("1. Press [s] to configure global settings") + "\n")
-			content.WriteString(welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope") + "\n\n")
-			content.WriteString(welcomeInfo.Render("2. Press [g] to discover and manage your Go projects") + "\n\n")
-			content.WriteString(welcomeSubtle.Render("s: settings • g: global • q: quit"))
+			allLines = append(allLines,
+				"",
+				welcomeHeader.Render("WELCOME TO DISTUI"),
+				"",
+				welcomeWarning.Render("⚠ GitHub not configured"),
+				"",
+				welcomeInfo.Render("No Go project detected in current directory"),
+				"",
+				welcomeInfo.Render("Get started:"),
+				"",
+				welcomeInfo.Render("1. Press [s] to configure global settings"),
+				welcomeInfo.Render("   → Add your GitHub username, Homebrew tap, NPM scope"),
+				"",
+				welcomeInfo.Render("2. Press [g] to discover and manage your Go projects"),
+				"",
+				welcomeSubtle.Render("s: settings • g: global • ?: help • q: quit"),
+			)
+
+			// Show lines up to animation frame
+			linesToShow := len(allLines)
+			if animFrame >= 0 && animFrame < len(allLines) {
+				linesToShow = animFrame
+			}
+
+			for i := 0; i < linesToShow; i++ {
+				content.WriteString(allLines[i] + "\n")
+			}
 		} else {
 			content.WriteString(headerStyle.Render("NO PROJECT") + "\n\n")
 			content.WriteString(infoStyle.Render("No Go project detected in current directory") + "\n\n")
 			content.WriteString(infoStyle.Render("Press [g] to view and select from your configured projects") + "\n\n")
-			content.WriteString(subtleStyle.Render("g: global • s: settings • q: quit"))
+			content.WriteString(subtleStyle.Render("g: global • s: settings • ?: help • q: quit"))
 		}
 		return content.String()
 	}
@@ -208,7 +253,7 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString(infoStyle.Render("1. Press [c] to open the configuration view") + "\n")
 		content.WriteString(infoStyle.Render("2. Use the Cleanup tab to commit/push changes") + "\n")
 		content.WriteString(infoStyle.Render("3. Return here to release") + "\n\n")
-		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • q: quit"))
+		content.WriteString(subtleStyle.Render("c: configure • g: global • s: settings • ?: help • q: quit"))
 		return content.String()
 	}
 
@@ -274,7 +319,7 @@ func RenderProjectContent(project *models.ProjectInfo, config *models.ProjectCon
 		content.WriteString("\n")
 	}
 
-	content.WriteString(subtleStyle.Render("r: release • c: configure • g: global • s: settings • q: quit"))
+	content.WriteString(subtleStyle.Render("r: release • c: configure • g: global • s: settings • ?: help • q: quit"))
 
 	return content.String()
 }

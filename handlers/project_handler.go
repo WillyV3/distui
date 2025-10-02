@@ -55,6 +55,8 @@ func UpdateProjectView(currentPage, previousPage int, msg tea.Msg, releaseModel 
 			return 1, false, tea.ClearScreen, releaseModel // globalView
 		case "s":
 			return 2, false, tea.ClearScreen, releaseModel // settingsView
+		case "?":
+			return 5, false, tea.ClearScreen, releaseModel // helpView
 		case "r":
 			// Only block release if files are MISSING, not if they're custom
 			// Check if required files exist (custom or distui-generated)

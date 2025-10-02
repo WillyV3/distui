@@ -392,12 +392,7 @@ func (m *ReleaseModel) handleKeyPress(msg tea.KeyMsg) (*ReleaseModel, tea.Cmd) {
 			needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
 		}
 
-		// DEBUG
-		fmt.Printf("handleKeyPress: ProjectConfig=%v, needsChangelog=%v, SelectedVersion=%d\n",
-			m.ProjectConfig != nil, needsChangelog, m.SelectedVersion)
-
 		if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
-			fmt.Printf("PASSING KEY TO CHANGELOG INPUT\n")
 			var cmd tea.Cmd
 			m.ChangelogInput, cmd = m.ChangelogInput.Update(msg)
 			return m, cmd

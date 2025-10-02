@@ -25,6 +25,7 @@ const (
 	settingsView
 	configureView
 	newProjectView
+	helpView
 )
 
 // Styles
@@ -47,6 +48,8 @@ type model struct {
 	quitting       bool
 	asciiArt       string
 	asciiAnimFrame int  // Current line to show (0 = not started, -1 = complete)
+	asciiFlashCount int  // Flash counter (0-8: 3 cycles of teal/orange/purple)
+	asciiFlashing   bool // True when flashing animation is active
 
 	// Real data
 	globalConfig   *models.GlobalConfig
@@ -60,15 +63,23 @@ type model struct {
 	settingsModel       *handlers.SettingsModel
 	globalModel         *handlers.GlobalModel
 	releaseModel        *handlers.ReleaseModel
+	helpModel           *views.HelpModel
 	notification        *models.UINotification
 	notificationModel   handlers.NotificationModel
 }
 
 type asciiAnimTickMsg time.Time
+type asciiFlashTickMsg time.Time
 
 func animateAscii() tea.Cmd {
 	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
 		return asciiAnimTickMsg(t)
+	})
+}
+
+func flashAscii() tea.Cmd {
+	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
+		return asciiFlashTickMsg(t)
 	})
 }
 
@@ -121,9 +132,7 @@ func initialModel() model {
 func (m model) Init() tea.Cmd {
 	// Start ASCII animation if first-time user
 	isFirstTime := m.globalConfig == nil || m.globalConfig.User.GitHubUsername == ""
-	fmt.Printf("DEBUG: Init - isFirstTime=%v, asciiArt=%q\n", isFirstTime, m.asciiArt)
 	if isFirstTime && m.asciiArt != "" {
-		fmt.Printf("DEBUG: Starting ASCII animation\n")
 		return tea.Batch(
 			m.spinner.Tick,
 			tea.SetWindowTitle("distui - Go Release Manager"),
@@ -163,16 +172,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case asciiAnimTickMsg:
 		// Advance ASCII art animation (line-by-line reveal)
-		// Embedded ASCII has ~10 lines, so animate up to 15 to be safe
-		totalLines := 15
+		// Welcome screen has ~20 lines total (ASCII + text)
+		totalLines := 25
 		if m.asciiAnimFrame < totalLines {
 			m.asciiAnimFrame++
-			fmt.Printf("DEBUG: asciiAnimFrame=%d\n", m.asciiAnimFrame)
 			return m, animateAscii()
 		}
-		// Animation complete
-		fmt.Printf("DEBUG: Animation complete\n")
+		// Animation complete - start flashing
 		m.asciiAnimFrame = -1
+		m.asciiFlashing = true
+		return m, flashAscii()
+
+	case asciiFlashTickMsg:
+		// Flash ASCII art through color gradient (teal -> orange -> purple) 3 times
+		if m.asciiFlashing && m.asciiFlashCount < 9 {
+			m.asciiFlashCount++
+			return m, flashAscii()
+		}
+		// Flashing complete
+		m.asciiFlashing = false
 		return m, nil
 
 	case handlers.ProjectsReloadedMsg:
@@ -312,6 +330,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentPage = pageState(newPage)
 		m.quitting = quitting
 		return m, tea.Batch(cmd, pageCmd)
+	case helpView:
+		// Initialize help model if needed
+		if m.helpModel == nil && m.width > 0 && m.height > 0 {
+			var err error
+			m.helpModel, err = views.NewHelpModel(m.width, m.height)
+			if err != nil {
+				// Fall back to project view on error
+				m.currentPage = projectView
+				return m, cmd
+			}
+		}
+
+		// Handle keys
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			switch keyMsg.String() {
+			case "q", "esc", "?":
+				m.currentPage = projectView
+				return m, cmd
+			case "left", "h":
+				m.helpModel.PrevTab()
+				return m, cmd
+			case "right", "l":
+				m.helpModel.NextTab()
+				return m, cmd
+			default:
+				m.helpModel.UpdateViewport(msg)
+				return m, cmd
+			}
+		}
+
+		// Update viewport for window resize
+		if windowMsg, ok := msg.(tea.WindowSizeMsg); ok {
+			m.helpModel.Update(windowMsg.Width, windowMsg.Height)
+		}
+
+		m.helpModel.UpdateViewport(msg)
+		return m, cmd
 	}
 
 	return m, cmd
@@ -336,6 +391,12 @@ func (m model) View() string {
 		s = m.renderConfigureView()
 	case newProjectView:
 		s = m.renderNewProjectView()
+	case helpView:
+		if m.helpModel != nil {
+			s = m.helpModel.View()
+		} else {
+			s = "Loading help..."
+		}
 	default:
 		s = "Unknown page"
 	}
@@ -366,10 +427,10 @@ func (m model) renderProjectView() string {
 	// Generate ASCII art for first-time users with animation
 	ascii := ""
 	if m.globalConfig == nil || m.globalConfig.User.GitHubUsername == "" {
-		ascii = renderASCIIArt(m.width, m.asciiAnimFrame)
+		ascii = renderASCIIArt(m.width, m.asciiAnimFrame, m.asciiFlashCount)
 	}
 
-	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "", ascii)
+	content := views.RenderProjectContent(m.detectedProject, m.currentProject, m.globalConfig, m.releaseModel, m.configureModel, "", ascii, m.asciiAnimFrame)
 	if m.notification != nil {
 		return views.RenderNotification(m.notification) + "\n" + content
 	}
