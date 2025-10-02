@@ -118,12 +118,9 @@ func RenderVersionSelection(m *handlers.ReleaseModel) string {
 	debugInfo += fmt.Sprintf("SelectedVersion=%d", m.SelectedVersion)
 	content.WriteString("\n" + releaseSubtleStyle.Render(debugInfo) + "\n")
 
-	// Show changelog input if enabled and a release version is selected (not Configure Project, not Custom)
-	needsChangelog := false
-	if m.ProjectConfig != nil && m.ProjectConfig.Config != nil && m.ProjectConfig.Config.Release != nil {
-		needsChangelog = m.ProjectConfig.Config.Release.GenerateChangelog
-	}
-	if needsChangelog && m.SelectedVersion > 0 && m.SelectedVersion < 4 {
+	// Show changelog input if a release version is selected (not Configure Project, not Custom)
+	// TEMPORARY: Always show to debug the issue
+	if m.SelectedVersion > 0 && m.SelectedVersion < 4 {
 		content.WriteString("\n" + releaseFieldStyle.Render("Changelog: ") + m.ChangelogInput.View() + "\n")
 	}
 
