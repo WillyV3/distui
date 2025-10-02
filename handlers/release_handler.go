@@ -462,14 +462,16 @@ func (m *ReleaseModel) getSelectedVersion() string {
 		baseVersion = "v0.1.0"
 	}
 
+	// Index 0 is "Configure Project" (handled separately, never reaches here)
+	// Index 1 is Patch, Index 2 is Minor, Index 3 is Major, Index 4 is Custom
 	switch m.SelectedVersion {
-	case 0:
-		return bumpPatch(baseVersion)
 	case 1:
-		return bumpMinor(baseVersion)
+		return bumpPatch(baseVersion)
 	case 2:
-		return bumpMajor(baseVersion)
+		return bumpMinor(baseVersion)
 	case 3:
+		return bumpMajor(baseVersion)
+	case 4:
 		return m.VersionInput.Value()
 	}
 
