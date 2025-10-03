@@ -1,60 +1,82 @@
 # Smart Commits
 
-## For Opinionated Go Devs
+## What It Does
 
-distui can create commits for you. Or don't use it. We don't care.
+Smart commits categorize your changes by file type and generate semantic commit messages.
 
-## How It Works
+Example: Changes to `*.go` files → "code: update authentication logic"
 
-During release setup:
-1. Choose "Smart Commit" option
-2. distui stages your changes
-3. Creates a semantic commit message
-4. Pushes to your branch
+## Accessing Smart Commit Preferences
 
-## Commit Format
+1. Press `c` to open Configure view
+2. You're on Cleanup tab by default
+3. Press `p` to enter Smart Commit Preferences
 
-We follow conventional commits:
+## The UI
+
+### Two Modes
+
+**Default Mode (Disabled):**
+- distui uses built-in conventional commit format
+- No customization needed
+
+**Custom Rules Mode (Enabled):**
+- Define file patterns per category
+- Categories: code, config, docs, build, test, assets, data
+- Each category maps to a commit prefix
+
+### Keybindings
+
+**Normal Mode:**
+- `space` - Toggle custom rules on/off
+- `up/down` or `k/j` - Navigate categories
+- `e` - Edit selected category
+- `r` - Reset to defaults (with confirmation)
+- `s` - Save configuration
+- `esc` - Back to configure view
+
+**Edit Category Mode:**
+- `e` - Add file extension (.go, .md, etc.)
+- `p` - Add glob pattern (**/*.test.go)
+- `d` - Delete selected rule
+- `esc` - Back to category list
+
+**Adding Extension/Pattern:**
+- Type the value
+- `enter` - Save
+- `esc` - Cancel
+
+## How Categories Work
+
+When you commit, distui scans changed files and matches them to categories:
+
 ```
-feat: add new terminal UI
-fix: resolve goreleaser config issue
-chore: update dependencies
+code:     *.go, *.js, *.py
+config:   *.yaml, *.json, *.toml
+docs:     *.md, *.txt
+build:    Makefile, Dockerfile, *.sh
+test:     *_test.go, *.test.js
+assets:   *.png, *.svg, *.css
+data:     *.sql, *.db
 ```
 
-## Creating Your Own
+Commit message format: `<category>: <description>`
 
-Don't like our format? Make your own:
+## Storage
 
-1. Edit `~/.distui/commit-templates.yaml`
-2. Add your patterns:
-```yaml
-templates:
-  release: "release: v{version}"
-  feature: "feat: {description}"
-```
+Rules saved in:
+`~/.distui/projects/YOUR_PROJECT.yaml` under `smart_commit` section
 
-## Current Branch Workflow
+## Default Rules
 
-Smart commits work with your current branch:
-1. Commit changes
-2. Push to origin
-3. Optionally merge to main
-4. Create release
+Pressing `r` resets to distui's built-in patterns.
 
-We handle the git gymnastics.
+## During Release
 
-## Manual Override
+If smart commits enabled, distui:
+1. Scans your changes
+2. Groups files by category
+3. Generates commit with dominant category
+4. Shows preview before committing
 
-Press `m` in release view to manually:
-- Stage specific files
-- Write custom commit message
-- Push to different branch
-
-## Warning
-
-Smart commits will:
-- Stage ALL changes
-- Create opinionated messages
-- Push immediately
-
-Not comfortable with that? Commit manually first, then release.
+You can still commit manually before running distui.

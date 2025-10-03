@@ -10,12 +10,8 @@ When you run `distui` for the first time, it:
    - No config? You're a first-time user
    - No GitHub username? Also first-time
 
-2. **Shows ASCII Art Animation**
-   - distui logo animates line-by-line
-   - Color cycles: teal → orange → purple
-   - Only shows on first run
 
-3. **Creates Directory Structure**
+2. **Creates Directory Structure**
    ```
    ~/.distui/
    ├── config.yaml          # Global settings
@@ -39,18 +35,25 @@ distui scans your current directory for:
 
 #### New Projects (No Existing Files)
 
-1. **Auto-detects distributions**:
-   - Searches GitHub for Homebrew taps
-   - Checks npm registry for packages
-   - Matches by project name
+1. **Checks existing config files first**:
+   - Looks for .goreleaser.yaml (extracts Homebrew tap)
+   - Looks for package.json (extracts NPM package)
 
-2. **Shows what it found**:
-   - Homebrew: yourname/homebrew-tap
-   - NPM: @yourname/package
+2. **Falls back to global config**:
+   - Uses default Homebrew tap from ~/.distui/config.yaml
+   - No NPM unless package.json exists
 
-3. **Generates files**:
+3. **Verifies with commands**:
+   - `brew info tap/formula` (if Homebrew config found)
+   - `npm view package version` (if package.json exists)
+
+4. **Shows confirmation screen**:
+   - Displays detected distributions
+   - Press Enter to confirm, Esc to edit
+
+5. **Generates files**:
    - .goreleaser.yaml in YOUR project
-   - Release metadata in ~/.distui
+   - Config metadata in ~/.distui
 
 #### Projects With Existing Configs
 
@@ -68,25 +71,25 @@ distui scans your current directory for:
    - Generates new configs
    - Full management enabled
 
-### Auto-Detection Magic
+### Detection Priority
 
-distui checks:
+distui checks in this order:
 
-1. **GitHub via gh CLI**:
+1. **Existing project files**:
+   - .goreleaser.yaml → Homebrew tap/formula
+   - package.json → NPM package name
+
+2. **Global config fallback**:
+   - ~/.distui/config.yaml → default Homebrew tap
+
+3. **Verification commands**:
    ```bash
-   gh repo list --json name
-   gh api repos/USER/homebrew-TAP
-   ```
-
-2. **NPM Registry**:
-   ```bash
-   npm view @scope/package
-   ```
-
-3. **Local Git Remote**:
-   ```bash
+   brew info tap/formula --json=v2
+   npm view package version
    git remote get-url origin
    ```
+
+No GitHub API searches. Reads local files first.
 
 ### Files Created in Your Project
 
@@ -95,8 +98,7 @@ Only if you choose distui management:
 ```
 your-project/
 ├── .goreleaser.yaml     # Build configuration
-├── .release.yaml        # Release metadata
-└── scripts/            # Optional build scripts
+└── package.json         # NPM package (if NPM enabled)
 ```
 
 ### Skipping Setup

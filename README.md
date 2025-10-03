@@ -48,7 +48,7 @@ Press `?` for help.
 
 ## First Time
 
-uto-detects your Homebrew tap, generates configs. That's it.
+Auto-detects your Homebrew tap, generates configs. That's it.
 
 ## Limitations
 

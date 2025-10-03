@@ -1,56 +1,74 @@
-# GitHub Cleanup
+# Cleanup Tab
 
-## What It Does
+## What It Actually Does
 
-The Cleanup view (`c` → Cleanup tab) manages your GitHub mess:
-- Old branches
-- Duplicate tags
-- Failed releases
+The Cleanup tab manages your **local Git repository status**, not GitHub cleanup.
 
-## Branch Management
+Access: Press `c` from project view → lands on Cleanup tab (first tab)
 
-Shows all your remote branches with:
-- Last commit date
-- Whether it's merged
-- Quick delete option
+## Features
 
-Select branches with space, delete with `d`. We won't let you delete main/master.
+### Repository Status
+Shows:
+- Git initialization state
+- GitHub remote configuration
+- Repository existence on GitHub
+- Uncommitted file changes
+- Current branch
+- Unpushed commits warning
+- Smart commit mode status
 
-## Tag Cleanup
+### File Management
+- View modified/added/deleted/untracked files
+- Scan repository files (`f` key)
+- Stage and commit changes
 
-Lists all tags with:
-- Version
-- Release status
-- Creation date
+### Commit Operations
+Two modes:
 
-Delete old or broken tags before re-releasing.
+**Smart Commit** (`s` key):
+- Auto-categorizes files by type
+- Generates semantic commit messages
+- Configure rules with `p` key
+
+**Regular Commit** (`C` key):
+- Standard git commit flow
+- Write custom message
+- Full control
+
+### GitHub Operations
+- Create GitHub repository (`G` key)
+- Push to remote branches (`P` key → branch modal)
+- Create pull requests
+
+## Keybindings
+
+**Main tab:**
+- `s` - Smart commit
+- `C` - Regular commit
+- `p` - Smart commit preferences
+- `f` - Scan repository files
+- `G` - Create GitHub repository
+- `P` - Branch/push modal
+- `r` - Refresh status
+- `space` - Cycle through options
+
+**Branch modal:**
+- Arrow keys - Select branch
+- Enter - Push to selected branch or create PR
+- Esc - Cancel
 
 ## Auto-Refresh
 
-The cleanup view refreshes GitHub status every time you navigate to it. No stale data.
+Refreshes GitHub repo status every time you navigate to this tab.
 
-## Safety
+## What This ISN'T
 
-We always:
-- Show what will be deleted
-- Require confirmation
-- Use `gh` CLI for authentication
-- Never force-delete
-
-## Quick Actions
-
-- `r` - Refresh all data
-- `space` - Select/deselect
-- `d` - Delete selected
-- `a` - Select all (except protected)
-- `n` - Deselect all
-
-## Limitations
-
-This isn't a full Git UI. Can't:
+**NOT a Git branch/tag manager.** Can't:
+- Delete branches
+- Manage tags
+- Clean up releases
 - View diffs
 - Resolve conflicts
-- Cherry-pick
-- Rebase
 
-Use actual git for complex operations.
+Use actual `git` or `gh` CLI for those operations.

@@ -6,12 +6,11 @@ distui can generate release configs for you, or you can keep your own. Your choi
 
 ## Generated Files
 
-Press `c` to configure, then:
-- `.goreleaser.yaml` - goreleaser config
-- `.release.yaml` - release metadata
-- `scripts/` - optional build scripts
+Press `c` to configure, distui generates:
+- `.goreleaser.yaml` - goreleaser config with distui markers
+- `package.json` - NPM package config (if NPM distribution enabled)
 
-These get created in YOUR project directory. We don't hide shit.
+These get created in YOUR project directory. Not hidden.
 
 ## Keep Your Own
 
@@ -29,7 +28,7 @@ If you fuck up your configs or want our latest:
 ## What We Generate
 
 Our configs are opinionated:
-- Multi-platform builds (darwin/linux, amd64/arm64)
+- Multi-platform builds (darwin/linux/windows, amd64/arm64)
 - GitHub releases
 - Homebrew tap support (if configured)
 - Archive formats that make sense

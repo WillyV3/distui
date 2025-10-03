@@ -6,9 +6,15 @@ Let's be real about what distui can't do.
 
 ## Changelogs
 
-**Changelog generation is broken.** Sorry.
+**Changelogs are disabled by default** in .goreleaser.yaml.
 
-If you need changelogs, release without distui for now. We're working on it.
+You can enable them:
+1. Configure view (`c`)
+2. Advanced Options tab
+3. Toggle "Generate changelog"
+4. Enter release notes during release flow
+
+The feature works. Just turned off to keep releases fast.
 
 ## Git Operations
 
@@ -19,7 +25,7 @@ This is NOT a Git UI. Can't:
 - Cherry-pick commits
 - Stash management
 
-You can merge current branch to main. That's about it.
+You can create PRs to main via gh CLI. That's about it.
 
 ## Language Support
 

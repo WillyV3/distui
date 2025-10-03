@@ -24,11 +24,11 @@ Built for myself. Shared because why not.
 
 ## Design Choices
 
-**Zero repo pollution**: Everything lives in `~/.distui/`. Your repo stays clean.
+**Minimal repo footprint**: Project metadata in `~/.distui/`. Release configs (.goreleaser.yaml, workflows) in your repo where they belong.
 
-**30-second releases**: Quick version bump, build, push. Done.
+**Fast releases**: Quick version bump, build, push. Timing varies by project size.
 
-**No abstractions**: Direct command execution. You can see what it's doing.
+**Direct command execution**: No shell scripts. Uses goreleaser and gh CLI directly.
 
 **Opinionated**: It works how I work. Don't like it? Fork it.
 
