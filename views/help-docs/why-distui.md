@@ -2,7 +2,9 @@
 
 ## The Problem
 
-I've been building TUIs like I'm running a marathon. Every project needs:
+First of all, I probably could've just gotten familiar and good at gorealer and github workflows - you probably should to. this is more developer over-engineering than anything - 
+
+I've been building TUIs like I'm running a marathon. 
 - goreleaser config
 - GitHub Actions setup
 - Release workflows
