@@ -70,11 +70,22 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 	}
 
 	if config.Config != nil && config.Config.Distributions.Homebrew != nil && config.Config.Distributions.Homebrew.Enabled {
+		tapRepo := config.Config.Distributions.Homebrew.TapRepo
+		tapParts := strings.Split(tapRepo, "/")
+
+		if len(tapParts) != 2 || tapParts[0] == "" || tapParts[1] == "" {
+			return "", fmt.Errorf("invalid homebrew tap repo format: expected 'owner/repo', got '%s'", tapRepo)
+		}
+
+		if project.Repository == nil {
+			return "", fmt.Errorf("repository information required for homebrew distribution")
+		}
+
 		b.WriteString("brews:\n")
 		b.WriteString("  - name: " + project.Module.Name + "\n")
 		b.WriteString("    repository:\n")
-		b.WriteString(fmt.Sprintf("      owner: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[0]))
-		b.WriteString(fmt.Sprintf("      name: %s\n", strings.Split(config.Config.Distributions.Homebrew.TapRepo, "/")[1]))
+		b.WriteString(fmt.Sprintf("      owner: %s\n", tapParts[0]))
+		b.WriteString(fmt.Sprintf("      name: %s\n", tapParts[1]))
 		b.WriteString("      token: \"{{ .Env.GITHUB_TOKEN }}\"\n")
 		b.WriteString("    homepage: https://github.com/" + project.Repository.Owner + "/" + project.Repository.Name + "\n")
 		b.WriteString("    description: \"" + project.Module.Name + "\"\n")
