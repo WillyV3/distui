@@ -22,7 +22,7 @@ type FileChange struct {
 }
 
 // IsWorkingTreeClean returns true if there are no uncommitted changes
-// Ignores .gitignore and .distui-backup/ - safe to leave uncommitted
+// Ignores untracked files (??) and safe files (.gitignore, .distui-backup/)
 func IsWorkingTreeClean() bool {
 	files, err := GetGitStatus()
 	if err != nil {
@@ -32,8 +32,11 @@ func IsWorkingTreeClean() bool {
 	// Filter out files safe to leave uncommitted
 	significantChanges := 0
 	for _, f := range files {
-		// Ignore .gitignore and .distui-backup/ (distui's internal backups)
-		if f.Path != ".gitignore" && !strings.HasPrefix(f.Path, ".distui-backup/") {
+		// Ignore untracked files (??), .gitignore, and .distui-backup/
+		isUntracked := f.Status == "??"
+		isSafeFile := f.Path == ".gitignore" || strings.HasPrefix(f.Path, ".distui-backup/")
+
+		if !isUntracked && !isSafeFile {
 			significantChanges++
 		}
 	}

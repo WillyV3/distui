@@ -81,22 +81,27 @@ func GenerateGoReleaserConfig(project *models.ProjectInfo, config *models.Projec
 			return "", fmt.Errorf("repository information required for homebrew distribution")
 		}
 
+		brewName := project.Repository.Name
+		if project.Binary != nil && project.Binary.Name != "" {
+			brewName = project.Binary.Name
+		}
+
 		b.WriteString("brews:\n")
-		b.WriteString("  - name: " + project.Module.Name + "\n")
+		b.WriteString("  - name: " + brewName + "\n")
 		b.WriteString("    repository:\n")
 		b.WriteString(fmt.Sprintf("      owner: %s\n", tapParts[0]))
 		b.WriteString(fmt.Sprintf("      name: %s\n", tapParts[1]))
 		b.WriteString("      token: \"{{ .Env.GITHUB_TOKEN }}\"\n")
 		b.WriteString("    homepage: https://github.com/" + project.Repository.Owner + "/" + project.Repository.Name + "\n")
-		b.WriteString("    description: \"" + project.Module.Name + "\"\n")
+		b.WriteString("    description: \"" + brewName + "\"\n")
 		b.WriteString("    license: MIT\n")
 		b.WriteString("    directory: Formula\n")
 		b.WriteString("    commit_author:\n")
 		b.WriteString("      name: distui\n")
 		b.WriteString("      email: distui@users.noreply.github.com\n")
-		b.WriteString("    commit_msg_template: \"Brew formula update for " + project.Module.Name + " version {{ .Tag }}\"\n")
+		b.WriteString("    commit_msg_template: \"Brew formula update for " + brewName + " version {{ .Tag }}\"\n")
 		b.WriteString("    test: |\n")
-		b.WriteString("      system \"#{bin}/" + project.Module.Name + "\", \"--version\"\n\n")
+		b.WriteString("      system \"#{bin}/" + brewName + "\", \"--version\"\n\n")
 	}
 
 	if config.Config != nil && config.Config.Distributions.NPM != nil && config.Config.Distributions.NPM.Enabled {
