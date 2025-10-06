@@ -22,21 +22,50 @@ type FileChange struct {
 }
 
 // IsWorkingTreeClean returns true if there are no uncommitted changes
-// Ignores untracked files (??) and safe files (.gitignore, .distui-backup/)
+// Ignores untracked files (??) and safe files/directories
 func IsWorkingTreeClean() bool {
 	files, err := GetGitStatus()
 	if err != nil {
 		return false
 	}
 
+	// Common build/output directories to ignore
+	ignoredPrefixes := []string{
+		"dist/",
+		".distui-backup/",
+		"build/",
+		"out/",
+		"target/",
+		"bin/",
+		"logs/",
+		"tmp/",
+		"temp/",
+		"node_modules/",
+	}
+
 	// Filter out files safe to leave uncommitted
 	significantChanges := 0
 	for _, f := range files {
-		// Ignore untracked files (??), .gitignore, and .distui-backup/
-		isUntracked := f.Status == "??"
-		isSafeFile := f.Path == ".gitignore" || strings.HasPrefix(f.Path, ".distui-backup/")
+		// Ignore untracked files (all ?? status)
+		if f.Status == "??" {
+			continue
+		}
 
-		if !isUntracked && !isSafeFile {
+		// Ignore specific safe files
+		if f.Path == ".gitignore" {
+			continue
+		}
+
+		// Ignore common build/output directories
+		shouldIgnore := false
+		for _, prefix := range ignoredPrefixes {
+			if strings.HasPrefix(f.Path, prefix) {
+				shouldIgnore = true
+				break
+			}
+		}
+
+		if !shouldIgnore {
 			significantChanges++
 		}
 	}
