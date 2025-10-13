@@ -260,11 +260,12 @@ func GetRepoStatus() string {
 }
 
 // HasUncommittedChanges checks if there are any uncommitted changes
+// Ignores untracked files - they're allowed during release
 func HasUncommittedChanges() bool {
-	// Check for modified files
+	// Check for modified files (unstaged)
 	cmd := exec.Command("git", "diff", "--quiet")
 	if err := cmd.Run(); err != nil {
-		return true // Changes exist
+		return true // Unstaged changes exist
 	}
 
 	// Check for staged files
@@ -273,12 +274,6 @@ func HasUncommittedChanges() bool {
 		return true // Staged changes exist
 	}
 
-	// Check for untracked files
-	cmd = exec.Command("git", "ls-files", "--others", "--exclude-standard")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	return strings.TrimSpace(string(output)) != ""
+	// Untracked files (??) are allowed - do not check them
+	return false
 }

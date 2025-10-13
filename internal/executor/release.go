@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"distui/internal/gitcleanup"
 	"distui/internal/models"
 )
 
@@ -250,6 +252,24 @@ func (r *ReleaseExecutor) countSteps() int {
 }
 
 func (r *ReleaseExecutor) ValidatePreFlight() error {
+	// Check for uncommitted changes FIRST (block if found)
+	if gitcleanup.HasUncommittedChanges() {
+		// Get list of uncommitted files to show user
+		changes, _ := gitcleanup.GetFileChanges()
+		var uncommittedFiles []string
+		for _, change := range changes {
+			// Skip untracked files (they're allowed)
+			if change.Status == "??" {
+				continue
+			}
+			uncommittedFiles = append(uncommittedFiles, fmt.Sprintf("  %s %s", change.Icon, change.Path))
+		}
+
+		if len(uncommittedFiles) > 0 {
+			return fmt.Errorf("uncommitted changes detected:\n%s\n\nPlease commit or stash changes before releasing", strings.Join(uncommittedFiles, "\n"))
+		}
+	}
+
 	if !CheckGoReleaserInstalled() {
 		return fmt.Errorf("goreleaser not installed")
 	}
